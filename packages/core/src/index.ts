@@ -89,3 +89,21 @@ export {
   valuePortfolio,
   type WeightedPosition,
 } from "./portfolio.ts";
+export {
+  type ConstituentTarget,
+  DEFAULT_MIN_LEG_VALUE_USD_E8,
+  DEFAULT_RESERVE_BPS,
+  type EligibilityInput,
+  type PlanMode,
+  type PlanProjection,
+  type ProjectedPosition,
+  planRebalance,
+  type RebalanceEligibility,
+  type RebalanceLeg,
+  type RebalancePlan,
+  type RebalancePlanInput,
+  type RebalancePlanResult,
+  type RebalanceRule,
+  rebalanceEligibility,
+  type SkippedLeg,
+} from "./rebalance.ts";
