@@ -27,12 +27,12 @@ never a valid value.
 | `slug`                         | string           | `^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`                                                    |
 | `description`                  | string           | Any Unicode text in Normalization Form C, may be empty                                    |
 | `universe.type`                | string           | Exactly `static`                                                                          |
-| `universe.tokens`              | array of address | 1 to 128 items, strictly ascending, none the zero address                                 |
+| `universe.tokens`              | array of address | 1 to 64 items, strictly ascending, none the zero address                                  |
 | `weighting.type`               | string           | `equal` or `fixed`                                                                        |
 | `weighting.weightsBps`         | array of integer | Only with `fixed`, and required: one per token, each 1 to 10000, summing to exactly 10000 |
-| `constraints` (optional)       | object           | At least one of the two bounds below                                                      |
-| `constraints.maxWeightBps`     | integer          | 1 to 10000, and `maxWeightBps * n >= 10000`                                               |
-| `constraints.minWeightBps`     | integer          | 1 to 10000, and `minWeightBps * n <= 10000`                                               |
+| `constraints` (optional)       | object           | Bounds every weight must satisfy; at least one of the two below                           |
+| `constraints.maxWeightBps`     | integer          | 1 to 10000; no weight may be above it                                                     |
+| `constraints.minWeightBps`     | integer          | 1 to 10000; no weight may be below it                                                     |
 | `pricing.source`               | string           | Exactly `chainlink-aggregator-v3`                                                         |
 | `pricing.feeds`                | array of address | One per token, `feeds[i]` is the feed of `tokens[i]`                                      |
 | `rebalance.trigger`            | string           | Exactly `drift`                                                                           |
@@ -58,7 +58,10 @@ strings byte by byte gives the same order.
 
 Two properties of the document follow from these rules and are worth stating:
 
-- A single constituent is valid. Its weight is 10000 bps, and a `maxWeightBps` below 10000 is then infeasible.
+- A single constituent is valid. Its weight is 10000 bps, so a `maxWeightBps` below 10000 makes the spec
+  invalid.
+- `constraints` are validation rules. They never change a weight: a published weight is exactly what the
+  author wrote (`fixed`) or exactly equal (`equal`), and a spec whose weights break a bound is invalid.
 - The creator, the version number and any timestamp are not part of the document, so the same methodology
   published twice has the same hash.
 
@@ -76,8 +79,11 @@ of them:
 2. `pricing.feeds` has exactly `n` items.
 3. `weighting.weightsBps` has exactly `n` items.
 4. `weighting.weightsBps` sums to exactly 10000.
-5. `constraints.maxWeightBps * n >= 10000`.
-6. `constraints.minWeightBps * n <= 10000`. Together with rule 5 this implies `minWeightBps <= maxWeightBps`.
+5. With `fixed` weighting, every weight satisfies `minWeightBps <= weightsBps[i] <= maxWeightBps`, for each
+   bound that is present. The error names the index of the offending weight.
+6. With `equal` weighting, `maxWeightBps * n >= 10000` and `minWeightBps * n <= 10000`, for each bound that
+   is present. The equal weights are `floor(10000 / n)` or one more, so these two inequalities hold exactly
+   when every rounded weight is within the bounds.
 7. `description` equals its NFC normalization and contains no lone surrogate.
 8. The canonical form is at most 8192 bytes.
 
@@ -90,13 +96,14 @@ where `path` is a JSON Pointer (RFC 6901) and `code` is stable. A document whose
 | Limit                     | Value      |
 | ------------------------- | ---------- |
 | Canonical form            | 8192 bytes |
-| Constituents              | 1 to 128   |
+| Constituents              | 1 to 64    |
 | Nesting accepted on parse | 32 levels  |
 
-Both the size limit and the constituent limit are enforced, and the size limit is reached first: a constituent
-costs 90 bytes of canonical form (its token and its feed), plus 2 to 6 bytes with fixed weights. A document
-with the shortest possible name, slug and description holds at most 87 constituents with equal weighting and
-85 with fixed weighting.
+The two limits are consistent. A constituent costs 90 bytes of canonical form (its token and its feed), plus
+2 to 6 bytes with fixed weights. The largest document the schema allows apart from its description is 6801
+bytes: 64 constituents, fixed weights written with the most digits they can have, a 64-character name, a
+32-character slug, both bounds, a parent and every integer at its longest. That leaves at least 1391 bytes for
+`description` in every valid spec.
 
 ## Canonical form
 
@@ -156,52 +163,26 @@ These 642 bytes hash to `0x0303f9e547c0c4b543d9c661f47bb6867f9048fbbd4bd66b8c37a
 
 The calculation maps a valid spec to its constituents: each token of `universe.tokens`, in the same order,
 with a weight in basis points. The weights are integers of at least 1 and sum to exactly 10000. All arithmetic
-is on integers or exact fractions; no step uses floating point.
+is on integers; no step uses floating point.
 
-1. **Raw weights.** With `equal`, every token has raw weight 1. With `fixed`, token `i` has raw weight
-   `weightsBps[i]`.
-2. **Exact weights.** The exact weight of a token is `10000 * raw / sum(raw)`, a fraction.
-3. **Cap**, when `maxWeightBps` is present. Repeat until no token is above the cap:
-   1. Every token whose exact weight is strictly above `maxWeightBps` is set to `maxWeightBps` and stays
-      there. All such tokens of a round are capped together.
-   2. The weight removed from them is added to the tokens that are not capped, in proportion to their current
-      exact weights.
-4. **Floor**, when `minWeightBps` is present, applied to the result of the cap. Repeat until no token is below
-   the floor:
-   1. Every token whose exact weight is strictly below `minWeightBps` is set to `minWeightBps` and stays
-      there.
-   2. The weight added to them is taken from all the other tokens, including capped ones, in proportion to
-      their current exact weights.
-5. **Rounding.** Round every exact weight down to an integer. Let `m` be 10000 minus the sum of the rounded
-   weights. Order the tokens by the fractional part they lost, largest first, breaking ties by ascending
-   token address, and add 1 bps to each of the first `m`.
+- **`fixed`**: the weight of `tokens[i]` is `weightsBps[i]`, unchanged.
+- **`equal`**: with `n` tokens, every token gets `floor(10000 / n)` bps. Let `m = 10000 - n * floor(10000 / n)`
+  be the basis points still missing. They are distributed one each by largest remainder, ties broken by
+  ascending token address. All remainders are equal here, so the `m` lowest addresses get one more basis
+  point.
 
-Notes for an implementer:
+`constraints` take no part in the calculation. The calculator never moves weight between constituents to
+satisfy a bound, so a published weight can always be read off the spec: it is the number the author wrote, or
+the equal share. A methodology that wants capped weights states weights that already respect the cap.
 
-- Proportional redistribution keeps the ratios between the tokens that are not pinned. After any number of
-  rounds, a free token therefore weighs `share * pool / total`, where `pool` is 10000 minus what the pinned
-  tokens hold and `total` is the sum of the shares of the free tokens. The reference implementation uses this
-  to compare and round with integer multiplications and one division, without carrying fractions.
-- The feasibility rules guarantee that both loops end with at least one free token or with every token
-  exactly at the bound.
-- The floor only lowers the tokens it takes from, so the cap still holds after it. Rounding cannot break a
-  bound either: a token that receives 1 bps had a fractional part, so its exact weight was strictly below any
-  integer bound above it.
-- Without bounds, `fixed` weights are returned unchanged. With bounds, the published weights differ from
-  `weightsBps`.
-- With `equal` weighting a feasible bound never binds.
+Examples, from the vectors:
 
-Worked example, the vector `fixed-cap-three-rounds`: raw weights 4500, 2500, 1300, 1150, 350, 200 and
-`maxWeightBps` 2200.
-
-| Round | Capped in this round | Pool for the free tokens | Exact weights of the free tokens |
-| ----- | -------------------- | ------------------------ | -------------------------------- |
-| 1     | tokens 1 and 2       | 5600                     | 2426.67, 2146.67, 653.33, 373.33 |
-| 2     | token 3              | 3400                     | 2300, 700, 400                   |
-| 3     | token 4              | 1200                     | 763.64, 436.36                   |
-
-Rounding down gives 763 and 436, 1 bps is missing, and the largest fractional part is 0.64. The result is
-2200, 2200, 2200, 2200, 764, 436.
+| Vector                | Spec                                                   | Constituent weights in bps  |
+| --------------------- | ------------------------------------------------------ | --------------------------- |
+| `equal-3`             | 3 tokens, `equal`                                      | 3334, 3333, 3333            |
+| `equal-7`             | 7 tokens, `equal`                                      | 1429 four times, then 1428  |
+| `equal-64`            | 64 tokens, `equal`                                     | 157 sixteen times, then 156 |
+| `fixed-within-bounds` | `fixed` 4000, 3000, 2250, 750 with bounds 750 and 4000 | 4000, 3000, 2250, 750       |
 
 ## Verifying a published version
 
