@@ -1,0 +1,263 @@
+{
+  "recorded": {
+    "source": "GET https://api.coinbase.com/v1/tokenized-stocks?page_size=200",
+    "at": "2026-11-21T19:10:56.090Z",
+    "trimmed": "Each page keeps the tokens that have a reference feed, plus the first minted token without a feed and the first unminted token. Descriptions are cut to 60 characters. Nothing else is altered."
+  },
+  "pages": [
+    {
+      "tokens": [
+        {
+          "contract_address": "0xb20000000000000000000006f910a0e7BBD3c168",
+          "symbol": "APPc",
+          "name": "AppLovin Corporation",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/1ae0f31ce639d549c9300876c0123f85055a180a7410c8e5f6921bac36aad99f.png",
+          "total_supply": 66.01157522,
+          "isin": "US03831W1080",
+          "multiplier": 1,
+          "description": "About AppLovin Corporation (Coinbase Tokenized Stock) (APPc)",
+          "first_mint_date": "2026-10-23T14:02:09Z",
+          "adgm_isin": "AE000A4AXWZ9"
+        },
+        {
+          "contract_address": "0xb20000000000000000000016e38FD364d271Ba28",
+          "symbol": "ANTc",
+          "name": "Anthropic, PBC",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/8ab0b05f5367f9125e4c94b1c792d6c31c784dddeb42a3fcbf93b242e8f8645d.png",
+          "total_supply": 14935.96406155,
+          "isin": "US03703U1079",
+          "multiplier": 1,
+          "nav_price": 87.595,
+          "nav_price_updated_at": "2026-11-21T00:56:41Z",
+          "description": "About Anthropic, PBC (Coinbase Tokenized Stock) (ANTc)\n\nAnth",
+          "first_mint_date": "2026-11-19T16:52:08Z",
+          "adgm_isin": "AE000A4AYQY2"
+        },
+        {
+          "contract_address": "0xB20000000000000000000019f6E7C675b73C2e4D",
+          "symbol": "CRCLc",
+          "name": "Circle Internet Group Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/f217835f2637739f460cc9335a59ec96011c1b9510a40cee3243aeef50eb7a45.png",
+          "total_supply": 3215.89041742,
+          "isin": "US1725731079",
+          "multiplier": 1,
+          "nav_price": 48.795,
+          "nav_price_updated_at": "2026-11-21T00:12:04Z",
+          "description": "About Circle Internet Group Inc. (Coinbase Tokenized Stock) ",
+          "first_mint_date": "2026-10-26T21:53:11Z",
+          "adgm_isin": "AE000A4AXGG2"
+        },
+        {
+          "contract_address": "0xb2000000000000000000001e800a7f5189430cD0",
+          "symbol": "TSLAc",
+          "name": "Tesla Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/a3b67028295d0e9fa3182c867b8a9afed5ebcbd8c012de3a46e160ae5e490980.png",
+          "total_supply": 6527.32389899,
+          "isin": "US88160R1014",
+          "multiplier": 1,
+          "nav_price": 350.45,
+          "nav_price_updated_at": "2026-11-20T22:43:49Z",
+          "description": "About Tesla Inc. (Coinbase Tokenized Stock) (TSLAc)\n\nTesla I",
+          "first_mint_date": "2026-09-03T18:16:27Z",
+          "adgm_isin": "AE000A4AWG09"
+        },
+        {
+          "contract_address": "0xb2000000000000000000002D0BA3164cc74f58B7",
+          "symbol": "GOOGLc",
+          "name": "Alphabet Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/0e80e31df40f7c42b49a3c7f6d23c6351625d73f235aeb69006ddee9221702b0.png",
+          "total_supply": 37248.30223607,
+          "isin": "US02079K3059",
+          "multiplier": 1.0003771186767842,
+          "nav_price": 269.71567647,
+          "nav_price_updated_at": "2026-11-20T21:42:19Z",
+          "description": "About Alphabet Inc. (Coinbase Tokenized Stock) (GOOGLc)\n\nAlp",
+          "first_mint_date": "2026-08-12T12:55:49Z",
+          "adgm_isin": "AE000A4AV8D4"
+        },
+        {
+          "contract_address": "0xb200000000000000000000397293Cb8cda9a10c5",
+          "symbol": "SNDKc",
+          "name": "Sandisk Corporation",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/495de6bc9902690826d533b9506494890f59d611d10f04231c00936f659bb0cb.png",
+          "total_supply": 3330.03853669,
+          "isin": "US80004C2008",
+          "multiplier": 8,
+          "nav_price": 649.44,
+          "nav_price_updated_at": "2026-11-20T23:38:55Z",
+          "description": "About Sandisk Corporation (Coinbase Tokenized Stock) (SNDKc)",
+          "first_mint_date": "2026-09-03T18:13:27Z",
+          "adgm_isin": "AE000A4AWGU5"
+        },
+        {
+          "contract_address": "0xb2000000000000000000004884b426556b92883d",
+          "symbol": "MSTRc",
+          "name": "Strategy Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/496024423dd795f8b547ffa0668f12a1e6bf09af247534754546a1a6661c7969.png",
+          "total_supply": 23080.97804302,
+          "isin": "US5949724083",
+          "multiplier": 1,
+          "nav_price": 79.37,
+          "nav_price_updated_at": "2026-11-21T00:08:11Z",
+          "description": "About Strategy Inc. (Coinbase Tokenized Stock) (MSTRc)\n\nStra",
+          "first_mint_date": "2026-09-03T18:11:53Z",
+          "adgm_isin": "AE000A4AWGY7"
+        },
+        {
+          "contract_address": "0xB2000000000000000000004AFF16039bA04bdFBc",
+          "symbol": "INTCc",
+          "name": "Intel Corporation",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/cc2d84b704e34b83b5fc1f3b0e89c67e5ccc9142e666a50a5cbde261cf09e2aa.png",
+          "total_supply": 2990.3600078,
+          "isin": "US4581401001",
+          "multiplier": 1,
+          "nav_price": 52.915,
+          "nav_price_updated_at": "2026-11-20T23:50:55Z",
+          "description": "About Intel Corporation (Coinbase Tokenized Stock) (INTCc)\n\n",
+          "first_mint_date": "2026-10-26T21:53:01Z",
+          "adgm_isin": "AE000A4AWGX9"
+        },
+        {
+          "contract_address": "0xb20000000000000000000078ee7ce2fE4908108C",
+          "symbol": "NVDAc",
+          "name": "NVIDIA Corporation",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/1fee9b7a44e800d438dd9d96c3283e05784c925c2c871a48ff735950740b551a.png",
+          "total_supply": 62019.73777574,
+          "isin": "US67066G1040",
+          "multiplier": 1.0005379395763694,
+          "nav_price": 129.82480034,
+          "nav_price_updated_at": "2026-11-20T23:42:40Z",
+          "description": "About NVIDIA Corporation (Coinbase Tokenized Stock) (NVDAc)\n",
+          "first_mint_date": "2026-08-12T12:40:59Z",
+          "adgm_isin": "AE000A4AV8A0"
+        },
+        {
+          "contract_address": "0xb2000000000000000000007b9fcbd005511aCBd5",
+          "symbol": "SPCXc",
+          "name": "Space Exploration Technologies Corp.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/79fa65beabbe27c7b84a38b8f67a492793a0c203a5312c8feddc23e4b7c66b79.png",
+          "total_supply": 30116.60889535,
+          "isin": "US84615Q1031",
+          "multiplier": 1,
+          "nav_price": 129.34,
+          "nav_price_updated_at": "2026-11-20T21:52:02Z",
+          "description": "About Space Exploration Technologies Corp. (Coinbase Tokeniz",
+          "first_mint_date": "2026-09-03T18:15:37Z",
+          "adgm_isin": "AE000A4AWGW1"
+        },
+        {
+          "contract_address": "0xb2000000000000000000008bC8786B856E61707C",
+          "symbol": "METAc",
+          "name": "Meta Platforms Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/1cedbfb3caee9498470945ff5041715b8c90921d904b3567a43bc4df82069e66.png",
+          "total_supply": 9037.50744454,
+          "isin": "US30303M1027",
+          "multiplier": 1.0003137922895982,
+          "nav_price": 567.17792022,
+          "nav_price_updated_at": "2026-11-20T21:15:17Z",
+          "description": "About Meta Platforms Inc. (Coinbase Tokenized Stock) (METAc)",
+          "first_mint_date": "2026-08-12T12:52:33Z",
+          "adgm_isin": "AE000A4AV8B8"
+        },
+        {
+          "contract_address": "0xB200000000000000000000Ab99cFa739E253872B",
+          "symbol": "MSFTc",
+          "name": "Microsoft Corporation",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/e90930ade985016f48816c6bd9fd1e8274b28507f4833881b3a16c77c2a3e2e7.png",
+          "total_supply": 2702.70741505,
+          "isin": "US5949181045",
+          "multiplier": 1,
+          "nav_price": 489.199,
+          "nav_price_updated_at": "2026-11-21T00:11:11Z",
+          "description": "About Microsoft Corporation (Coinbase Tokenized Stock) (MSFT",
+          "first_mint_date": "2026-09-03T18:11:07Z",
+          "adgm_isin": "AE000A4AWG17"
+        },
+        {
+          "contract_address": "0xb200000000000000000000C2e324d24d7eEcd1fb",
+          "symbol": "AAPLc",
+          "name": "Apple Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/873819f4b14efe44b94abecbc8e8864d2998163abd0ca55b449ee6eb07d0d94c.png",
+          "total_supply": 6103.12108319,
+          "isin": "US0378331005",
+          "multiplier": 1.0005003893019802,
+          "nav_price": 345.29769685,
+          "nav_price_updated_at": "2026-11-20T23:12:02Z",
+          "description": "About Apple Inc. (Coinbase Tokenized Stock) (AAPLc)\n\nApple I",
+          "first_mint_date": "2026-08-12T12:54:19Z",
+          "adgm_isin": "AE000A4AV8C6"
+        },
+        {
+          "contract_address": "0xb200000000000000000000d9192b6B456483C2E8",
+          "symbol": "AMZNc",
+          "name": "Amazon.com Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/06d3c2cac2c89e3a8bc4b2fe40ff259f104b55244321dea400e44b22f215896b.png",
+          "total_supply": 10198.50295316,
+          "isin": "US0231351067",
+          "multiplier": 1,
+          "nav_price": 250.879,
+          "nav_price_updated_at": "2026-11-21T00:23:57Z",
+          "description": "About Amazon.com Inc. (Coinbase Tokenized Stock) (AMZNc)\n\nAm",
+          "first_mint_date": "2026-09-03T18:06:13Z",
+          "adgm_isin": "AE000A4AWGV3"
+        },
+        {
+          "contract_address": "0xb200000000000000000000000D3176ee4af1102d",
+          "symbol": "RKTc",
+          "name": "Rocket Companies, Inc.",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/4dde0edccaaf5a6e62a814beeef58402cc8a1aba58ca6aab50f65b2ae28d1127.png",
+          "isin": "US77311W1018",
+          "multiplier": 1,
+          "description": "About Rocket Companies, Inc. (Coinbase Tokenized Stock) (RKT",
+          "adgm_isin": "AE000A4AXJY9"
+        }
+      ],
+      "next_page_token": "ejoweGIyMDAwMDAwMDAwMDAwMDAwMDAwMDA1NTUwZTg1MDYxMjQyMzYyNzE"
+    },
+    {
+      "tokens": [
+        {
+          "contract_address": "0xb200000000000000000000559eC0BEdaacf436eA",
+          "symbol": "SBETc",
+          "name": "Sharplink, Inc.",
+          "decimals": 8,
+          "isin": "US8200144058",
+          "multiplier": 1,
+          "description": "About Sharplink, Inc. (Coinbase Tokenized Stock) (SBETc)\n\nSh",
+          "adgm_isin": "AE000A4AXRG9"
+        }
+      ],
+      "next_page_token": "ejoweGIyMDAwMDAwMDAwMDAwMDAwMDAwMDBmMGUxM2Q5YzFjZGZkMjExYzg"
+    },
+    {
+      "tokens": [
+        {
+          "contract_address": "0xb200000000000000000000F327a373aa86Ac86A8",
+          "symbol": "HSYc",
+          "name": "The Hershey Company",
+          "decimals": 8,
+          "icon_url": "https://metadata.coinbase.com/equity_icons/1b679535d38aea571dd9a3d868d67ac971b9d4b3ab6cbd1ab38fed6aaa336851.png",
+          "isin": "US4278661081",
+          "multiplier": 1,
+          "description": "About The Hershey Company (Coinbase Tokenized Stock) (HSYc)\n",
+          "adgm_isin": "AE000A4AXSS2"
+        }
+      ]
+    }
+  ]
+}

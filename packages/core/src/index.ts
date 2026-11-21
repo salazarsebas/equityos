@@ -11,6 +11,22 @@ export {
 } from "./jcs.ts";
 export { INDEX_SPEC_JSON_SCHEMA } from "./json-schema.ts";
 export {
+  CALENDAR_FIRST_DATE,
+  CALENDAR_LAST_DATE,
+  type MarketPhase,
+  type MarketSession,
+  marketPhaseAt,
+  marketSession,
+  tradingSecondsBetween,
+} from "./market-calendar.ts";
+export {
+  InvalidDecimalsError,
+  MAX_TOKEN_DECIMALS,
+  positionValueUsdE8,
+  type Rounding,
+  USD_E8,
+} from "./position-value.ts";
+export {
   type Address,
   CALC_ID,
   type Constituent,
@@ -29,6 +45,16 @@ export {
   TOTAL_WEIGHT_BPS,
   type WeightConstraints,
 } from "./spec.ts";
+export {
+  CLOCK_SKEW_TOLERANCE_SECONDS,
+  classifyStaleness,
+  FEED_HEARTBEAT_SECONDS,
+  HEARTBEAT_GRACE_SECONDS,
+  LIVE_MAX_AGE_SECONDS,
+  type StalenessInput,
+  type StalenessStatus,
+  UNCOVERED_MAX_AGE_SECONDS,
+} from "./staleness.ts";
 export { type SpecError, type SpecErrorCode, type SpecValidationResult, validateSpec } from "./validate.ts";
 export {
   type CheckCode,
