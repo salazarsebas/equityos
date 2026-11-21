@@ -47,24 +47,42 @@ contract IndexConsumer {
         }
     }
 
-    /// @notice Whether `token` is a constituent of the version, and its stored weight.
+    /// @notice Whether `token` is a constituent of the version. Valid for every composition.
+    /// @dev A RuleBased version stores no constituents, so this is always false for it: membership of a
+    ///      rule-based universe cannot be decided from the mirror.
+    function isConstituent(bytes32 indexId, uint32 version, address token) external view returns (bool) {
+        IIndexRegistry.Constituent[] memory constituents = REGISTRY.constituentsOf(indexId, version);
+        (bool found,) = _find(constituents, token);
+        return found;
+    }
+
+    /// @notice Stored weight of `token` in a static version, in basis points. 0 means "not a constituent".
+    /// @dev Reverts with {NotStatic} for any other composition. A DynamicWeights version stores 0 for every
+    ///      token, which means "not known onchain", not "zero weight": returning it would be wrong.
+    function staticWeightOf(bytes32 indexId, uint32 version, address token) external view returns (uint16) {
+        if (REGISTRY.getVersion(indexId, version).composition != IIndexRegistry.Composition.Static) {
+            revert NotStatic(indexId, version);
+        }
+        IIndexRegistry.Constituent[] memory constituents = REGISTRY.constituentsOf(indexId, version);
+        (bool found, uint256 position) = _find(constituents, token);
+        return found ? constituents[position].weightBps : 0;
+    }
+
     /// @dev Binary search, valid because the registry stores tokens in strictly ascending order.
-    function findConstituent(
-        bytes32 indexId,
-        uint32 version,
+    function _find(
+        IIndexRegistry.Constituent[] memory constituents,
         address token
     )
-        external
-        view
-        returns (bool found, uint16 weightBps)
+        private
+        pure
+        returns (bool found, uint256 position)
     {
-        IIndexRegistry.Constituent[] memory constituents = REGISTRY.constituentsOf(indexId, version);
         uint256 low = 0;
         uint256 high = constituents.length;
         while (low < high) {
             uint256 middle = (low + high) / 2;
             address candidate = constituents[middle].token;
-            if (candidate == token) return (true, constituents[middle].weightBps);
+            if (candidate == token) return (true, middle);
             if (candidate < token) low = middle + 1;
             else high = middle;
         }

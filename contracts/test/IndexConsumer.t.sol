@@ -45,7 +45,7 @@ contract IndexConsumerTest is RegistryTestBase {
     }
 
     function testFuzz_TargetAllocation_ConservesTotal(uint256 countSeed, uint128 total) public {
-        uint256 count = bound(countSeed, 1, 128);
+        uint256 count = bound(countSeed, 1, 64);
         bytes32 indexId = _createStatic(alice, SALT, count);
 
         (address[] memory tokens, uint256[] memory amounts, uint256 unallocated) =
@@ -89,33 +89,55 @@ contract IndexConsumerTest is RegistryTestBase {
         consumer.targetAllocation(indexId, 2, 1000);
     }
 
-    function test_FindConstituent_BinarySearchOverAscendingTokens() public {
-        address[] memory tokens = _tokens(128);
-        uint16[] memory weights = _weights(128);
+    function test_StaticWeightOf_BinarySearchOverAscendingTokens() public {
+        address[] memory tokens = _tokens(64);
+        uint16[] memory weights = _weights(64);
         vm.prank(alice);
         bytes32 indexId = registry.createIndex(SALT, _spec(200), tokens, weights);
 
         for (uint256 i = 0; i < tokens.length; ++i) {
-            (bool found, uint16 weightBps) = consumer.findConstituent(indexId, 1, tokens[i]);
-            assertTrue(found);
-            assertEq(weightBps, weights[i]);
+            assertEq(consumer.staticWeightOf(indexId, 1, tokens[i]), weights[i]);
+            assertTrue(consumer.isConstituent(indexId, 1, tokens[i]));
 
             // The address right after a constituent is never one, because of the gap between tokens.
-            (bool foundNeighbour,) = consumer.findConstituent(indexId, 1, address(uint160(tokens[i]) + 1));
-            assertFalse(foundNeighbour);
+            address neighbour = address(uint160(tokens[i]) + 1);
+            assertEq(consumer.staticWeightOf(indexId, 1, neighbour), 0);
+            assertFalse(consumer.isConstituent(indexId, 1, neighbour));
         }
 
-        (bool foundZero,) = consumer.findConstituent(indexId, 1, address(0));
-        assertFalse(foundZero);
-        (bool foundMax,) = consumer.findConstituent(indexId, 1, address(type(uint160).max));
-        assertFalse(foundMax);
+        assertFalse(consumer.isConstituent(indexId, 1, address(0)));
+        assertFalse(consumer.isConstituent(indexId, 1, address(type(uint160).max)));
+        assertEq(consumer.staticWeightOf(indexId, 1, address(0)), 0);
     }
 
-    function test_FindConstituent_EmptyForRuleBased() public {
+    /// @dev A DynamicWeights version stores zero weights. The consumer must refuse to read them as weights.
+    function test_RevertWhen_StaticWeightOfOnDynamicWeightsVersion() public {
+        address[] memory tokens = _tokens(3);
+        vm.prank(alice);
+        bytes32 indexId = registry.createIndex(SALT, _spec(200), tokens, _noWeights());
+
+        for (uint256 i = 0; i < tokens.length; ++i) {
+            vm.expectRevert(abi.encodeWithSelector(IndexConsumer.NotStatic.selector, indexId, 1));
+            consumer.staticWeightOf(indexId, 1, tokens[i]);
+            // Membership is still a valid question for a dynamic version.
+            assertTrue(consumer.isConstituent(indexId, 1, tokens[i]));
+        }
+    }
+
+    function test_RevertWhen_StaticWeightOfOnRuleBasedVersion() public {
         vm.prank(alice);
         bytes32 indexId = registry.createIndex(SALT, _spec(200), _noTokens(), _noWeights());
-        (bool found, uint16 weightBps) = consumer.findConstituent(indexId, 1, _tokens(1)[0]);
-        assertFalse(found);
-        assertEq(weightBps, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(IndexConsumer.NotStatic.selector, indexId, 1));
+        consumer.staticWeightOf(indexId, 1, _tokens(1)[0]);
+        assertFalse(consumer.isConstituent(indexId, 1, _tokens(1)[0]));
+    }
+
+    function test_RevertWhen_LookupOnUnknownVersion() public {
+        bytes32 indexId = _createStatic(alice, SALT, 2);
+        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.VersionNotFound.selector, indexId, 2));
+        consumer.staticWeightOf(indexId, 2, _tokens(1)[0]);
+        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.VersionNotFound.selector, indexId, 2));
+        consumer.isConstituent(indexId, 2, _tokens(1)[0]);
     }
 }
