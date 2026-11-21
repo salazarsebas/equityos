@@ -2,7 +2,11 @@ import { defineConfig, devices } from "@playwright/test";
 
 const port = 3100;
 
-/** Smoke tests against the production build. Run `bun run build` first. */
+/**
+ * Smoke tests against the production build. Run `bun run build` first. The server replays the recorded market
+ * data of `test/fixtures/market` with the clock fixed at the recorded block, so the tests make no network access
+ * and see the same values on every run.
+ */
 export default defineConfig({
   testDir: "e2e",
   testMatch: "**/*.e2e.ts",
@@ -18,6 +22,7 @@ export default defineConfig({
   webServer: {
     command: `bun run start --port ${port}`,
     url: `http://127.0.0.1:${port}`,
+    env: { MARKET_REPLAY_DIR: "test/fixtures/market" },
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },
