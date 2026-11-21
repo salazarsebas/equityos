@@ -67,3 +67,25 @@ export {
   verifyVersion,
 } from "./verify.ts";
 export { computeConstituents, computeEqualWeights, WeightCalculationError, type WeightErrorCode } from "./weights.ts";
+export {
+  CalculationInputError,
+  type CalculationInputErrorCode,
+  type CalculationIssue,
+  type CalculationIssueCode,
+  type ConstituentDrift,
+  computeDrift,
+  type DriftReport,
+  type Holding,
+  type OutsideHolding,
+  type PortfolioInput,
+  type PortfolioValuation,
+  type PositionValuation,
+  type PriceStatus,
+  QUOTE_DECIMALS,
+  QUOTE_PRICE_E8,
+  QUOTE_UNIT_VALUE_USD_E8,
+  type ReferencePrice,
+  type TargetConstituent,
+  valuePortfolio,
+  type WeightedPosition,
+} from "./portfolio.ts";
