@@ -1,13 +1,30 @@
+# OS and editors
 .DS_Store
+
+# Dependencies
 node_modules/
+
+# Environment
 .env
 .env.*
 !.env.example
+
+# Git worktrees
 .worktrees/
+
+# TypeScript and package builds
+dist/
+*.tsbuildinfo
+coverage/
+
+# Next.js
 .next/
 out/
-dist/
+next-env.d.ts
+
+# Foundry (contracts/out is covered by out/ above)
 cache/
 broadcast/
-coverage/
+
+# Logs
 *.log
