@@ -1,0 +1,8 @@
+{
+  "constituentsOf worst case (128), warm: execution": "62498",
+  "createIndex typical (600 bytes, 10 static): execution": "822264",
+  "createIndex typical (600 bytes, 10 static): transaction": "859404",
+  "createIndex worst case (8192 bytes, 128 static): execution": "8880793",
+  "createIndex worst case (8192 bytes, 128 static): transaction": "9097697",
+  "specOf worst case (8192 bytes), warm: execution": "42939"
+}

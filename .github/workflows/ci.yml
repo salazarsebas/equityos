@@ -81,5 +81,8 @@ jobs:
       - name: Build
         run: forge build --sizes
 
+      # Fails if a measured gas figure differs from the committed contracts/snapshots.
       - name: Test
         run: forge test -vvv
+        env:
+          FORGE_SNAPSHOT_CHECK: true
