@@ -1,0 +1,52 @@
+/*
+ * Design tokens. Every color is declared once as light-dark(<light>, <dark>), so the two themes cannot drift
+ * apart. The active theme follows the system preference unless <html data-theme="light|dark"> overrides it.
+ * test/contrast.test.ts parses this file and checks the WCAG AA contrast of every text and control role.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --bg-page: light-dark(#fafaf7, #0f100e);
+  --bg-surface: light-dark(#ffffff, #161714);
+  --bg-subtle: light-dark(#f3f3ef, #1e1f1b);
+  --scrim: light-dark(rgb(23 23 20 / 0.4), rgb(0 0 0 / 0.6));
+
+  /* Borders */
+  --border: light-dark(#d9d9d2, #2e2f2a);
+  --border-strong: light-dark(#6e6e65, #94948a);
+  --border-overlay: light-dark(#d9d9d2, #94948a);
+
+  /* Text */
+  --text-primary: light-dark(#171714, #edede8);
+  --text-secondary: light-dark(#55554d, #b4b4aa);
+  --text-tertiary: light-dark(#6e6e65, #94948a);
+  --text-disabled: light-dark(#94948a, #6e6e65);
+
+  /* Accent: interaction only (links, primary action, focus, selection) */
+  --accent: light-dark(#1d3fbf, #93a8ff);
+  --accent-hover: light-dark(#17329a, #b3c2ff);
+  --accent-fg: light-dark(#ffffff, #0f100e);
+  --accent-subtle: light-dark(#e8ecfb, #1a2147);
+
+  /* Semantic: positive and negative carry the sign of a return, warning and info carry state */
+  --positive: light-dark(#0b6e3b, #4fbf86);
+  --positive-subtle: light-dark(#e6f2ea, #13291d);
+  --negative: light-dark(#b42318, #f0766a);
+  --negative-subtle: light-dark(#fbeae8, #331815);
+  --warning: light-dark(#8a5a00, #e0a93b);
+  --warning-subtle: light-dark(#faf0d9, #2e2410);
+  --info: light-dark(#2b4a8c, #9bb4e8);
+  --info-subtle: light-dark(#e8edf8, #18223a);
+
+  /* The single elevation, for dialogs and popovers. Dark replaces the shadow with a stronger outline. */
+  --elevation-overlay: 0 4px 16px light-dark(rgb(23 23 20 / 0.1), transparent);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

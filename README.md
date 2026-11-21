@@ -21,7 +21,8 @@ What exists today is the project scaffold only:
 - A Bun workspaces monorepo with strict TypeScript, Biome formatting and linting, and CI.
 - `@equityos/core` with one utility: fixed-point `mulDivDown` and `mulDivUp` on `bigint`, plus the `BPS` constant.
 - `@equityos/sdk` as a package skeleton that exports its version and nothing else.
-- A Next.js web app with a single static home page.
+- A Next.js web app with a design system, an application shell, a static home page and a component reference
+  page at `/dev/components`. See [docs/product/design-system.md](docs/product/design-system.md).
 - A Foundry project with a pinned toolchain and no contracts.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
@@ -77,6 +78,7 @@ All commands run from the repository root.
 | `bun run typecheck`           | Type-check every workspace                           |
 | `bun run test`                | Run the unit tests of every workspace                |
 | `bun run build`               | Build the packages and the web app                   |
+| `bun run test:e2e`            | Run the Playwright smoke test against the build      |
 | `bun run contracts:build`     | Compile the Solidity project                         |
 | `bun run contracts:test`      | Run the Foundry tests                                |
 | `bun run contracts:fmt:check` | Verify Solidity formatting                           |
