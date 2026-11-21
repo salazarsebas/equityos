@@ -1,0 +1,2329 @@
+{
+  "schema": "equityos.index/1",
+  "calc": "equityos.calc/1",
+  "vectors": [
+    {
+      "name": "root-not-object",
+      "spec": [
+        {
+          "schema": "equityos.index/1",
+          "calc": "equityos.calc/1",
+          "chainId": 8453,
+          "name": "Test Index 3",
+          "slug": "test-index-3",
+          "description": "Test vector with 3 constituents.",
+          "universe": {
+            "type": "static",
+            "tokens": [
+              "0xb200000000000000000000000000000000000001",
+              "0xb200000000000000000000000000000000000002",
+              "0xb200000000000000000000000000000000000003"
+            ]
+          },
+          "weighting": {
+            "type": "equal"
+          },
+          "pricing": {
+            "source": "chainlink-aggregator-v3",
+            "feeds": [
+              "0xfeed000000000000000000000000000000000001",
+              "0xfeed000000000000000000000000000000000002",
+              "0xfeed000000000000000000000000000000000003"
+            ]
+          },
+          "rebalance": {
+            "trigger": "drift",
+            "driftThresholdBps": 500,
+            "minIntervalSeconds": 604800
+          }
+        }
+      ],
+      "error": {
+        "path": "",
+        "code": "invalid_type"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "schema-unsupported",
+      "spec": {
+        "schema": "equityos.index/2",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/schema",
+        "code": "unsupported_schema"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "calc-unsupported",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/2",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/calc",
+        "code": "unsupported_calc"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "unknown-root-property",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "tags": "stocks"
+      },
+      "error": {
+        "path": "/tags",
+        "code": "unknown_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "unknown-nested-property",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800,
+          "slippageBps": 50
+        }
+      },
+      "error": {
+        "path": "/rebalance/slippageBps",
+        "code": "unknown_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "missing-slug",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/slug",
+        "code": "missing_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "missing-description",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/description",
+        "code": "missing_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "description-null",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": null,
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/description",
+        "code": "invalid_type"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "description-not-nfc",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "café",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/description",
+        "code": "not_nfc"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "chain-id-fraction",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453.5,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/chainId",
+        "code": "not_safe_integer"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "chain-id-2-pow-53",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 9007199254740992,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/chainId",
+        "code": "not_safe_integer"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "chain-id-string",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": "8453",
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/chainId",
+        "code": "invalid_type"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "chain-id-zero",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 0,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/chainId",
+        "code": "out_of_range"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "name-non-ascii",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Índice",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/name",
+        "code": "invalid_name"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "name-empty",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/name",
+        "code": "invalid_name"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "name-control-character",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test\tIndex",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/name",
+        "code": "invalid_name"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "name-too-long",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/name",
+        "code": "invalid_name"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "slug-uppercase",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "Test-index",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/slug",
+        "code": "invalid_slug"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "slug-trailing-hyphen",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/slug",
+        "code": "invalid_slug"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "slug-too-long",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/slug",
+        "code": "invalid_slug"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "universe-rule-based",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "rule",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/type",
+        "code": "invalid_value"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "token-mixed-case",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xB2000000000000000000000000000000000000Ab"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens/2",
+        "code": "invalid_address"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "token-too-short",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": ["0xb200000000000000000000000000000000000001", "0xb200000000000000000000000000000000000002", "0xb2"]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens/2",
+        "code": "invalid_address"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "token-zero-address",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0x0000000000000000000000000000000000000000",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens/0",
+        "code": "zero_address"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "tokens-not-sorted",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000003",
+            "0xb200000000000000000000000000000000000002"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens/2",
+        "code": "tokens_not_strictly_ascending"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "tokens-duplicate",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000002"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens/2",
+        "code": "tokens_not_strictly_ascending"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "tokens-empty",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 0",
+        "slug": "test-index-0",
+        "description": "Test vector with 0 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": []
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": []
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens",
+        "code": "too_few_items"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "feeds-length-mismatch",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": ["0xfeed000000000000000000000000000000000001", "0xfeed000000000000000000000000000000000002"]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/pricing/feeds",
+        "code": "length_mismatch"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "feed-mixed-case",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xFEED000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/pricing/feeds/2",
+        "code": "invalid_address"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "pricing-source-unknown",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "pyth",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/pricing/source",
+        "code": "invalid_value"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "weighting-supply-value",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "supplyValue"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/type",
+        "code": "invalid_value"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "weighting-equal-with-weights",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal",
+          "weightsBps": [3334, 3333, 3333]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps",
+        "code": "unknown_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "weighting-fixed-without-weights",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps",
+        "code": "missing_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "weights-sum-9999",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [5000, 3000, 1999]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps",
+        "code": "invalid_weight_sum"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "weights-sum-10001",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [5000, 3000, 2001]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps",
+        "code": "invalid_weight_sum"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "weight-zero",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [5000, 5000, 0]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps/2",
+        "code": "out_of_range"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "weight-string",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [5000, 3000, "2000"]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps/2",
+        "code": "invalid_type"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "weights-length-mismatch",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [5000, 5000]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps",
+        "code": "length_mismatch"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "constraints-empty",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {}
+      },
+      "error": {
+        "path": "/constraints",
+        "code": "empty_object"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "constraints-unknown-property",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "maxWeightBps": 5000,
+          "maxWeight": 50
+        }
+      },
+      "error": {
+        "path": "/constraints/maxWeight",
+        "code": "unknown_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "equal-cap-infeasible",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "maxWeightBps": 3333
+        }
+      },
+      "error": {
+        "path": "/constraints/maxWeightBps",
+        "code": "cap_infeasible"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "equal-floor-infeasible",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "minWeightBps": 3334
+        }
+      },
+      "error": {
+        "path": "/constraints/minWeightBps",
+        "code": "floor_infeasible"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "fixed-weight-above-max",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [4001, 3000, 2999]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "maxWeightBps": 4000
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps/0",
+        "code": "weight_above_max"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "fixed-weight-below-min",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [5000, 4001, 999]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "minWeightBps": 1000
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps/2",
+        "code": "weight_below_min"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "fixed-weight-above-max-with-feasible-cap",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "fixed",
+          "weightsBps": [6000, 2000, 2000]
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "maxWeightBps": 5000,
+          "minWeightBps": 2000
+        }
+      },
+      "error": {
+        "path": "/weighting/weightsBps/0",
+        "code": "weight_above_max"
+      },
+      "jsonSchema": "accepts"
+    },
+    {
+      "name": "tokens-65",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 65",
+        "slug": "test-index-65",
+        "description": "Test vector with 65 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003",
+            "0xb200000000000000000000000000000000000004",
+            "0xb200000000000000000000000000000000000005",
+            "0xb200000000000000000000000000000000000006",
+            "0xb200000000000000000000000000000000000007",
+            "0xb200000000000000000000000000000000000008",
+            "0xb200000000000000000000000000000000000009",
+            "0xb20000000000000000000000000000000000000a",
+            "0xb20000000000000000000000000000000000000b",
+            "0xb20000000000000000000000000000000000000c",
+            "0xb20000000000000000000000000000000000000d",
+            "0xb20000000000000000000000000000000000000e",
+            "0xb20000000000000000000000000000000000000f",
+            "0xb200000000000000000000000000000000000010",
+            "0xb200000000000000000000000000000000000011",
+            "0xb200000000000000000000000000000000000012",
+            "0xb200000000000000000000000000000000000013",
+            "0xb200000000000000000000000000000000000014",
+            "0xb200000000000000000000000000000000000015",
+            "0xb200000000000000000000000000000000000016",
+            "0xb200000000000000000000000000000000000017",
+            "0xb200000000000000000000000000000000000018",
+            "0xb200000000000000000000000000000000000019",
+            "0xb20000000000000000000000000000000000001a",
+            "0xb20000000000000000000000000000000000001b",
+            "0xb20000000000000000000000000000000000001c",
+            "0xb20000000000000000000000000000000000001d",
+            "0xb20000000000000000000000000000000000001e",
+            "0xb20000000000000000000000000000000000001f",
+            "0xb200000000000000000000000000000000000020",
+            "0xb200000000000000000000000000000000000021",
+            "0xb200000000000000000000000000000000000022",
+            "0xb200000000000000000000000000000000000023",
+            "0xb200000000000000000000000000000000000024",
+            "0xb200000000000000000000000000000000000025",
+            "0xb200000000000000000000000000000000000026",
+            "0xb200000000000000000000000000000000000027",
+            "0xb200000000000000000000000000000000000028",
+            "0xb200000000000000000000000000000000000029",
+            "0xb20000000000000000000000000000000000002a",
+            "0xb20000000000000000000000000000000000002b",
+            "0xb20000000000000000000000000000000000002c",
+            "0xb20000000000000000000000000000000000002d",
+            "0xb20000000000000000000000000000000000002e",
+            "0xb20000000000000000000000000000000000002f",
+            "0xb200000000000000000000000000000000000030",
+            "0xb200000000000000000000000000000000000031",
+            "0xb200000000000000000000000000000000000032",
+            "0xb200000000000000000000000000000000000033",
+            "0xb200000000000000000000000000000000000034",
+            "0xb200000000000000000000000000000000000035",
+            "0xb200000000000000000000000000000000000036",
+            "0xb200000000000000000000000000000000000037",
+            "0xb200000000000000000000000000000000000038",
+            "0xb200000000000000000000000000000000000039",
+            "0xb20000000000000000000000000000000000003a",
+            "0xb20000000000000000000000000000000000003b",
+            "0xb20000000000000000000000000000000000003c",
+            "0xb20000000000000000000000000000000000003d",
+            "0xb20000000000000000000000000000000000003e",
+            "0xb20000000000000000000000000000000000003f",
+            "0xb200000000000000000000000000000000000040",
+            "0xb200000000000000000000000000000000000041"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003",
+            "0xfeed000000000000000000000000000000000004",
+            "0xfeed000000000000000000000000000000000005",
+            "0xfeed000000000000000000000000000000000006",
+            "0xfeed000000000000000000000000000000000007",
+            "0xfeed000000000000000000000000000000000008",
+            "0xfeed000000000000000000000000000000000009",
+            "0xfeed00000000000000000000000000000000000a",
+            "0xfeed00000000000000000000000000000000000b",
+            "0xfeed00000000000000000000000000000000000c",
+            "0xfeed00000000000000000000000000000000000d",
+            "0xfeed00000000000000000000000000000000000e",
+            "0xfeed00000000000000000000000000000000000f",
+            "0xfeed000000000000000000000000000000000010",
+            "0xfeed000000000000000000000000000000000011",
+            "0xfeed000000000000000000000000000000000012",
+            "0xfeed000000000000000000000000000000000013",
+            "0xfeed000000000000000000000000000000000014",
+            "0xfeed000000000000000000000000000000000015",
+            "0xfeed000000000000000000000000000000000016",
+            "0xfeed000000000000000000000000000000000017",
+            "0xfeed000000000000000000000000000000000018",
+            "0xfeed000000000000000000000000000000000019",
+            "0xfeed00000000000000000000000000000000001a",
+            "0xfeed00000000000000000000000000000000001b",
+            "0xfeed00000000000000000000000000000000001c",
+            "0xfeed00000000000000000000000000000000001d",
+            "0xfeed00000000000000000000000000000000001e",
+            "0xfeed00000000000000000000000000000000001f",
+            "0xfeed000000000000000000000000000000000020",
+            "0xfeed000000000000000000000000000000000021",
+            "0xfeed000000000000000000000000000000000022",
+            "0xfeed000000000000000000000000000000000023",
+            "0xfeed000000000000000000000000000000000024",
+            "0xfeed000000000000000000000000000000000025",
+            "0xfeed000000000000000000000000000000000026",
+            "0xfeed000000000000000000000000000000000027",
+            "0xfeed000000000000000000000000000000000028",
+            "0xfeed000000000000000000000000000000000029",
+            "0xfeed00000000000000000000000000000000002a",
+            "0xfeed00000000000000000000000000000000002b",
+            "0xfeed00000000000000000000000000000000002c",
+            "0xfeed00000000000000000000000000000000002d",
+            "0xfeed00000000000000000000000000000000002e",
+            "0xfeed00000000000000000000000000000000002f",
+            "0xfeed000000000000000000000000000000000030",
+            "0xfeed000000000000000000000000000000000031",
+            "0xfeed000000000000000000000000000000000032",
+            "0xfeed000000000000000000000000000000000033",
+            "0xfeed000000000000000000000000000000000034",
+            "0xfeed000000000000000000000000000000000035",
+            "0xfeed000000000000000000000000000000000036",
+            "0xfeed000000000000000000000000000000000037",
+            "0xfeed000000000000000000000000000000000038",
+            "0xfeed000000000000000000000000000000000039",
+            "0xfeed00000000000000000000000000000000003a",
+            "0xfeed00000000000000000000000000000000003b",
+            "0xfeed00000000000000000000000000000000003c",
+            "0xfeed00000000000000000000000000000000003d",
+            "0xfeed00000000000000000000000000000000003e",
+            "0xfeed00000000000000000000000000000000003f",
+            "0xfeed000000000000000000000000000000000040",
+            "0xfeed000000000000000000000000000000000041"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/universe/tokens",
+        "code": "too_many_items"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "cap-above-10000",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "constraints": {
+          "maxWeightBps": 10001
+        }
+      },
+      "error": {
+        "path": "/constraints/maxWeightBps",
+        "code": "out_of_range"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "rebalance-trigger-unknown",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "calendar",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/rebalance/trigger",
+        "code": "invalid_value"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "drift-threshold-zero",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 0,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "/rebalance/driftThresholdBps",
+        "code": "out_of_range"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "min-interval-negative",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": -1
+        }
+      },
+      "error": {
+        "path": "/rebalance/minIntervalSeconds",
+        "code": "out_of_range"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "parent-index-id-too-short",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "parent": {
+          "chainId": 8453,
+          "registry": "0xb200000000000000000000000000000000000009",
+          "indexId": "0x1a",
+          "version": 1,
+          "specHash": "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+        }
+      },
+      "error": {
+        "path": "/parent/indexId",
+        "code": "invalid_bytes32"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "parent-missing-spec-hash",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "parent": {
+          "chainId": 8453,
+          "registry": "0xb200000000000000000000000000000000000009",
+          "indexId": "0x1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+          "version": 1
+        }
+      },
+      "error": {
+        "path": "/parent/specHash",
+        "code": "missing_property"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "parent-version-zero",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "Test vector with 3 constituents.",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        },
+        "parent": {
+          "chainId": 8453,
+          "registry": "0xb200000000000000000000000000000000000009",
+          "indexId": "0x1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+          "version": 0,
+          "specHash": "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+        }
+      },
+      "error": {
+        "path": "/parent/version",
+        "code": "out_of_range"
+      },
+      "jsonSchema": "rejects"
+    },
+    {
+      "name": "spec-too-large-description",
+      "spec": {
+        "schema": "equityos.index/1",
+        "calc": "equityos.calc/1",
+        "chainId": 8453,
+        "name": "Test Index 3",
+        "slug": "test-index-3",
+        "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "universe": {
+          "type": "static",
+          "tokens": [
+            "0xb200000000000000000000000000000000000001",
+            "0xb200000000000000000000000000000000000002",
+            "0xb200000000000000000000000000000000000003"
+          ]
+        },
+        "weighting": {
+          "type": "equal"
+        },
+        "pricing": {
+          "source": "chainlink-aggregator-v3",
+          "feeds": [
+            "0xfeed000000000000000000000000000000000001",
+            "0xfeed000000000000000000000000000000000002",
+            "0xfeed000000000000000000000000000000000003"
+          ]
+        },
+        "rebalance": {
+          "trigger": "drift",
+          "driftThresholdBps": 500,
+          "minIntervalSeconds": 604800
+        }
+      },
+      "error": {
+        "path": "",
+        "code": "spec_too_large"
+      },
+      "jsonSchema": "accepts"
+    }
+  ]
+}

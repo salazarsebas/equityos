@@ -1,0 +1,11 @@
+{
+  "constituentsOf typical (10), cold: execution": "29991",
+  "constituentsOf worst case (64), cold: execution": "163681",
+  "createIndex typical (600 bytes, 10 static): execution": "822264",
+  "createIndex typical (600 bytes, 10 static): transaction": "859404",
+  "createIndex worst case (8192 bytes, 64 static): execution": "7363405",
+  "createIndex worst case (8192 bytes, 64 static): transaction": "7548613",
+  "getVersion, cold: execution": "12157",
+  "specOf typical (600 bytes), cold: execution": "46732",
+  "specOf worst case (8192 bytes), cold: execution": "558939"
+}
