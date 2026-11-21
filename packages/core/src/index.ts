@@ -1,4 +1,15 @@
 export { BPS, DivisionByZeroError, mulDivDown, mulDivUp, NegativeOperandError } from "./fixed-point.ts";
+export { bytesToHex, specHash } from "./hash.ts";
+export {
+  type CanonicalErrorCode,
+  CanonicalizationError,
+  canonicalize,
+  type JsonValue,
+  MAX_DEPTH,
+  type ParseCanonicalResult,
+  parseCanonical,
+} from "./jcs.ts";
+export { INDEX_SPEC_JSON_SCHEMA } from "./json-schema.ts";
 export {
   CALENDAR_FIRST_DATE,
   CALENDAR_LAST_DATE,
@@ -16,6 +27,25 @@ export {
   USD_E8,
 } from "./position-value.ts";
 export {
+  type Address,
+  CALC_ID,
+  type Constituent,
+  type EqualWeighting,
+  type FixedWeighting,
+  type Hex,
+  INDEX_SCHEMA_ID,
+  type IndexSpec,
+  isAddress,
+  MAX_CONSTITUENTS,
+  MAX_NAME_LENGTH,
+  MAX_SPEC_BYTES,
+  MIN_CONSTITUENTS,
+  type ParentReference,
+  PRICE_SOURCE,
+  TOTAL_WEIGHT_BPS,
+  type WeightConstraints,
+} from "./spec.ts";
+export {
   CLOCK_SKEW_TOLERANCE_SECONDS,
   classifyStaleness,
   FEED_HEARTBEAT_SECONDS,
@@ -25,3 +55,15 @@ export {
   type StalenessStatus,
   UNCOVERED_MAX_AGE_SECONDS,
 } from "./staleness.ts";
+export { type SpecError, type SpecErrorCode, type SpecValidationResult, validateSpec } from "./validate.ts";
+export {
+  type CheckCode,
+  type CheckId,
+  type CheckResult,
+  type CheckStatus,
+  type PublishedConstituent,
+  type VerificationInput,
+  type VerificationReport,
+  verifyVersion,
+} from "./verify.ts";
+export { computeConstituents, computeEqualWeights, WeightCalculationError, type WeightErrorCode } from "./weights.ts";
