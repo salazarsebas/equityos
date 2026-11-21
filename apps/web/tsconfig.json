@@ -10,8 +10,10 @@
     "incremental": true,
     "resolveJsonModule": true,
     "plugins": [{ "name": "next" }],
+    "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@equityos/core": ["../../packages/core/src/index.ts"]
     }
   },
   "include": [

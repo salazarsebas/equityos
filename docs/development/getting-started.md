@@ -82,12 +82,23 @@ bun run --filter @equityos/core test
 | Variable               | Used by    | Purpose                                                                                |
 | ---------------------- | ---------- | -------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_SITE_URL` | `apps/web` | Public origin for canonical URLs, `robots.txt` and the sitemap. Defaults to localhost. |
+| `BASE_RPC_URL`         | `apps/web` | Base mainnet JSON-RPC endpoint for server-side market data. Required in production.    |
+
+`apps/web/.env.example` lists the variables. Outside production, an unset `BASE_RPC_URL` falls back to the public
+Base endpoint, which is rate limited. The market data layer is described in
+[Market data layer](../architecture/market-data.md).
 
 ## TypeScript configuration
 
 Every workspace extends `tsconfig.base.json`. The packages have two configurations: `tsconfig.json` type-checks
 sources and tests without emitting, and `tsconfig.build.json` emits `dist/` from `src/` only. The web app
 type-checks its unit tests with `tsconfig.test.json`, which adds the Bun types that application code must not see.
+
+The web app imports `@equityos/core` from source through a `paths` entry in `apps/web/tsconfig.json`, so
+type-checking and unit tests do not depend on a prior build of the package.
+
+`apps/web/test/market/live.test.ts` reads the live issuer API and Base mainnet. It is skipped unless
+`LIVE_TESTS=1` is set and is not part of CI.
 
 ## Solidity toolchain
 
