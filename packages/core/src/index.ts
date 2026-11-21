@@ -31,6 +31,16 @@ export {
 } from "./spec.ts";
 export { type SpecError, type SpecErrorCode, type SpecValidationResult, validateSpec } from "./validate.ts";
 export {
+  type CheckCode,
+  type CheckId,
+  type CheckResult,
+  type CheckStatus,
+  type PublishedConstituent,
+  type VerificationInput,
+  type VerificationReport,
+  verifyVersion,
+} from "./verify.ts";
+export {
   computeConstituents,
   computeWeights,
   WeightCalculationError,
