@@ -231,6 +231,26 @@ Every failure has a typed error with a stable `code`.
 `requireReferencePrice` returns a usable price or throws one of the errors above, for callers that cannot
 proceed without a price.
 
+## Replay of a recording
+
+When `MARKET_REPLAY_DIR` names a directory, the process-wide service does not read the API or the chain. It
+serves the recording in that directory (`asset-list.json` and `onchain.json`, in the format of
+`apps/web/test/fixtures/market`) through the same parsing, decoding, eligibility and pricing code, with the clock
+fixed at the time of the recorded block. The staleness classes are therefore those of that moment, on every run.
+
+This exists for the browser smoke tests, which run the production build without network access. It is not a way
+to serve users: a replayed snapshot is real data of a past block, not current data. `marketDataMode()` returns
+`replay`, the assets page shows a warning that names the recorded block, and `GET /api/v1/status` reports
+`marketData.mode: "replay"`. Never set the variable on a deployment.
+
+## Consumers
+
+- `/assets` renders the snapshot as a table.
+- The public API under `/api/v1` serializes it. See [the API documentation](../api/README.md).
+
+`listAssets(snapshot, eligible?)` returns the tokens of a snapshot ordered by symbol and then by address, for
+both.
+
 ## Tests
 
 Unit tests run without a network. They replay fixtures recorded from the live API and from Base mainnet

@@ -15,6 +15,7 @@ import {
 import { REFERENCE_FEEDS } from "./feeds";
 import { createMarketClient, type MarketClient, type OnchainSnapshot, readOnchain, type TokenRead } from "./onchain";
 import { buildReferencePrice, type ReferencePrice, type UsableReferencePrice } from "./reference-price";
+import { loadReplay, REPLAY_VARIABLE } from "./replay";
 
 /**
  * The asset list changes when the issuer lists a token, which is rare. Ten minutes bounds how long a new
@@ -139,12 +140,64 @@ export function createMarketData(options: MarketDataOptions = {}): MarketData {
   };
 }
 
+/**
+ * - `live`: the asset list API and Base mainnet are read as they are now.
+ * - `replay`: a recording of one past block is served, with the clock fixed at that block. For browser tests.
+ */
+export type MarketDataMode = "live" | "replay";
+
+function replayDirectory(env: NodeJS.ProcessEnv): string | null {
+  const directory = env[REPLAY_VARIABLE]?.trim() ?? "";
+  return directory === "" ? null : directory;
+}
+
+/**
+ * Where the process-wide service reads from. A caller that shows market data to a person or returns it from an
+ * API must state when the mode is `replay`: a replayed snapshot is real data of a past block, not current data.
+ */
+export function marketDataMode(env: NodeJS.ProcessEnv = process.env): MarketDataMode {
+  return replayDirectory(env) === null ? "live" : "replay";
+}
+
+/** Serves one recorded block forever. The clock is the block time, so the staleness classes never change. */
+function createReplayMarketData(directory: string): MarketData {
+  let snapshot: Promise<MarketSnapshot> | undefined;
+  return {
+    getSnapshot(): Promise<MarketSnapshot> {
+      snapshot ??= loadReplay(directory).then(({ assetList, onchain }) => {
+        const fetchedAt = onchain.blockTimestamp;
+        return buildMarketSnapshot(
+          { value: assetList, fetchedAt, servedStale: false, error: null },
+          { value: onchain, fetchedAt, servedStale: false, error: null },
+          fetchedAt,
+        );
+      });
+      return snapshot;
+    },
+  };
+}
+
 let shared: MarketData | undefined;
 
-/** The process-wide market data service. */
+/** The process-wide market data service: live, unless `MARKET_REPLAY_DIR` names a recording to replay. */
 export function getMarketData(): MarketData {
-  shared ??= createMarketData();
+  const directory = replayDirectory(process.env);
+  shared ??= directory === null ? createMarketData() : createReplayMarketData(directory);
   return shared;
+}
+
+/**
+ * The tokens of a snapshot in a stable order: by symbol, then by address. Symbols are display data and may
+ * repeat, so the address breaks ties.
+ *
+ * @param eligible keeps only index-eligible tokens when `true`, only ineligible ones when `false`
+ */
+export function listAssets(snapshot: MarketSnapshot, eligible?: boolean): AssetMarketData[] {
+  const entries = [...snapshot.assets.values()].filter(
+    (entry) => eligible === undefined || entry.eligibility.eligible === eligible,
+  );
+  const order = ({ asset }: AssetMarketData) => `${asset.symbol} ${asset.address}`;
+  return entries.sort((a, b) => (order(a) < order(b) ? -1 : 1));
 }
 
 /**
@@ -188,8 +241,10 @@ export function requireTransferable(snapshot: MarketSnapshot, token: Address): v
 }
 
 export type { AssetList, ListedAsset } from "./asset-list";
+export { BASE_CHAIN_ID } from "./config";
 export type { Eligibility, IneligibilityCode } from "./eligibility";
 export * from "./errors";
+export { REFERENCE_FEEDS } from "./feeds";
 export type { OnchainSnapshot, PendingMultiplier, TokenRead, TokenState } from "./onchain";
 export type {
   PricePoint,
