@@ -29,3 +29,4 @@ export {
   TOTAL_WEIGHT_BPS,
   type WeightConstraints,
 } from "./spec.ts";
+export { type SpecError, type SpecErrorCode, type SpecValidationResult, validateSpec } from "./validate.ts";
