@@ -94,5 +94,12 @@ jobs:
       - name: Build
         run: forge build --sizes
 
+      # Fails if a measured gas figure differs from the committed contracts/snapshots.
       - name: Test
         run: forge test -vvv
+        env:
+          FORGE_SNAPSHOT_CHECK: true
+
+      # Sends the deployment transactions to a local Anvil node, with an unlocked development account.
+      - name: Deploy to a local node
+        run: ./test/deploy-local.sh

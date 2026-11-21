@@ -10,12 +10,31 @@ solc_version = "0.8.39"
 evm_version = "prague"
 optimizer = true
 optimizer_runs = 200
+# Pinned explicitly: the deterministic deployment addresses depend on the exact bytecode, metadata included.
+via_ir = false
+bytecode_hash = "ipfs"
+cbor_metadata = true
 
 [profile.default.fuzz]
 runs = 256
 
+# Every handler call is expected to succeed: a revert inside the handler fails the campaign.
+[profile.default.invariant]
+runs = 64
+depth = 100
+fail_on_revert = true
+
 [profile.ci.fuzz]
 runs = 5000
+
+[profile.ci.invariant]
+runs = 256
+depth = 200
+fail_on_revert = true
+
+[lint]
+# The contracts contain no assembly on purpose, so the assembly keccak256 suggestion is not followed.
+exclude_lints = ["asm-keccak256"]
 
 [fmt]
 line_length = 120
