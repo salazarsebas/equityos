@@ -1,0 +1,24 @@
+import { defineConfig, devices } from "@playwright/test";
+
+const port = 3100;
+
+/** Smoke tests against the production build. Run `bun run build` first. */
+export default defineConfig({
+  testDir: "e2e",
+  testMatch: "**/*.e2e.ts",
+  fullyParallel: true,
+  forbidOnly: Boolean(process.env.CI),
+  retries: 0,
+  reporter: "list",
+  timeout: 20_000,
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    ...devices["Desktop Chrome"],
+  },
+  webServer: {
+    command: `bun run start --port ${port}`,
+    url: `http://127.0.0.1:${port}`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 30_000,
+  },
+});
