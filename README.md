@@ -2,11 +2,93 @@
 
 Programmable index infrastructure for tokenized stocks on Base.
 
-EquityOS lets anyone define an index of tokenized equities as a transparent, deterministic methodology, publish it,
-and let others replicate it from their own wallets. An index is a published rule set, not a pool of funds.
+EquityOS lets anyone define an index of tokenized stocks as a transparent, deterministic methodology, publish it,
+and let others replicate it from their own wallets.
 
-**Status:** early development. Nothing is deployed yet. This README will describe what is implemented as it lands.
+## Core idea
+
+- **An index is a methodology, not a fund.** An index is a published, versioned, deterministic rule set over
+  tokenized stocks. Given the same inputs, anyone can recompute the same constituents and weights.
+- **Replication happens per wallet.** A user who follows an index holds the constituents in their own wallet.
+- **No pooled funds.** EquityOS does not custody assets and does not pool user funds behind an index.
+
+## Status
+
+Early development. Nothing is deployed, and no index can be created, published or replicated yet.
+
+What exists today is the project scaffold only:
+
+- A Bun workspaces monorepo with strict TypeScript, Biome formatting and linting, and CI.
+- `@equityos/core` with one utility: fixed-point `mulDivDown` and `mulDivUp` on `bigint`, plus the `BPS` constant.
+- `@equityos/sdk` as a package skeleton that exports its version and nothing else.
+- A Next.js web app with a single static home page.
+- A Foundry project with a pinned toolchain and no contracts.
+
+Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+
+## Repository layout
+
+```text
+apps/web            Next.js app (App Router, React, Tailwind CSS)
+packages/core       @equityos/core: methodology and calculation engine (pure TypeScript)
+packages/sdk        @equityos/sdk: TypeScript SDK
+contracts           Foundry project for the Solidity contracts
+docs                Technical documentation
+.github/workflows   Continuous integration
+```
+
+## Prerequisites
+
+| Tool                             | Version                    | Used for                              |
+| -------------------------------- | -------------------------- | ------------------------------------- |
+| [Bun](https://bun.sh)            | 1.3.14                     | Package manager, script runner, tests |
+| [Node.js](https://nodejs.org)    | 22 or newer (see `.nvmrc`) | Runtime for the Next.js CLI           |
+| [Foundry](https://getfoundry.sh) | 1.5.1                      | Solidity build, test and format       |
+| [Git](https://git-scm.com)       | any recent version         | Source control and submodules         |
+
+## Install
+
+```sh
+git clone --recurse-submodules https://github.com/salazarsebas/equityos.git
+cd equityos
+bun install
+```
+
+If the repository was cloned without `--recurse-submodules`, fetch the Solidity dependencies with
+`git submodule update --init --recursive`.
+
+## Run
+
+```sh
+bun run dev
+```
+
+The web app is served at <http://localhost:3000>.
+
+## Check and test
+
+All commands run from the repository root.
+
+| Command                       | What it does                                         |
+| ----------------------------- | ---------------------------------------------------- |
+| `bun run format`              | Format TypeScript, JavaScript, JSON and CSS in place |
+| `bun run format:check`        | Verify formatting without writing                    |
+| `bun run lint`                | Lint with Biome                                      |
+| `bun run typecheck`           | Type-check every workspace                           |
+| `bun run test`                | Run the unit tests of every workspace                |
+| `bun run build`               | Build the packages and the web app                   |
+| `bun run contracts:build`     | Compile the Solidity project                         |
+| `bun run contracts:test`      | Run the Foundry tests                                |
+| `bun run contracts:fmt:check` | Verify Solidity formatting                           |
+
+CI runs the same checks on every pull request and on every push to `main`.
+
+## Documentation
+
+- [docs/README.md](docs/README.md): documentation index.
+- [AGENTS.md](AGENTS.md): working rules for contributors and coding agents.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to propose a change.
 
 ## License
 
-MIT
+[MIT](LICENSE)
