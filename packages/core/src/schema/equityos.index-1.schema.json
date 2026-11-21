@@ -3,7 +3,7 @@
   "$id": "urn:equityos:schema:index:1",
   "title": "equityos.index/1",
   "description": "Methodology spec of an EquityOS index. Structural rules only: a conforming validator also enforces the rules listed in $comment.",
-  "$comment": "Not expressible here and required for validity: (1) universe.tokens is strictly ascending; (2) pricing.feeds has the length of universe.tokens; (3) weighting.weightsBps has the length of universe.tokens; (4) weighting.weightsBps sums to 10000; (5) constraints.maxWeightBps times the number of tokens is at least 10000; (6) constraints.minWeightBps times the number of tokens is at most 10000; (7) description is in Unicode Normalization Form C and has no lone surrogate; (8) the RFC 8785 canonical form is at most 8192 bytes; (9) every number is an integer written without fraction or exponent, which the canonical form guarantees.",
+  "$comment": "Not expressible here and required for validity: (1) universe.tokens is strictly ascending; (2) pricing.feeds has the length of universe.tokens; (3) weighting.weightsBps has the length of universe.tokens; (4) weighting.weightsBps sums to 10000; (5) with fixed weighting, every weight is at most constraints.maxWeightBps and at least constraints.minWeightBps; (6) with equal weighting, constraints.maxWeightBps times the number of tokens is at least 10000 and constraints.minWeightBps times the number of tokens is at most 10000; (7) description is in Unicode Normalization Form C and has no lone surrogate; (8) the RFC 8785 canonical form is at most 8192 bytes; (9) every number is an integer written without fraction or exponent, which the canonical form guarantees.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -34,7 +34,7 @@
         "tokens": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 128,
+          "maxItems": 64,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/address",

@@ -34,7 +34,7 @@ function summary(input: Parameters<typeof verifyVersion>[0]): string[] {
 
 const fixedSpec = {
   ...baseSpec(4),
-  weighting: { type: "fixed", weightsBps: [6000, 2000, 1500, 500] },
+  weighting: { type: "fixed", weightsBps: [4000, 3000, 2250, 750] },
   constraints: { maxWeightBps: 4000 },
 };
 
@@ -189,10 +189,19 @@ describe("verifyVersion", () => {
     const replace = (index: number, change: Partial<Constituent>) =>
       input.constituents.map((constituent, i) => (i === index ? { ...constituent, ...change } : constituent));
 
-    test("uses the weights the calculation implies, not the raw fixed weights", () => {
+    test("expects fixed weights exactly as the spec states them", () => {
       expect(input.constituents.map(({ weightBps }) => weightBps)).toEqual([4000, 3000, 2250, 750]);
-      const raw = input.constituents.map(({ token }, i) => ({ token, weightBps: [6000, 2000, 1500, 500][i] ?? 0 }));
-      expect(c5(raw)).toEqual(["C4 pass ok", "C5 fail weight_mismatch"]);
+      const swapped = input.constituents.map(({ token }, i) => ({ token, weightBps: [3000, 4000, 2250, 750][i] ?? 0 }));
+      expect(c5(swapped)).toEqual(["C4 pass ok", "C5 fail weight_mismatch"]);
+    });
+
+    test("expects the rounded equal weights of an equal-weight spec", () => {
+      const equal = published(baseSpec(3));
+      const weights = (weightsBps: readonly number[]) =>
+        equal.constituents.map(({ token }, i) => ({ token, weightBps: weightsBps[i] ?? 0 }));
+      expect(summary({ ...equal, constituents: weights([3334, 3333, 3333]) })[4]).toBe("C5 pass ok");
+      expect(summary({ ...equal, constituents: weights([3333, 3334, 3333]) })[4]).toBe("C5 fail weight_mismatch");
+      expect(summary({ ...equal, constituents: weights([3333, 3333, 3334]) })[4]).toBe("C5 fail weight_mismatch");
     });
 
     test("fails on a different number of constituents", () => {

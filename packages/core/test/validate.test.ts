@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { canonicalize, MAX_SPEC_BYTES, type SpecErrorCode, validateSpec } from "../src/index.ts";
+import { canonicalize, MAX_CONSTITUENTS, MAX_SPEC_BYTES, type SpecErrorCode, validateSpec } from "../src/index.ts";
 import { address, baseSpec, range } from "./helpers.ts";
 
 type Spec = Record<string, unknown>;
+
+/** Canonical size of the largest spec the schema allows, with an empty description. */
+const MAXIMAL_EMPTY_BYTES = 6801;
 
 /** The `path code` pairs reported for a document, in order. */
 function errors(value: unknown): string[] {
@@ -44,7 +47,7 @@ describe("validateSpec on valid documents", () => {
       version: 4_294_967_295,
       specHash: `0x${"c3".repeat(32)}`,
     };
-    const full = fixed([5000, 3000, 2000], { constraints: { maxWeightBps: 4000, minWeightBps: 2500 }, parent });
+    const full = fixed([5000, 3000, 2000], { constraints: { maxWeightBps: 5000, minWeightBps: 2000 }, parent });
     expect(errors(full)).toEqual([]);
     expect(errors(withTokens(3, { constraints: { minWeightBps: 1 } }))).toEqual([]);
   });
@@ -309,7 +312,8 @@ describe("validateSpec addresses", () => {
   });
 
   test("bounds the number of tokens", () => {
-    expect(errors(withTokens(129))).toEqual(["/universe/tokens too_many_items"]);
+    expect(errors(withTokens(64))).toEqual([]);
+    expect(errors(withTokens(65))).toEqual(["/universe/tokens too_many_items"]);
     expect(errors(withTokens(2, { universe: { type: "static", tokens: "none" } }))).toEqual([
       "/universe/tokens invalid_type",
     ]);
@@ -387,7 +391,7 @@ describe("validateSpec weighting and constraints", () => {
     expect(errors(tooMany)).toEqual(["/weighting/weightsBps length_mismatch"]);
   });
 
-  test("requires the cap to be feasible: maxWeightBps * n >= 10_000", () => {
+  test("equal weighting: requires maxWeightBps * n >= 10_000", () => {
     expect(errors(withTokens(3, { constraints: { maxWeightBps: 3334 } }))).toEqual([]);
     expect(errors(withTokens(3, { constraints: { maxWeightBps: 3333 } }))).toEqual([
       "/constraints/maxWeightBps cap_infeasible",
@@ -401,16 +405,59 @@ describe("validateSpec weighting and constraints", () => {
     ]);
   });
 
-  test("requires the floor to be feasible: minWeightBps * n <= 10_000", () => {
+  test("equal weighting: requires minWeightBps * n <= 10_000", () => {
     expect(errors(withTokens(3, { constraints: { minWeightBps: 3333 } }))).toEqual([]);
     expect(errors(withTokens(3, { constraints: { minWeightBps: 3334 } }))).toEqual([
       "/constraints/minWeightBps floor_infeasible",
     ]);
+    const crossed = { maxWeightBps: 4000, minWeightBps: 4001 };
+    expect(errors(withTokens(3, { constraints: crossed }))).toEqual(["/constraints/minWeightBps floor_infeasible"]);
   });
 
-  test("rejects a floor above the cap through the feasibility rules", () => {
-    const constraints = { maxWeightBps: 4000, minWeightBps: 4001 };
-    expect(errors(withTokens(3, { constraints }))).toEqual(["/constraints/minWeightBps floor_infeasible"]);
+  test("fixed weighting: requires every weight to be at most maxWeightBps", () => {
+    expect(errors(fixed([4000, 3000, 3000], { constraints: { maxWeightBps: 4000 } }))).toEqual([]);
+    expect(errors(fixed([4001, 3000, 2999], { constraints: { maxWeightBps: 4000 } }))).toEqual([
+      "/weighting/weightsBps/0 weight_above_max",
+    ]);
+    expect(errors(fixed([1000, 4500, 4500], { constraints: { maxWeightBps: 4000 } }))).toEqual([
+      "/weighting/weightsBps/1 weight_above_max",
+      "/weighting/weightsBps/2 weight_above_max",
+    ]);
+  });
+
+  test("fixed weighting: requires every weight to be at least minWeightBps", () => {
+    expect(errors(fixed([5000, 4000, 1000], { constraints: { minWeightBps: 1000 } }))).toEqual([]);
+    expect(errors(fixed([5000, 4001, 999], { constraints: { minWeightBps: 1000 } }))).toEqual([
+      "/weighting/weightsBps/2 weight_below_min",
+    ]);
+  });
+
+  test("fixed weighting: reports the weights, not the product rule, and names each token index", () => {
+    // maxWeightBps * n >= 10_000 holds here; the weights still break both bounds.
+    const constraints = { maxWeightBps: 5000, minWeightBps: 2000 };
+    expect(errors(fixed([6000, 3000, 1000], { constraints }))).toEqual([
+      "/weighting/weightsBps/0 weight_above_max",
+      "/weighting/weightsBps/2 weight_below_min",
+    ]);
+    // A cap no set of three weights can satisfy is reported on the weights that break it.
+    expect(errors(fixed([3334, 3333, 3333], { constraints: { maxWeightBps: 3333 } }))).toEqual([
+      "/weighting/weightsBps/0 weight_above_max",
+    ]);
+    expect(errors(fixed([5000, 5000], { constraints: { maxWeightBps: 4000, minWeightBps: 6000 } }))).toEqual([
+      "/weighting/weightsBps/0 weight_above_max",
+      "/weighting/weightsBps/0 weight_below_min",
+      "/weighting/weightsBps/1 weight_above_max",
+      "/weighting/weightsBps/1 weight_below_min",
+    ]);
+  });
+
+  test("does not check weights against constraints when either is itself invalid", () => {
+    expect(errors(fixed([6000, 3999], { constraints: { maxWeightBps: 5000 } }))).toEqual([
+      "/weighting/weightsBps invalid_weight_sum",
+    ]);
+    expect(errors(fixed([6000, 4000], { constraints: { maxWeightBps: 0 } }))).toEqual([
+      "/constraints/maxWeightBps out_of_range",
+    ]);
   });
 
   test("bounds the constraints and rejects an empty object", () => {
@@ -493,16 +540,47 @@ describe("validateSpec size limit", () => {
     expect(errors({ ...baseSpec(2), description: euro.repeat(fits + 1) })).toEqual([" spec_too_large"]);
   });
 
-  test("admits fewer constituents than MAX_CONSTITUENTS: each one costs 90 bytes", () => {
-    const minimal = (count: number) => ({
-      ...baseSpec(count),
-      chainId: 1,
-      name: "N",
-      slug: "s",
-      description: "",
-      rebalance: { trigger: "drift", driftThresholdBps: 1, minIntervalSeconds: 0 },
-    });
-    expect(errors(minimal(87))).toEqual([]);
-    expect(errors(minimal(88))).toEqual([" spec_too_large"]);
+  // The largest document the schema allows apart from the description: 64 constituents with fixed weights
+  // written with the most digits 64 weights can have (four of 1000 and sixty of 100), the longest name
+  // and slug, both bounds, a parent, and every integer at its longest.
+  function maximalSpec(description: string): Spec {
+    const weightsBps = [...range(4).map(() => 1000), ...range(60).map(() => 100)];
+    return {
+      ...baseSpec(MAX_CONSTITUENTS),
+      chainId: Number.MAX_SAFE_INTEGER,
+      name: "N".repeat(64),
+      slug: "s".repeat(32),
+      description,
+      weighting: { type: "fixed", weightsBps },
+      constraints: { maxWeightBps: 10_000, minWeightBps: 100 },
+      rebalance: { trigger: "drift", driftThresholdBps: 10_000, minIntervalSeconds: Number.MAX_SAFE_INTEGER },
+      parent: {
+        chainId: Number.MAX_SAFE_INTEGER,
+        registry: address(0xaa),
+        indexId: `0x${"1a".repeat(32)}`,
+        version: 4_294_967_295,
+        specHash: `0x${"c3".repeat(32)}`,
+      },
+    };
+  }
+
+  test("a maximal 64-constituent spec fits with room for a realistic description", () => {
+    const description =
+      "Sixty-four tokenized stocks with fixed target weights. Four core holdings carry ten percent each and " +
+      "sixty satellite holdings carry one percent each. Rebalanced when any constituent drifts five percent " +
+      "from its target, at most once a week.";
+    const result = validateSpec(maximalSpec(description));
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.spec.universe.tokens.length).toBe(64);
+    expect(result.specBytes.length).toBe(MAXIMAL_EMPTY_BYTES + description.length);
+    expect(result.specBytes.length).toBeLessThan(MAX_SPEC_BYTES);
+  });
+
+  test("the headroom left for the description of a maximal spec is exactly 1391 bytes", () => {
+    expect(canonicalize(maximalSpec("")).length).toBe(MAXIMAL_EMPTY_BYTES);
+    const headroom = MAX_SPEC_BYTES - MAXIMAL_EMPTY_BYTES;
+    expect(headroom).toBe(1391);
+    expect(errors(maximalSpec("d".repeat(headroom)))).toEqual([]);
+    expect(errors(maximalSpec("d".repeat(headroom + 1)))).toEqual([" spec_too_large"]);
   });
 });

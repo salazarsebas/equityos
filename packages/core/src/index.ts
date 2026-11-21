@@ -40,10 +40,4 @@ export {
   type VerificationReport,
   verifyVersion,
 } from "./verify.ts";
-export {
-  computeConstituents,
-  computeWeights,
-  WeightCalculationError,
-  type WeightErrorCode,
-  type WeightInput,
-} from "./weights.ts";
+export { computeConstituents, computeEqualWeights, WeightCalculationError, type WeightErrorCode } from "./weights.ts";

@@ -49,10 +49,14 @@ export type SpecErrorCode =
   | "length_mismatch"
   /** Fixed weights do not sum to 10_000 bps. */
   | "invalid_weight_sum"
-  /** `maxWeightBps` times the number of tokens is below 10_000 bps. */
+  /** Equal weighting: `maxWeightBps` times the number of tokens is below 10_000 bps. */
   | "cap_infeasible"
-  /** `minWeightBps` times the number of tokens is above 10_000 bps. */
+  /** Equal weighting: `minWeightBps` times the number of tokens is above 10_000 bps. */
   | "floor_infeasible"
+  /** A fixed weight is above `maxWeightBps`. */
+  | "weight_above_max"
+  /** A fixed weight is below `minWeightBps`. */
+  | "weight_below_min"
   /** The canonical form is larger than 8_192 bytes. */
   | "spec_too_large";
 
@@ -278,33 +282,49 @@ function weighting(
   return errors.length === before ? { type, weightsBps } : undefined;
 }
 
-function constraints(
-  errors: SpecError[],
-  value: unknown,
-  tokenCount: number | undefined,
-): WeightConstraints | undefined {
+function constraints(errors: SpecError[], value: unknown): WeightConstraints | undefined {
   const before = errors.length;
   const fields = object(errors, value, "/constraints", [], ["maxWeightBps", "minWeightBps"]);
   if (fields === undefined) return undefined;
   if (Object.keys(fields).length === 0) fail(errors, "/constraints", "empty_object", "omit the property instead");
   const maxWeightBps = integer(errors, field(fields, "maxWeightBps"), "/constraints/maxWeightBps", 1, TOTAL_WEIGHT_BPS);
   const minWeightBps = integer(errors, field(fields, "minWeightBps"), "/constraints/minWeightBps", 1, TOTAL_WEIGHT_BPS);
-  if (tokenCount !== undefined) {
-    // With both bounds feasible, minWeightBps <= 10_000 / n <= maxWeightBps, so the bounds cannot cross.
-    if (maxWeightBps !== undefined && maxWeightBps * tokenCount < TOTAL_WEIGHT_BPS) {
-      const message = `${tokenCount} tokens capped at ${maxWeightBps} bps cannot reach ${TOTAL_WEIGHT_BPS} bps`;
-      fail(errors, "/constraints/maxWeightBps", "cap_infeasible", message);
-    }
-    if (minWeightBps !== undefined && minWeightBps * tokenCount > TOTAL_WEIGHT_BPS) {
-      const message = `${tokenCount} tokens of at least ${minWeightBps} bps exceed ${TOTAL_WEIGHT_BPS} bps`;
-      fail(errors, "/constraints/minWeightBps", "floor_infeasible", message);
-    }
-  }
   if (errors.length !== before) return undefined;
   return {
     ...(maxWeightBps === undefined ? {} : { maxWeightBps }),
     ...(minWeightBps === undefined ? {} : { minWeightBps }),
   };
+}
+
+/**
+ * Checks the weights against the constraints. Constraints never change a weight: a spec whose weights
+ * do not satisfy them is invalid.
+ *
+ * Fixed weights are checked one by one. Equal weights are `floor(10_000 / n)` or one more, so they are
+ * within the bounds exactly when `maxWeightBps * n >= 10_000` and `minWeightBps * n <= 10_000`.
+ */
+function bounds(errors: SpecError[], weights: IndexSpec["weighting"], limits: WeightConstraints, count: number): void {
+  const { maxWeightBps, minWeightBps } = limits;
+  if (weights.type === "fixed") {
+    weights.weightsBps.forEach((weightBps, i) => {
+      const path = `/weighting/weightsBps/${i}`;
+      if (maxWeightBps !== undefined && weightBps > maxWeightBps) {
+        fail(errors, path, "weight_above_max", `${weightBps} bps is above maxWeightBps ${maxWeightBps}`);
+      }
+      if (minWeightBps !== undefined && weightBps < minWeightBps) {
+        fail(errors, path, "weight_below_min", `${weightBps} bps is below minWeightBps ${minWeightBps}`);
+      }
+    });
+    return;
+  }
+  if (maxWeightBps !== undefined && maxWeightBps * count < TOTAL_WEIGHT_BPS) {
+    const message = `${count} equal weights exceed maxWeightBps ${maxWeightBps}`;
+    fail(errors, "/constraints/maxWeightBps", "cap_infeasible", message);
+  }
+  if (minWeightBps !== undefined && minWeightBps * count > TOTAL_WEIGHT_BPS) {
+    const message = `${count} equal weights are below minWeightBps ${minWeightBps}`;
+    fail(errors, "/constraints/minWeightBps", "floor_infeasible", message);
+  }
 }
 
 function pricing(
@@ -379,7 +399,7 @@ const OPTIONAL = ["constraints", "parent"];
  * Validates a parsed JSON value against `equityos.index/1`.
  *
  * Enforces everything the published JSON Schema does, plus the rules a JSON Schema cannot express:
- * token order, array lengths tied to the token count, the weight sum, bound feasibility, Unicode
+ * token order, array lengths tied to the token count, the weight sum, weights within `constraints`, Unicode
  * normalization and the size of the canonical form. Every violation found is reported; a document
  * with an unsupported `schema` reports only that, because none of its other content can be interpreted.
  */
@@ -399,7 +419,10 @@ export function validateSpec(value: unknown): SpecValidationResult {
   const universeValue = universe(errors, field(root, "universe"));
   const tokenCount = universeValue?.tokens.length;
   const weightingValue = weighting(errors, field(root, "weighting"), tokenCount);
-  const constraintsValue = constraints(errors, field(root, "constraints"), tokenCount);
+  const constraintsValue = constraints(errors, field(root, "constraints"));
+  if (weightingValue !== undefined && constraintsValue !== undefined && tokenCount !== undefined) {
+    bounds(errors, weightingValue, constraintsValue, tokenCount);
+  }
   const pricingValue = pricing(errors, field(root, "pricing"), tokenCount);
   const rebalanceValue = rebalance(errors, field(root, "rebalance"));
   const parentValue = parent(errors, field(root, "parent"));

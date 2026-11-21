@@ -16,10 +16,10 @@ export const CALC_ID = "equityos.calc/1";
 export const MAX_SPEC_BYTES = 8_192;
 
 /**
- * Maximum number of constituents of one index version. `MAX_SPEC_BYTES` is reached first: a constituent
- * costs 90 bytes of canonical form, so a spec holds at most 87 of them.
+ * Maximum number of constituents of one index version. A spec with 64 constituents, fixed weights and
+ * every other property at its longest still fits in `MAX_SPEC_BYTES`.
  */
-export const MAX_CONSTITUENTS = 128;
+export const MAX_CONSTITUENTS = 64;
 
 /** Minimum number of constituents. A single constituent at 10_000 bps is a valid index. */
 export const MIN_CONSTITUENTS = 1;
@@ -58,7 +58,10 @@ export interface FixedWeighting {
   readonly weightsBps: readonly number[];
 }
 
-/** Optional bounds applied to every constituent weight. At least one bound is present. */
+/**
+ * Optional bounds every constituent weight must satisfy. At least one bound is present. They are
+ * validation rules: a spec whose weights break them is invalid, and no weight is ever adjusted.
+ */
 export interface WeightConstraints {
   /** Upper bound of a constituent weight, in basis points. */
   readonly maxWeightBps?: number;
@@ -112,6 +115,9 @@ export interface IndexSpec {
 /** One constituent of an index version: a token and its target weight in basis points. */
 export interface Constituent {
   readonly token: Address;
-  /** Target weight in basis points, an integer in [1, 10_000]. */
+  /**
+   * Target weight in basis points, an integer in [1, 10_000]. A safe-integer `number` at the type boundary
+   * because it is a JSON value; arithmetic on weights is done in `bigint`.
+   */
   readonly weightBps: number;
 }

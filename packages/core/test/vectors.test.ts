@@ -115,6 +115,8 @@ describe("the JSON Schema and validateSpec agree on the vectors", () => {
       "not_nfc",
       "spec_too_large",
       "tokens_not_strictly_ascending",
+      "weight_above_max",
+      "weight_below_min",
     ]);
   });
 });
