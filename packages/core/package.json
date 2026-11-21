@@ -11,10 +11,12 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./schema/equityos.index-1.schema.json": "./dist/schema/equityos.index-1.schema.json"
+    "./schema/equityos.index-1.schema.json": "./dist/schema/equityos.index-1.schema.json",
+    "./vectors/*.json": "./vectors/*.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "vectors"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
