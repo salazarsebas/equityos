@@ -22,6 +22,10 @@ coverage/
 out/
 next-env.d.ts
 
+# Playwright
+test-results/
+playwright-report/
+
 # Foundry (contracts/out is covered by out/ above)
 cache/
 broadcast/

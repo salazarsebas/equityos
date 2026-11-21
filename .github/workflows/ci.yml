@@ -51,6 +51,19 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: bunx playwright install --with-deps --only-shell chromium
+
+      - name: Smoke test
+        run: bun run test:e2e
+
   contracts:
     name: contracts
     runs-on: ubuntu-24.04

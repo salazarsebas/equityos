@@ -57,7 +57,11 @@ bun run lint
 bun run typecheck
 bun run test
 bun run build
+bun run test:e2e
 ```
+
+`test:e2e` is a Playwright smoke test that runs against the production build. Install its browser once with
+`bunx playwright install chromium` from `apps/web`.
 
 ```sh
 bun run contracts:fmt:check
@@ -73,10 +77,17 @@ To run a script in a single workspace, filter by package name:
 bun run --filter @equityos/core test
 ```
 
+## Environment
+
+| Variable               | Used by    | Purpose                                                                                |
+| ---------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL` | `apps/web` | Public origin for canonical URLs, `robots.txt` and the sitemap. Defaults to localhost. |
+
 ## TypeScript configuration
 
 Every workspace extends `tsconfig.base.json`. The packages have two configurations: `tsconfig.json` type-checks
-sources and tests without emitting, and `tsconfig.build.json` emits `dist/` from `src/` only.
+sources and tests without emitting, and `tsconfig.build.json` emits `dist/` from `src/` only. The web app
+type-checks its unit tests with `tsconfig.test.json`, which adds the Bun types that application code must not see.
 
 ## Solidity toolchain
 
@@ -88,7 +99,7 @@ deliberate. CI runs the tests with `FOUNDRY_PROFILE=ci`, which raises the number
 
 `.github/workflows/ci.yml` runs on every pull request and on every push to `main`:
 
-- `web`: install with a frozen lockfile, format check, lint, typecheck, test, build.
+- `web`: install with a frozen lockfile, format check, lint, typecheck, test, build, Playwright smoke test.
 - `contracts`: format check, build, test.
 
 When a dependency changes, commit the updated `bun.lock`. CI fails if the lockfile does not match

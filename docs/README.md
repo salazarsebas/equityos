@@ -8,7 +8,7 @@ Technical documentation for EquityOS. This index lists only pages that exist.
 | `api`          | REST API and SDK reference                              | None yet                                          |
 | `security`     | Threat model, trust assumptions and security practices  | None yet                                          |
 | `development`  | Setting up, building and testing the project            | [Getting started](development/getting-started.md) |
-| `product`      | Product concepts and terminology                        | None yet                                          |
+| `product`      | Product concepts and terminology                        | [Design system](product/design-system.md)         |
 
 A section directory is created together with its first page.
 
