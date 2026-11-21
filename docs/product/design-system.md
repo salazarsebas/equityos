@@ -114,6 +114,8 @@ The shell is in `apps/web/src/components/shell`: `Header`, `PrimaryNav`, `ThemeT
 
 - **Button.** One primary button per screen. The label is a verb that states what will happen. Disabled and
   loading buttons use `aria-disabled` so they stay focusable. Pass `loadingLabel` to say what is in progress.
+- **Link.** A path under `/api/` is a response of the API, not a page. `Link` renders it as a plain anchor, so
+  the router neither prefetches it nor navigates to it on the client.
 - **Tag.** A tag appears once per scope: in the table caption, not on every row. Do not invent status tags. The
   set is `Theoretical`, `Actual`, `Simulated`, `Demo data`, `Back-calculated`, `Reference`, `Quote`,
   `Market closed`, `Delayed`, `Reference index`, `Deprecated`.
@@ -150,6 +152,7 @@ returns a string. No value passes through a floating-point number. The helpers l
 | `formatFixed`            | value, decimals, digits | `1,084.27`             | half away from zero |
 | `formatUtcDate`          | Unix seconds            | `2026-11-21`           | exact               |
 | `formatUtcDateTime`      | Unix seconds            | `2026-11-20 21:00 UTC` | minute, down        |
+| `formatUtcMinute`        | Unix seconds            | `2026-11-20 21:00`     | minute, down        |
 | `formatRelativeTime`     | Unix seconds, now       | `4 s ago`              | largest unit, down  |
 | `shortenAddress`         | 20-byte hex address     | `0x1234...abcd`        | not applicable      |
 
@@ -158,6 +161,7 @@ returns a string. No value passes through a floating-point number. The helpers l
 - Token quantities show up to 6 significant digits, trim trailing zeros and never shorten the integer part.
 - Zero is unsigned.
 - `formatCompact` is for stat rows only. Tables show full values.
+- `formatUtcMinute` is for a table column whose header states UTC. Everywhere else the zone is written.
 
 ## Navigation
 
@@ -167,6 +171,6 @@ that adds its page: `apps/web/test/navigation.test.ts` fails when an entry point
 ## Verification
 
 - `bun run test` runs the contrast, formatting and navigation tests.
-- `bun run test:e2e` runs the Playwright smoke test against the production build: both pages render with no
+- `bun run test:e2e` runs the Playwright smoke test against the production build: every page renders with no
   console errors, there is no horizontal overflow at 375 px, the theme toggle persists, fonts are served from
   the app's origin, and tabs and the dialog respond to the keyboard. Run `bun run build` first.
