@@ -30,3 +30,10 @@ export {
   type WeightConstraints,
 } from "./spec.ts";
 export { type SpecError, type SpecErrorCode, type SpecValidationResult, validateSpec } from "./validate.ts";
+export {
+  computeConstituents,
+  computeWeights,
+  WeightCalculationError,
+  type WeightErrorCode,
+  type WeightInput,
+} from "./weights.ts";
