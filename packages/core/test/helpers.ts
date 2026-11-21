@@ -48,3 +48,10 @@ export function baseSpec(count: number): Record<string, unknown> {
 export function price(token: Address, priceE8: bigint, status: StalenessStatus = "live"): ReferencePrice {
   return { token, priceE8, status };
 }
+
+/** Serializes a calculation result for comparison with a published vector: every bigint as a decimal string. */
+export function toVectorJson(value: unknown): unknown {
+  return JSON.parse(
+    JSON.stringify(value, (_key, item: unknown) => (typeof item === "bigint" ? item.toString() : item)),
+  );
+}
