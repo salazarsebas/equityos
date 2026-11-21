@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+.worktrees/
+.next/
+out/
+dist/
+cache/
+broadcast/
+coverage/
+*.log
