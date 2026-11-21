@@ -162,10 +162,15 @@ export function formatUtcDate(unixSeconds: bigint): string {
   return toIsoInstant(unixSeconds).slice(0, 10);
 }
 
+/** Timestamp in UTC to the minute, zone not stated: `2026-11-20 21:00`. For a column whose header says UTC. */
+export function formatUtcMinute(unixSeconds: bigint): string {
+  const iso = toIsoInstant(unixSeconds);
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+
 /** Absolute timestamp in UTC, 24-hour, zone stated: `2026-11-20 21:00 UTC`. */
 export function formatUtcDateTime(unixSeconds: bigint): string {
-  const iso = toIsoInstant(unixSeconds);
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+  return `${formatUtcMinute(unixSeconds)} UTC`;
 }
 
 const RELATIVE_UNITS = [

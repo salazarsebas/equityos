@@ -17,7 +17,11 @@ const variants = {
   quiet: "underline-offset-[3px] hover:underline",
 };
 
-/** Text link. Absolute URLs open in the same tab as a plain anchor and are marked with the external link icon. */
+/**
+ * Text link. Absolute URLs open in the same tab as a plain anchor and are marked with the external link icon.
+ * Paths under `/api/` are responses of the API, not pages, so they are plain anchors too: the router must not
+ * prefetch them or navigate to them on the client.
+ */
 export function Link({ href, children, variant = "inline", className, ...rest }: LinkProps) {
   const classes = cx("rounded-sm", variants[variant], className);
   if (/^https?:\/\//.test(href)) {
@@ -25,6 +29,13 @@ export function Link({ href, children, variant = "inline", className, ...rest }:
       <a {...rest} href={href} rel="noreferrer" className={cx(classes, "inline-flex items-center gap-1")}>
         {children}
         <ExternalLinkIcon className="shrink-0" />
+      </a>
+    );
+  }
+  if (href.startsWith("/api/")) {
+    return (
+      <a {...rest} href={href} className={classes}>
+        {children}
       </a>
     );
   }

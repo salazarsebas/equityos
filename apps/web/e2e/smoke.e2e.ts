@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const routes = ["/", "/dev/components"];
+const routes = ["/", "/assets", "/assets?view=all", "/dev/components"];
 
 /** Collects console errors and uncaught exceptions for the lifetime of the page. */
 function collectErrors(page: Page): string[] {
@@ -89,4 +89,89 @@ test("tabs follow the arrow keys and the dialog opens and closes", async ({ page
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("button", { name: "Open dialog" })).toBeFocused();
+});
+
+test.describe("assets page on the recorded block", () => {
+  test("lists the index-eligible assets with their reference prices and says the data is a recording", async ({
+    page,
+  }) => {
+    const errors = collectErrors(page);
+    await page.goto("/assets");
+    const table = page.getByRole("region", { name: "Index-eligible assets" });
+    await expect(table.getByRole("row")).toHaveCount(14);
+    await expect(table.getByText("Market closed")).toBeVisible();
+    const nvda = table.getByRole("row", { name: /NVDAc/ });
+    await expect(nvda).toContainText("NVIDIA Corporation");
+    await expect(nvda).toContainText("129.82");
+    await expect(nvda).toContainText("Last close");
+    await expect(nvda).toContainText("2026-11-20 23:42");
+    await expect(nvda).toContainText("1.0005");
+    await expect(table.getByRole("row", { name: /SNDKc/ })).toContainText("8.0000");
+    await expect(page.getByRole("note")).toContainText("recording, not current data");
+    await expect(page.getByText("as of 2026-11-20 21:15 UTC")).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test("the view switch shows every listed asset with the reason it is not eligible, and switches back", async ({
+    page,
+  }) => {
+    const errors = collectErrors(page);
+    await page.goto("/assets");
+    const views = page.getByRole("navigation", { name: "Asset view" });
+    await expect(views.getByRole("link", { name: /Index-eligible/ })).toHaveAttribute("aria-current", "page");
+    await views.getByRole("link", { name: /All listed/ }).click();
+    await expect(page).toHaveURL(/\/assets\?view=all$/);
+    const table = page.getByRole("region", { name: "All listed assets" });
+    await expect(table.getByRole("row")).toHaveCount(18);
+    await expect(table.getByRole("columnheader", { name: "Eligibility" })).toBeVisible();
+    await expect(table.getByRole("row", { name: /RKTc/ })).toContainText("Not minted · No feed");
+    await expect(table.getByRole("row", { name: /NVDAc/ })).toContainText("Eligible");
+    await views.getByRole("link", { name: /Index-eligible/ }).click();
+    await expect(page).toHaveURL(/\/assets$/);
+    await expect(page.getByRole("region", { name: "Index-eligible assets" }).getByRole("row")).toHaveCount(14);
+    expect(errors).toEqual([]);
+  });
+
+  test("without JavaScript the page says so and links to the same data as JSON", async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    await page.goto("/assets");
+    const note = page.getByRole("note").filter({ hasText: "needs JavaScript" });
+    await expect(note.getByRole("link", { name: "eligible assets" })).toHaveAttribute(
+      "href",
+      "/api/v1/assets?eligible=true",
+    );
+    await context.close();
+  });
+
+  test("the table scrolls inside its frame at 375 px and keeps the symbol column in view", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/assets");
+    const table = page.getByRole("region", { name: "Index-eligible assets" });
+    const last = table.getByRole("columnheader", { name: "Token", exact: true });
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
+    await expect(table.getByRole("columnheader", { name: "Asset" })).toBeInViewport();
+    expect(await table.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  });
+
+  test("the API serves the same block as the page, and the primary navigation links to it", async ({
+    page,
+    request,
+  }) => {
+    const response = await request.get("/api/v1/assets?eligible=true");
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.0.0");
+    expect(response.headers()["access-control-allow-origin"]).toBe("*");
+    const { data, meta } = await response.json();
+    expect(data).toHaveLength(13);
+    expect(meta.datasets.onchain.blockNumber).toBe("60489401");
+    const status = await (await request.get("/api/v1/status")).json();
+    expect(status.data.marketData).toMatchObject({ mode: "replay", available: true });
+    expect(Object.keys((await (await request.get("/api/v1/openapi.json")).json()).paths)).toContain("/assets");
+
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Assets" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Assets" })).toBeVisible();
+  });
 });

@@ -18,12 +18,21 @@ export default function HomePage() {
               Status: early development
             </h2>
             <p className="mt-3 max-w-measure text-md text-secondary">
-              Nothing is deployed yet. No index can be created, published or replicated. The repository contains the
-              project scaffold, the design system and this application shell.
+              The asset universe is available: the tokenized stocks listed on Base, with their onchain state, reference
+              prices and index eligibility, on a page and through a public read API. Indexes are not available yet: no
+              index can be created, published or replicated.
             </p>
-            <p className="mt-3 text-md">
-              <Link href="/dev/components">Component reference</Link>
-            </p>
+            <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-md">
+              <li>
+                <Link href="/assets">Assets</Link>
+              </li>
+              <li>
+                <Link href="/api/v1/openapi.json">API description (OpenAPI)</Link>
+              </li>
+              <li>
+                <Link href="/dev/components">Component reference</Link>
+              </li>
+            </ul>
           </section>
         </div>
       </Grid>
