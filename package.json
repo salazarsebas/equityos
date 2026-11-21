@@ -1,0 +1,33 @@
+{
+  "name": "equityos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Programmable index infrastructure for tokenized stocks on Base",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @equityos/web dev",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "build": "bun run --filter '*' build",
+    "contracts:build": "forge build --root contracts",
+    "contracts:test": "forge test --root contracts",
+    "contracts:fmt:check": "forge fmt --root contracts --check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@types/bun": "1.3.14",
+    "typescript": "7.0.2"
+  }
+}
