@@ -33,6 +33,7 @@ or yarn, and do not commit any lockfile other than `bun.lock`.
 | `bun run typecheck`           | Type-check every workspace            |
 | `bun run test`                | Run unit tests with `bun test`        |
 | `bun run build`               | Build the packages and the web app    |
+| `bun run test:e2e`            | Playwright smoke test, after a build  |
 | `bun run contracts:build`     | `forge build`                         |
 | `bun run contracts:test`      | `forge test`                          |
 | `bun run contracts:fmt:check` | `forge fmt --check`                   |
@@ -77,7 +78,8 @@ Every one of these must pass before a change is pushed. CI runs them in the `web
 ## Tests
 
 Tests are required for every change in behavior. TypeScript tests use `bun test` and live in the `test/`
-directory of their workspace. Solidity tests use Foundry and live in `contracts/test`.
+directory of their workspace. Browser smoke tests for the web app use Playwright and live in `apps/web/e2e`.
+Solidity tests use Foundry and live in `contracts/test`.
 
 ## Git
 
