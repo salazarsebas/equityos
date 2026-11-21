@@ -25,6 +25,7 @@
     "contracts:build": "forge build --root contracts",
     "contracts:test": "forge test --root contracts",
     "contracts:fmt:check": "forge fmt --root contracts --check",
+    "contracts:test:deploy": "contracts/test/deploy-local.sh",
     "contracts:snapshot": "forge test --root contracts --match-contract IndexRegistryGasTest",
     "contracts:snapshot:check": "FORGE_SNAPSHOT_CHECK=true forge test --root contracts --match-contract IndexRegistryGasTest"
   },
