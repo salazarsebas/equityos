@@ -27,6 +27,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `robots.txt`, `sitemap.xml` and an SVG icon for the web app.
 - Playwright smoke test, run by the `web` CI job.
 - Design system documentation in `docs/product/design-system.md`.
+- Methodology spec `equityos.index/1` in `@equityos/core`: strict validator, published JSON Schema, RFC 8785
+  canonicalization, keccak256 spec hash, equal and fixed weight calculation, verification checks and test vectors.
+- Market data layer: tokenized stock list client, onchain token and reference feed reads, eligibility rules,
+  staleness classification with a US market calendar, and position value math on `bigint`.
+- `IndexRegistry` and `RebalanceLog` contracts with unit, fuzz and invariant tests, gas snapshots and a
+  deterministic deployment script. Not audited and not deployed.
+- Public API v1: `GET /api/v1/assets`, `GET /api/v1/assets/{address}`, `GET /api/v1/status` and an OpenAPI 3.1
+  document at `/api/v1/openapi.json`.
+- Assets page listing the tokenized stock universe with reference prices and their staleness.
+- Architecture, API and security documentation for the above.
 
 ### Changed
 

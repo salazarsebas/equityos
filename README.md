@@ -14,16 +14,21 @@ and let others replicate it from their own wallets.
 
 ## Status
 
-Early development. Nothing is deployed, and no index can be created, published or replicated yet.
+Early development. The contracts are not deployed on any network, so no index can be published or replicated yet.
 
-What exists today is the project scaffold only:
+What exists today:
 
-- A Bun workspaces monorepo with strict TypeScript, Biome formatting and linting, and CI.
-- `@equityos/core` with one utility: fixed-point `mulDivDown` and `mulDivUp` on `bigint`, plus the `BPS` constant.
-- `@equityos/sdk` as a package skeleton that exports its version and nothing else.
-- A Next.js web app with a design system, an application shell, a static home page and a component reference
-  page at `/dev/components`. See [docs/product/design-system.md](docs/product/design-system.md).
-- A Foundry project with a pinned toolchain and no contracts.
+- `@equityos/core`: the methodology spec `equityos.index/1` with its validator, canonicalization, hash, weight
+  calculation and verification checks, plus market calendar, price staleness and position value math. All integer
+  arithmetic on `bigint`. See [docs/architecture/methodology-spec.md](docs/architecture/methodology-spec.md).
+- `contracts`: `IndexRegistry` and `RebalanceLog`, immutable and ownerless, with a deterministic deployment script.
+  Not audited. See [docs/architecture/index-registry.md](docs/architecture/index-registry.md) and
+  [docs/security/index-registry.md](docs/security/index-registry.md).
+- `apps/web`: a design system, the asset universe page with reference prices read from Base mainnet, and the
+  public API v1 for assets. See [docs/api/README.md](docs/api/README.md).
+- `@equityos/sdk`: a package skeleton that exports its version and nothing else.
+
+Not built yet: publishing and browsing indexes in the app, portfolio replication, rebalance execution.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
