@@ -143,9 +143,9 @@ contract RegistryHandler is Test {
             spec = new bytes(8193);
             expectedError = abi.encodeWithSelector(IIndexRegistry.SpecTooLarge.selector, 8193, 8192);
         } else if (kind == 2) {
-            tokens = new address[](129);
+            tokens = new address[](65);
             weights = new uint16[](0);
-            expectedError = abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, 129, 128);
+            expectedError = abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, 65, 64);
         } else if (kind == 3) {
             weights = new uint16[](1);
             expectedError = abi.encodeWithSelector(IIndexRegistry.LengthMismatch.selector, 2, 1);
@@ -319,7 +319,7 @@ contract RegistryHandler is Test {
         uint256 kind = (seed >> 16) % 3;
         if (kind == 0) return (spec, new address[](0), new uint16[](0));
 
-        uint256 count = seed % 43 == 0 ? 128 : 1 + (seed >> 24) % 8;
+        uint256 count = seed % 43 == 0 ? 64 : 1 + (seed >> 24) % 8;
         tokens = new address[](count);
         uint160 previous = 0;
         for (uint256 i = 0; i < count; ++i) {

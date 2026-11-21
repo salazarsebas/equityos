@@ -19,7 +19,7 @@ contract IndexRegistry is IIndexRegistry {
     /// @inheritdoc IIndexRegistry
     uint32 public constant MAX_SPEC_BYTES = 8192;
     /// @inheritdoc IIndexRegistry
-    uint16 public constant MAX_CONSTITUENTS = 128;
+    uint16 public constant MAX_CONSTITUENTS = 64;
 
     /// @dev One storage slot: 160 + 32 + 64 bits.
     struct IndexRecord {

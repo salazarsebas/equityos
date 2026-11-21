@@ -38,34 +38,59 @@ contract IndexRegistryGasTest is RegistryTestBase {
 
     function test_Gas_CreateIndex_WorstCase() public {
         bytes memory spec = _spec(8192);
-        address[] memory tokens = _tokens(128);
-        uint16[] memory weights = _weights(128);
+        address[] memory tokens = _tokens(64);
+        uint16[] memory weights = _weights(64);
 
         vm.prank(alice);
         registry.createIndex(SALT, spec, tokens, weights);
-        uint256 execution = vm.snapshotGasLastCall(GROUP, "createIndex worst case (8192 bytes, 128 static): execution");
+        uint256 execution = vm.snapshotGasLastCall(GROUP, "createIndex worst case (8192 bytes, 64 static): execution");
         uint256 transaction =
             execution + _intrinsicGas(abi.encodeCall(registry.createIndex, (SALT, spec, tokens, weights)));
 
-        vm.snapshotValue(GROUP, "createIndex worst case (8192 bytes, 128 static): transaction", transaction);
+        vm.snapshotValue(GROUP, "createIndex worst case (8192 bytes, 64 static): transaction", transaction);
         assertLt(transaction, WORST_CASE_CEILING, "worst case stays under the asserted ceiling");
         assertLt(WORST_CASE_CEILING, TRANSACTION_GAS_CAP, "the ceiling is below the per-transaction cap");
     }
 
-    /// @dev Reading the largest possible version must stay cheap enough for another contract to do onchain.
-    ///      The storage is warm here because the test wrote it, so a cold read costs more: 2_000 gas per slot,
-    ///      about 0.26M for the constituents and 0.52M for the spec.
-    function test_Gas_ReadWorstCaseVersion() public {
+    /// @dev Reading the largest possible version from another contract, cold: `vm.cool` resets the access list
+    ///      of the registry, so every slot is charged the 2_100 cold read price as in a fresh transaction. The
+    ///      figures are the gas of the call frame, which is what a calling contract pays on top of the 2_600
+    ///      cold account access.
+    function test_Gas_ReadWorstCaseVersion_Cold() public {
         vm.prank(alice);
-        bytes32 indexId = registry.createIndex(SALT, _spec(8192), _tokens(128), _weights(128));
+        bytes32 indexId = registry.createIndex(SALT, _spec(8192), _tokens(64), _weights(64));
 
+        vm.cool(address(registry));
+        registry.getVersion(indexId, 1);
+        uint256 versionGas = vm.snapshotGasLastCall(GROUP, "getVersion, cold: execution");
+
+        vm.cool(address(registry));
         registry.constituentsOf(indexId, 1);
-        uint256 constituentsGas = vm.snapshotGasLastCall(GROUP, "constituentsOf worst case (128), warm: execution");
-        registry.specOf(indexId, 1);
-        uint256 specGas = vm.snapshotGasLastCall(GROUP, "specOf worst case (8192 bytes), warm: execution");
+        uint256 constituentsGas = vm.snapshotGasLastCall(GROUP, "constituentsOf worst case (64), cold: execution");
 
-        assertLt(constituentsGas, 250_000);
-        assertLt(specGas, 250_000);
+        vm.cool(address(registry));
+        registry.specOf(indexId, 1);
+        uint256 specGas = vm.snapshotGasLastCall(GROUP, "specOf worst case (8192 bytes), cold: execution");
+
+        assertLt(versionGas, 20_000);
+        assertLt(constituentsGas, 200_000);
+        assertLt(specGas, 600_000);
+        // Sanity: the reads are really cold. 64 constituent slots and 256 spec slots at 2_100 each.
+        assertGt(constituentsGas, 64 * 2100);
+        assertGt(specGas, 256 * 2100);
+    }
+
+    /// @dev A typical version read cold: 600-byte spec and 10 constituents.
+    function test_Gas_ReadTypicalVersion_Cold() public {
+        bytes32 indexId = _createStatic(alice, SALT, 10);
+
+        vm.cool(address(registry));
+        registry.constituentsOf(indexId, 1);
+        vm.snapshotGasLastCall(GROUP, "constituentsOf typical (10), cold: execution");
+
+        vm.cool(address(registry));
+        registry.specOf(indexId, 1);
+        vm.snapshotGasLastCall(GROUP, "specOf typical (600 bytes), cold: execution");
     }
 
     /// @dev Gas a transaction pays before execution: 21_000 plus 4 per zero byte and 16 per non-zero byte of

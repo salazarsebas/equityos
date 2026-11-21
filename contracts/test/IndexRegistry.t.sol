@@ -41,7 +41,7 @@ contract IndexRegistryTest is RegistryTestBase {
     function test_Constants() public view {
         assertEq(registry.BPS(), 10_000);
         assertEq(registry.MAX_SPEC_BYTES(), 8192);
-        assertEq(registry.MAX_CONSTITUENTS(), 128);
+        assertEq(registry.MAX_CONSTITUENTS(), 64);
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -345,29 +345,29 @@ contract IndexRegistryTest is RegistryTestBase {
     // ---------------------------------------------------------------------------------------------------------
 
     function test_MaxConstituentsSucceeds() public {
-        address[] memory tokens = _tokens(128);
-        uint16[] memory weights = _weights(128);
+        address[] memory tokens = _tokens(64);
+        uint16[] memory weights = _weights(64);
 
         vm.prank(alice);
         bytes32 staticId = registry.createIndex(SALT, _spec(100), tokens, weights);
-        assertEq(registry.getVersion(staticId, 1).constituentCount, 128);
-        assertEq(registry.constituentsOf(staticId, 1).length, 128);
+        assertEq(registry.getVersion(staticId, 1).constituentCount, 64);
+        assertEq(registry.constituentsOf(staticId, 1).length, 64);
         _assertVersionWellFormed(staticId, 1);
 
         vm.prank(alice);
         bytes32 dynamicId = registry.createIndex(keccak256("dynamic"), _spec(100), tokens, _noWeights());
-        assertEq(registry.getVersion(dynamicId, 1).constituentCount, 128);
+        assertEq(registry.getVersion(dynamicId, 1).constituentCount, 64);
         _assertVersionWellFormed(dynamicId, 1);
     }
 
     function test_RevertWhen_OneConstituentOverMax() public {
-        address[] memory tokens = _tokens(129);
+        address[] memory tokens = _tokens(65);
 
-        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, 129, 128));
+        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, 65, 64));
         vm.prank(alice);
-        registry.createIndex(SALT, _spec(100), tokens, _weights(129));
+        registry.createIndex(SALT, _spec(100), tokens, _weights(65));
 
-        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, 129, 128));
+        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, 65, 64));
         vm.prank(alice);
         registry.createIndex(SALT, _spec(100), tokens, _noWeights());
     }
@@ -585,14 +585,14 @@ contract IndexRegistryTest is RegistryTestBase {
 
     /// @dev The sum is accumulated in 256 bits: the largest possible input cannot wrap around to 10_000.
     function test_RevertWhen_WeightSumIsTheLargestPossible() public {
-        uint16[] memory weights = new uint16[](128);
-        for (uint256 i = 0; i < 128; ++i) {
+        uint16[] memory weights = new uint16[](64);
+        for (uint256 i = 0; i < 64; ++i) {
             weights[i] = type(uint16).max;
         }
 
-        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.InvalidWeightSum.selector, 128 * 65_535));
+        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.InvalidWeightSum.selector, 64 * 65_535));
         vm.prank(alice);
-        registry.createIndex(SALT, _spec(100), _tokens(128), weights);
+        registry.createIndex(SALT, _spec(100), _tokens(64), weights);
     }
 
     // ---------------------------------------------------------------------------------------------------------

@@ -127,7 +127,7 @@ interface IIndexRegistry {
     /// @notice Maximum spec size in bytes: 8_192.
     function MAX_SPEC_BYTES() external view returns (uint32);
 
-    /// @notice Maximum number of constituents per version: 128.
+    /// @notice Maximum number of constituents per version: 64.
     function MAX_CONSTITUENTS() external view returns (uint16);
 
     /// @notice Create an index and publish its version 1. The caller becomes the creator, permanently.

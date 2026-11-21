@@ -56,7 +56,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
 
     /// @dev Random sorted tokens with random positive weights normalized to 10_000 always publish and read back.
     function testFuzz_ValidStaticSet(uint256 seed, uint256 countSeed) public {
-        uint256 count = bound(countSeed, 1, 128);
+        uint256 count = bound(countSeed, 1, 64);
         address[] memory tokens = _randomSortedTokens(seed, count);
         uint16[] memory weights = _randomWeights(seed, count);
 
@@ -78,7 +78,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
 
     /// @dev Random sorted tokens without weights always publish as DynamicWeights with zero weights.
     function testFuzz_ValidDynamicSet(uint256 seed, uint256 countSeed) public {
-        uint256 count = bound(countSeed, 1, 128);
+        uint256 count = bound(countSeed, 1, 64);
         address[] memory tokens = _randomSortedTokens(seed, count);
 
         vm.prank(alice);
@@ -103,7 +103,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
     )
         public
     {
-        uint256 count = bound(countSeed, 2, 128);
+        uint256 count = bound(countSeed, 2, 64);
         uint256 position = bound(positionSeed, 1, count - 1);
         address[] memory tokens = _randomSortedTokens(seed, count);
         if (duplicate) {
@@ -128,7 +128,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
     )
         public
     {
-        uint256 count = bound(countSeed, 1, 128);
+        uint256 count = bound(countSeed, 1, 64);
         uint256 position = bound(positionSeed, 0, count - 1);
         address[] memory tokens = _randomSortedTokens(seed, count);
         uint16[] memory weights = _randomWeights(seed, count);
@@ -154,7 +154,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
     }
 
     function testFuzz_RevertWhen_AnyStaticWeightIsZero(uint256 seed, uint256 countSeed, uint256 positionSeed) public {
-        uint256 count = bound(countSeed, 1, 128);
+        uint256 count = bound(countSeed, 1, 64);
         uint256 position = bound(positionSeed, 0, count - 1);
         uint16[] memory weights = _randomWeights(seed, count);
         weights[position] = 0;
@@ -165,7 +165,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
     }
 
     function testFuzz_RevertWhen_LengthsDiffer(uint256 tokenCountSeed, uint256 weightCountSeed) public {
-        uint256 tokenCount = bound(tokenCountSeed, 0, 128);
+        uint256 tokenCount = bound(tokenCountSeed, 0, 64);
         uint256 weightCount = bound(weightCountSeed, 1, 200);
         vm.assume(tokenCount != weightCount);
 
@@ -176,13 +176,13 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
 
     function testFuzz_RevertWhen_SpecOrConstituentsExceedCaps(uint256 specSizeSeed, uint256 countSeed) public {
         uint256 specSize = bound(specSizeSeed, 8193, 20_000);
-        uint256 count = bound(countSeed, 129, 400);
+        uint256 count = bound(countSeed, 65, 400);
 
         vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.SpecTooLarge.selector, specSize, 8192));
         vm.prank(alice);
         registry.createIndex(SALT, new bytes(specSize), _noTokens(), _noWeights());
 
-        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, count, 128));
+        vm.expectRevert(abi.encodeWithSelector(IIndexRegistry.TooManyConstituents.selector, count, 64));
         vm.prank(alice);
         registry.createIndex(SALT, _spec(64), _tokens(count), _noWeights());
     }
@@ -262,7 +262,7 @@ contract IndexRegistryFuzzTest is RegistryTestBase {
         }
     }
 
-    /// @dev Strictly ascending non-zero addresses. Each gap is below 2**152, so 128 of them fit in 160 bits.
+    /// @dev Strictly ascending non-zero addresses. Each gap is below 2**152, so 64 of them fit in 160 bits.
     function _randomSortedTokens(uint256 seed, uint256 count) private pure returns (address[] memory tokens) {
         tokens = new address[](count);
         uint160 previous = 0;

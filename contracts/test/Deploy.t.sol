@@ -21,7 +21,8 @@ contract DeployTest is Test {
         script = new Deploy();
         proxy = script.DEPLOYMENT_PROXY();
         vm.etch(proxy, PROXY_RUNTIME_CODE);
-        vm.chainId(8453);
+        // Base Sepolia. Base mainnet needs an explicit opt-in and has its own tests below.
+        vm.chainId(84_532);
     }
 
     function test_ProxyFixtureMatchesThePinnedCodeHash() public view {
@@ -80,7 +81,7 @@ contract DeployTest is Test {
 
         assertEq(registry.BPS(), 10_000);
         assertEq(registry.MAX_SPEC_BYTES(), 8192);
-        assertEq(registry.MAX_CONSTITUENTS(), 128);
+        assertEq(registry.MAX_CONSTITUENTS(), 64);
         assertEq(registry.indexCount(), 0);
         assertEq(address(rebalanceLog.REGISTRY()), address(registry));
         assertEq(address(registry).balance, 0);
@@ -126,16 +127,74 @@ contract DeployTest is Test {
         assertEq(address(rebalanceLog.REGISTRY()), script.EXPECTED_REGISTRY());
     }
 
-    function test_Run_SameAddressesOnEverySupportedChain() public {
+    function test_Deploy_SameAddressesOnEverySupportedChain() public {
         uint256[3] memory chainIds = [uint256(8453), 84_532, 31_337];
         uint256 snapshot = vm.snapshotState();
         for (uint256 i = 0; i < chainIds.length; ++i) {
             vm.chainId(chainIds[i]);
-            (IndexRegistry registry, RebalanceLog rebalanceLog) = script.run();
+            (IndexRegistry registry, RebalanceLog rebalanceLog) = script.deploy(true);
             assertEq(address(registry), script.EXPECTED_REGISTRY());
             assertEq(address(rebalanceLog), script.EXPECTED_REBALANCE_LOG());
             vm.revertToState(snapshot);
         }
+    }
+
+    function test_RevertWhen_MainnetIsNotConfirmed() public {
+        vm.chainId(8453);
+        uint64 nonceBefore = vm.getNonce(proxy);
+
+        vm.expectRevert(Deploy.MainnetNotConfirmed.selector);
+        script.deploy(false);
+
+        assertEq(vm.getNonce(proxy), nonceBefore, "nothing is deployed");
+        assertEq(script.EXPECTED_REGISTRY().code.length, 0);
+        assertEq(script.EXPECTED_REBALANCE_LOG().code.length, 0);
+    }
+
+    function test_Deploy_MainnetWithConfirmation() public {
+        vm.chainId(8453);
+        (IndexRegistry registry, RebalanceLog rebalanceLog) = script.deploy(true);
+        assertEq(address(registry), script.EXPECTED_REGISTRY());
+        assertEq(address(rebalanceLog), script.EXPECTED_REBALANCE_LOG());
+        assertGt(address(registry).code.length, 0);
+    }
+
+    /// @dev The confirmation flag is ignored outside mainnet: no flag is needed on the other chains.
+    function test_Deploy_ConfirmationIsNotNeededOnOtherChains() public {
+        uint256[2] memory chainIds = [uint256(84_532), 31_337];
+        uint256 snapshot = vm.snapshotState();
+        for (uint256 i = 0; i < chainIds.length; ++i) {
+            vm.chainId(chainIds[i]);
+            (IndexRegistry registry,) = script.deploy(false);
+            assertGt(address(registry).code.length, 0);
+            vm.revertToState(snapshot);
+        }
+    }
+
+    /// @dev `run` on mainnet follows the DEPLOY_MAINNET environment variable. This is the only test that
+    ///      touches the variable or calls `run` on mainnet, because the environment is shared by all tests.
+    function test_Run_MainnetRequiresTheEnvironmentOptIn() public {
+        assertEq(script.MAINNET_OPT_IN_ENV(), "DEPLOY_MAINNET");
+        vm.chainId(8453);
+        uint256 snapshot = vm.snapshotState();
+
+        // forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.setEnv("DEPLOY_MAINNET", "false");
+        vm.expectRevert(Deploy.MainnetNotConfirmed.selector);
+        script.run();
+        assertEq(script.EXPECTED_REGISTRY().code.length, 0);
+
+        // forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.setEnv("DEPLOY_MAINNET", "true");
+        (IndexRegistry registry,) = script.run();
+        assertEq(address(registry), script.EXPECTED_REGISTRY());
+        assertGt(address(registry).code.length, 0);
+
+        vm.revertToState(snapshot);
+        // forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.setEnv("DEPLOY_MAINNET", "false");
+        vm.expectRevert(Deploy.MainnetNotConfirmed.selector);
+        script.run();
     }
 
     /// @dev Anyone can send ETH to the addresses before the deployment. That must not block it.
@@ -156,6 +215,9 @@ contract DeployTest is Test {
             vm.chainId(chainIds[i]);
             vm.expectRevert(abi.encodeWithSelector(Deploy.UnsupportedChain.selector, chainIds[i]));
             script.run();
+            // The mainnet confirmation does not unlock any other chain.
+            vm.expectRevert(abi.encodeWithSelector(Deploy.UnsupportedChain.selector, chainIds[i]));
+            script.deploy(true);
         }
     }
 
