@@ -58,6 +58,7 @@ FOUNDRY_PROFILE=ci forge test
 | `test/IndexConsumer.t.sol`           | A third-party contract (`test/examples/IndexConsumer.sol`) reading an index |
 | `test/Bytecode.t.sol`                | Opcodes that must not appear in the compiled contracts                      |
 | `test/Deploy.t.sol`                  | The deployment script, run against the local test chain                     |
+| `test/deploy-local.sh`               | The deployment script broadcasting to a local Anvil node                    |
 | `test/Setup.t.sol`                   | Guards the toolchain configuration                                          |
 
 ### Gas snapshots
@@ -86,7 +87,8 @@ the optimized bytecode (code hashes, opcodes, gas) and do not hold under that bu
 `script/Deploy.s.sol` deploys both contracts with CREATE2 through the deterministic deployment proxy at
 `0x4e59b44847b379578588920cA78FbF26c0B4956C`. The script:
 
-1. Accepts only Base mainnet (8453), Base Sepolia (84532) and a local development chain (31337).
+1. Accepts only Base mainnet (8453), Base Sepolia (84532) and a local development chain (31337). On Base
+   mainnet it also requires an explicit opt-in, described below.
 2. Requires the proxy to have its known runtime code hash.
 3. Requires the predicted addresses to equal the `EXPECTED_*` constants committed in the script.
 4. Skips a contract that is already deployed, after checking its runtime code hash. Running it twice is safe.
@@ -122,6 +124,32 @@ The sender is the first default Anvil account. A second run prints `already depl
 contracts and sends no transaction.
 
 To simulate without sending anything, drop `--broadcast`, `--unlocked` and `--sender`.
+
+### Broadcast test
+
+`forge test` runs the script inside the test EVM (`test/Deploy.t.sol`), where `vm.startBroadcast` sends nothing.
+The path that sends real transactions is covered by a shell test, which CI runs after the Solidity tests:
+
+```sh
+./test/deploy-local.sh
+```
+
+From the repository root: `bun run contracts:test:deploy`. It starts Anvil on port 8555 (override with
+`ANVIL_PORT`), runs the script with `--broadcast` from the unlocked development account, and checks that the
+first run sends exactly two transactions, that the code at both expected addresses has the expected hash, and
+that a second run sends none. No private key is stored or passed.
+
+### Mainnet opt-in
+
+On Base mainnet (chain id 8453) the script reverts with `MainnetNotConfirmed` unless the environment variable
+`DEPLOY_MAINNET` is set to `true`:
+
+```sh
+DEPLOY_MAINNET=true forge script script/Deploy.s.sol --rpc-url <base mainnet rpc> ...
+```
+
+The variable is read only on chain 8453. It does not unlock any other chain, and it is not needed on Base
+Sepolia or locally. Calling `deploy(bool)` directly with `--sig` is the same opt-in, given as an argument.
 
 ### Live networks
 

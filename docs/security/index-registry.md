@@ -17,7 +17,7 @@ What the contracts guarantee, without trusting anyone:
   once.
 - `specHash` is the keccak256 of the stored spec bytes. It is computed by the registry, not supplied.
 - Only the creator of an index can append a version to it or deprecate it.
-- The structured mirror is well formed: at most 128 tokens, strictly ascending, and for a static composition
+- The structured mirror is well formed: at most 64 tokens, strictly ascending, and for a static composition
   positive weights that sum to exactly 10,000 basis points.
 - Neither contract can hold or move tokens, and neither accepts ETH through any function.
 - Nobody, including the deployer, has any privilege. There is no owner, admin, pause, fee or upgrade path.
@@ -49,6 +49,7 @@ What a user or integrator still has to trust:
 | Rebalance events                 | Intermediate contract            | Attribute an event to another account                    | `account` is always `msg.sender`, never calldata or `tx.origin`                                                   |
 | Deployment                       | Front-runner                     | Deploy first at the deterministic address                | Same bytecode, no owner, no initializer: the result is identical. The script checks the code hash                 |
 | Deployment                       | Operator mistake                 | Different bytecode on two chains                         | Pinned build settings, expected addresses and code hashes committed, checked by the script and by a test          |
+| Deployment                       | Operator mistake                 | Send the deployment to Base mainnet unintentionally      | The script reverts on chain 8453 unless `DEPLOY_MAINNET=true` is set                                              |
 | Deployment                       | Anyone                           | Send ETH to the address before deployment to block it    | The script reports a balance but does not reject it                                                               |
 | Contract balance                 | Anyone                           | Force ETH in without a call                              | The ETH is stuck. Nothing reads the balance                                                                       |
 | Time fields                      | Sequencer                        | Skew `block.timestamp`                                   | Timestamps are informational. No logic depends on time                                                            |
@@ -93,6 +94,10 @@ Line and branch coverage of both contracts is 100%.
   spec, including offensive or unlawful content. Filtering is the job of whatever displays the registry.
 - **Impersonation.** Anyone can publish a spec that copies the content or name of another index. The only
   identity the registry provides is the creator address.
+- **Cross-chain identity.** The index id contains no chain id. The same creator address can belong to a
+  different party on another chain (for example a counterfactual smart account deployed with other owners), so
+  an equal `indexId` on two chains does not imply the same creator. The full identity is
+  `(chainId, registry, indexId, version)`.
 - **Meaningless rebalance events.** Anyone can call `recordRebalance` for any existing version at the cost of
   gas. The event proves that the caller named a version, not that it traded.
 - **Wrong constants.** `MAX_SPEC_BYTES` and `MAX_CONSTITUENTS` cannot be changed. A different value requires a

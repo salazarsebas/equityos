@@ -32,6 +32,13 @@ indexId = keccak256(abi.encode(creator, salt))
 
 The registry stores no name. A name, if any, lives inside the spec bytes.
 
+> **The index id is not a global identity.** The full identity of a version is
+> `(chainId, registry, indexId, version)`. The same `indexId` on two chains means the same creator address and
+> salt, not the same party: an address can be controlled by different parties on different chains, for example a
+> smart account whose address is derived counterfactually and deployed with other owners elsewhere. Never infer
+> from equal ids on two chains that the indexes share a creator or a methodology. Compare the spec bytes or the
+> `specHash` on each chain instead.
+
 ### Version
 
 A version is identified by `(indexId, version)`. Versions are `uint32`, start at 1 and are strictly sequential.
@@ -87,7 +94,7 @@ and nothing onchain moves an account from one version to the next.
 | -------------------------------------------------------- | ---------------------------- |
 | Spec is not empty                                        | `EmptySpec`                  |
 | Spec is at most `MAX_SPEC_BYTES` (8,192) bytes           | `SpecTooLarge`               |
-| At most `MAX_CONSTITUENTS` (128) tokens                  | `TooManyConstituents`        |
+| At most `MAX_CONSTITUENTS` (64) tokens                   | `TooManyConstituents`        |
 | `weightsBps` is empty or has the same length as `tokens` | `LengthMismatch`             |
 | Tokens are strictly ascending by address                 | `TokensNotStrictlyAscending` |
 | Static composition: every weight is greater than zero    | `ZeroWeight`                 |
@@ -132,13 +139,20 @@ function staticConstituents(
     IIndexRegistry.VersionInfo memory info = registry.getVersion(indexId, version);
     // Weights are zero for DynamicWeights and absent for RuleBased: check before using them.
     require(info.composition == IIndexRegistry.Composition.Static, "not static");
-    // At most 128 entries, tokens strictly ascending, weights positive and summing to 10,000.
+    // At most 64 entries, tokens strictly ascending, weights positive and summing to 10,000.
     return registry.constituentsOf(indexId, version);
 }
 ```
 
-`contracts/test/examples/IndexConsumer.sol` is a complete contract used by the test suite: it splits an amount
-across the constituents by weight and finds a token with a binary search.
+The composition check is not optional. For a `DynamicWeights` version every stored `weightBps` is 0, which means
+"not known onchain", not "zero weight". A consumer that needs weights must revert, or return the composition to
+its caller, when the version is not `Static`. It must never use the stored zeros as weights. Membership (is this
+token a constituent) can be read from the mirror for `Static` and `DynamicWeights`, and cannot be decided from
+the mirror for `RuleBased`, which stores no constituents.
+
+`contracts/test/examples/IndexConsumer.sol` is a complete contract used by the test suite that follows this
+pattern: `targetAllocation` and `staticWeightOf` revert with `NotStatic` on any other composition, and
+`isConstituent` answers membership with a binary search without touching the weights.
 
 Read functions:
 
@@ -162,23 +176,41 @@ scanning logs. Positions are stable: entries are only appended.
 | Limit              | Value       | Why                                                       |
 | ------------------ | ----------- | --------------------------------------------------------- |
 | `MAX_SPEC_BYTES`   | 8,192 bytes | Bounds the gas and storage of a publish and of every read |
-| `MAX_CONSTITUENTS` | 128         | Bounds every loop, for the publisher and for every reader |
+| `MAX_CONSTITUENTS` | 64          | Bounds every loop, for the publisher and for every reader |
 | Versions per index | `2**32 - 1` | Width of the version number                               |
 
 The limits are constants. They cannot be changed: a different limit requires a new registry at a new address.
 
-Measured gas, from `contracts/test/IndexRegistry.gas.t.sol`. The values are committed in `contracts/snapshots`
-and CI fails if they drift:
+### Gas
 
-| Call                                                    | Execution gas | Transaction gas |
-| ------------------------------------------------------- | ------------- | --------------- |
-| `createIndex`, 600-byte spec, 10 static constituents    | 822,264       | 859,404         |
-| `createIndex`, 8,192-byte spec, 128 static constituents | 8,880,793     | 9,097,697       |
+Measured by `contracts/test/IndexRegistry.gas.t.sol`. The values are committed in `contracts/snapshots` and CI
+fails if they drift.
+
+Publishing:
+
+| Call                                                   | Execution gas | Transaction gas |
+| ------------------------------------------------------ | ------------- | --------------- |
+| `createIndex`, 600-byte spec, 10 static constituents   | 822,264       | 859,404         |
+| `createIndex`, 8,192-byte spec, 64 static constituents | 7,363,405     | 7,548,613       |
 
 Transaction gas adds the 21,000 base cost and the calldata cost to the execution gas. It does not include the L1
-data fee that Base charges separately. The largest possible publish uses about 54% of the per-transaction gas cap
-on Base (16,777,216) and about 23% of a 40,000,000 gas block. The publisher pays for all the storage it creates,
+data fee that Base charges separately. The largest possible publish uses about 45% of the per-transaction gas cap
+on Base (16,777,216) and about 19% of a 40,000,000 gas block. The publisher pays for all the storage it creates,
 and no function iterates over all indexes, so the size of the registry does not change the cost of any call.
+
+Reading from another contract, with cold storage (the first read of that version in the transaction):
+
+| Call                                    | Execution gas |
+| --------------------------------------- | ------------- |
+| `getVersion`                            | 12,157        |
+| `constituentsOf`, 10 constituents       | 29,991        |
+| `constituentsOf`, 64 constituents (max) | 163,681       |
+| `specOf`, 600-byte spec                 | 46,732        |
+| `specOf`, 8,192-byte spec (max)         | 558,939       |
+
+These are the gas of the call into the registry. The caller also pays 2,600 once per transaction for the first
+access to the registry address, plus its own memory and decoding costs. A consumer that only needs the
+composition should call `getVersion` and `constituentsOf` and leave `specOf` to offchain readers.
 
 ## Events
 
@@ -190,7 +222,10 @@ and no function iterates over all indexes, so the size of the registry does not 
 | `VersionPublished` | `indexId`, `version`, `specHash` (all indexed), `creator`, `composition`, `specSize`, `constituentCount` | For every version, including version 1      |
 | `IndexDeprecated`  | `indexId` (indexed), `creator` (indexed)                                                                 | Once, when the creator deprecates the index |
 
-The spec bytes are not in any event. Contract state is the single store: read them with `specOf`.
+No event carries the spec bytes or the constituents. Contract state is the single store. An indexer reads each
+version once with `eth_call` (`getVersion`, `specOf`, `constituentsOf`) when it sees `VersionPublished`, and can
+cache the result forever, because a published version never changes. The sizes in the event are informational:
+read the state.
 
 `RebalanceLog`:
 
