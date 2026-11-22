@@ -15,6 +15,8 @@ export interface SeedIndex {
   /** Salt passed to `createIndex`. With the creator it determines the index id. */
   readonly salt: Hex;
   readonly versions: readonly SeedVersion[];
+  /** Whether the seed deprecates the index after publishing its versions. */
+  readonly deprecated: boolean;
 }
 
 interface Holding {
@@ -30,6 +32,11 @@ interface VersionDraft {
   readonly description: string;
   readonly holdings: readonly Holding[];
   readonly constraints?: IndexSpec["constraints"];
+  /**
+   * Weights to publish in place of the ones the spec implies, in ascending token order. Only for the example
+   * of a version that fails verification: the registry accepts it, and check C5 then fails.
+   */
+  readonly publishedWeightsBps?: readonly number[];
 }
 
 /** The token and feed proxy of a feed-covered asset, lowercase, looked up by the ticker in the feed description. */
@@ -73,7 +80,7 @@ function buildVersion(chainId: number, draft: VersionDraft): SeedVersion {
     specBytes,
     specHash: specHash(specBytes),
     tokens: constituents.map(({ token }) => token),
-    weightsBps: constituents.map(({ weightBps }) => weightBps),
+    weightsBps: draft.publishedWeightsBps ?? constituents.map(({ weightBps }) => weightBps),
   };
 }
 
@@ -85,8 +92,9 @@ function salt(text: string): Hex {
 }
 
 /**
- * The example indexes of a local chain: one equal-weight index, one with fixed weights and weight bounds,
- * and one with two versions.
+ * The example indexes of a local chain, in creation order: one whose published weights differ from its spec,
+ * so that it fails verification, one deprecated index with a single constituent, one equal-weight index, one
+ * with fixed weights and weight bounds, and one with two versions.
  *
  * The constituents are the Base mainnet addresses of tokens that have a reference feed in the market data
  * layer, and the feeds are their Base mainnet proxies. The registry stores addresses and calls none of them,
@@ -96,7 +104,33 @@ function salt(text: string): Hex {
 export function buildSeedIndexes(chainId: number): SeedIndex[] {
   return [
     {
+      salt: salt("equityos.seed.mismatched-weights"),
+      deprecated: false,
+      versions: [
+        buildVersion(chainId, {
+          name: "Mismatched Weights Example",
+          slug: "mismatched-weights",
+          description: "Two companies at the same weight. Published with other weights, so verification fails.",
+          holdings: [{ ticker: "INTC" }, { ticker: "MSFT" }],
+          publishedWeightsBps: [6_000, 4_000],
+        }),
+      ],
+    },
+    {
+      salt: salt("equityos.seed.single-asset"),
+      deprecated: true,
+      versions: [
+        buildVersion(chainId, {
+          name: "Single Asset Example",
+          slug: "single-asset",
+          description: "One company at full weight. Deprecated by its creator after publication.",
+          holdings: [{ ticker: "MSFT" }],
+        }),
+      ],
+    },
+    {
       salt: salt("equityos.seed.large-technology"),
+      deprecated: false,
       versions: [
         buildVersion(chainId, {
           name: "Large Technology Equal Weight",
@@ -114,6 +148,7 @@ export function buildSeedIndexes(chainId: number): SeedIndex[] {
     },
     {
       salt: salt("equityos.seed.semiconductors"),
+      deprecated: false,
       versions: [
         buildVersion(chainId, {
           name: "Semiconductors Fixed Weight",
@@ -130,6 +165,7 @@ export function buildSeedIndexes(chainId: number): SeedIndex[] {
     },
     {
       salt: salt("equityos.seed.diversified"),
+      deprecated: false,
       versions: [
         buildVersion(chainId, {
           name: "Diversified Equity",

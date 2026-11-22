@@ -1,9 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { statusHandler } from "../../src/server/api/status";
-import { body, fixtureService, get, RECORDED_AT } from "./support";
+import { resolveRegistryConfig } from "../../src/server/registry/config";
+import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
+import { FakeChain } from "../registry/support";
+import { body, fakeRegistry, fixtureService, get, RECORDED_AT, recordedRegistry } from "./support";
 
-function handler(service = fixtureService(), mode: "live" | "replay" = "live") {
-  return statusHandler({ marketData: service.marketData, mode: () => mode, now: () => service.clock.now });
+/** Base mainnet, where no deployment is recorded: the reader answers without a client. */
+const baseRegistry = createRegistryReader({ config: resolveRegistryConfig({}) });
+
+function handler(
+  service = fixtureService(),
+  mode: "live" | "replay" = "live",
+  registry: RegistryReader = baseRegistry,
+) {
+  return statusHandler({
+    marketData: service.marketData,
+    mode: () => mode,
+    registry: () => registry,
+    registryMode: () => mode,
+    now: () => service.clock.now,
+  });
 }
 
 describe("GET /api/v1/status", () => {
@@ -16,7 +32,7 @@ describe("GET /api/v1/status", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(await body(response)).toEqual({
       data: {
-        apiVersion: "1.0.0",
+        apiVersion: "1.1.0",
         chainId: 8453,
         marketPhase: "closed",
         executionAvailable: false,
@@ -43,6 +59,15 @@ describe("GET /api/v1/status", () => {
               blockTimestamp: "2026-11-21T19:10:55Z",
             },
           },
+          error: null,
+        },
+        registry: {
+          chainId: 8453,
+          address: "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+          mode: "live",
+          deployed: false,
+          notDeployedReason: "not_configured",
+          indexCount: null,
           error: null,
         },
       },
@@ -101,8 +126,31 @@ describe("GET /api/v1/status", () => {
   });
 
   test("says so when the server replays a recording", async () => {
-    const { data } = await body(await handler(fixtureService(), "replay")(get("/api/v1/status"), undefined));
-    expect(data).toMatchObject({ marketData: { mode: "replay" } });
+    const response = await handler(fixtureService(), "replay", recordedRegistry())(get("/api/v1/status"), undefined);
+    expect((await body(response)).data).toMatchObject({
+      marketData: { mode: "replay" },
+      registry: { chainId: 31_337, mode: "replay", deployed: true, notDeployedReason: null, indexCount: 5 },
+    });
+  });
+
+  test("tells a registry without code from one that cannot be read, and still answers 200", async () => {
+    const chain = new FakeChain();
+    chain.deployed = false;
+    const absent = await handler(fixtureService(), "live", fakeRegistry(chain))(get("/api/v1/status"), undefined);
+    expect((await body(absent)).data).toMatchObject({
+      registry: { deployed: false, notDeployedReason: "no_code", indexCount: null, error: null },
+    });
+    const down = new FakeChain();
+    down.fail = () => true;
+    const failed = await handler(fixtureService(), "live", fakeRegistry(down))(get("/api/v1/status"), undefined);
+    expect(failed.status).toBe(200);
+    expect((await body(failed)).data).toMatchObject({
+      registry: {
+        deployed: null,
+        indexCount: null,
+        error: { code: "upstream_unavailable", details: { source: "registry_rpc" } },
+      },
+    });
   });
 
   test("exposes no endpoint URL, country or environment value", async () => {

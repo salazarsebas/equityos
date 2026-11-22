@@ -55,11 +55,13 @@ export interface SpecOptions {
   /** Fixed weights of the first tokens. Omitted for equal weighting over `tokenCount` tokens. */
   readonly weightsBps?: readonly number[];
   readonly tokenCount?: number;
+  /** Tokens to use in place of the test addresses, strictly ascending. */
+  readonly tokens?: readonly Address[];
 }
 
 /** A valid spec, its canonical bytes and the composition mirror it implies. */
 export function buildSpec(options: SpecOptions = {}) {
-  const count = options.weightsBps?.length ?? options.tokenCount ?? 4;
+  const count = options.weightsBps?.length ?? options.tokens?.length ?? options.tokenCount ?? 4;
   const validation = validateSpec({
     schema: "equityos.index/1",
     calc: "equityos.calc/1",
@@ -67,7 +69,7 @@ export function buildSpec(options: SpecOptions = {}) {
     name: "Test Index",
     slug: options.slug ?? "test-index",
     description: "An index used by the tests.",
-    universe: { type: "static", tokens: TOKENS.slice(0, count) },
+    universe: { type: "static", tokens: (options.tokens ?? TOKENS).slice(0, count) },
     weighting: options.weightsBps === undefined ? { type: "equal" } : { type: "fixed", weightsBps: options.weightsBps },
     pricing: { source: "chainlink-aggregator-v3", feeds: FEEDS.slice(0, count) },
     rebalance: { trigger: "drift", driftThresholdBps: 500, minIntervalSeconds: 86_400 },
