@@ -68,6 +68,7 @@ export {
 } from "./verify.ts";
 export { computeConstituents, computeEqualWeights, WeightCalculationError, type WeightErrorCode } from "./weights.ts";
 export {
+  type BelowMinimumPortfolioValueIssue,
   CalculationInputError,
   type CalculationInputErrorCode,
   type CalculationIssue,
@@ -81,19 +82,24 @@ export {
   type PortfolioValuation,
   type PositionValuation,
   type PriceStatus,
+  type ProjectedDriftIncreaseIssue,
   QUOTE_DECIMALS,
   QUOTE_PRICE_E8,
   QUOTE_UNIT_VALUE_USD_E8,
   type ReferencePrice,
   type TargetConstituent,
+  type TokenIssue,
   valuePortfolio,
   type WeightedPosition,
+  type ZeroDeployableValueIssue,
 } from "./portfolio.ts";
 export {
+  type BlockedPlan,
   type ConstituentTarget,
   DEFAULT_MIN_LEG_VALUE_USD_E8,
   DEFAULT_RESERVE_BPS,
   type EligibilityInput,
+  MAX_RESERVE_BPS,
   type PlanMode,
   type PlanProjection,
   type ProjectedPosition,

@@ -3,14 +3,16 @@ import {
   CalculationInputError,
   type CalculationInputErrorCode,
   computeDrift,
+  MAX_CONSTITUENTS,
   type PortfolioInput,
   QUOTE_DECIMALS,
   QUOTE_PRICE_E8,
   QUOTE_UNIT_VALUE_USD_E8,
+  type ReferencePrice,
   USD_E8,
   valuePortfolio,
 } from "../src/index.ts";
-import { address, price } from "./helpers.ts";
+import { address, price, range } from "./helpers.ts";
 
 const A = address(0xa1);
 const B = address(0xb2);
@@ -272,6 +274,37 @@ describe("valuePortfolio: data-quality findings", () => {
     expect(valuation.investedValueUsdE8).toBeNull();
   });
 
+  test("a price without a status, or with a status that is not a known class, is unavailable", () => {
+    const noStatus = { token: A, priceE8: 1_250n * USD_E8 } as unknown as ReferencePrice;
+    const stale = { token: A, priceE8: 1_250n * USD_E8, status: "stale" } as unknown as ReferencePrice;
+    const notANumber = { token: A, priceE8: "125000000000", status: "LIVE" } as unknown as ReferencePrice;
+    for (const bad of [noStatus, stale, notANumber]) {
+      const valuation = valuePortfolio({ ...TWO_TOKENS, prices: [bad, price(B, 50_000_000n)] });
+      expect(valuation.issues).toEqual([{ code: "price_unavailable", severity: "blocker", token: A }]);
+      expect(valuation.positions[0]).toMatchObject({ priceE8: null, priceStatus: "unavailable", valueUsdE8: null });
+      expect(valuation.investedValueUsdE8).toBeNull();
+    }
+  });
+
+  test("an unavailable price is not read, so a negative one is a finding and not an error", () => {
+    const valuation = valuePortfolio({
+      ...TWO_TOKENS,
+      prices: [price(A, -1n, "unavailable"), price(B, 50_000_000n)],
+    });
+    expect(valuation.issues).toEqual([{ code: "price_unavailable", severity: "blocker", token: A }]);
+  });
+
+  test("blockOnLastClose makes a last_close price a blocker and still values the position", () => {
+    const closed = { ...TWO_TOKENS, prices: [price(A, 1_250n * USD_E8, "last_close"), price(B, 50_000_000n)] };
+    const valuation = valuePortfolio({ ...closed, blockOnLastClose: true });
+    expect(valuation.issues).toEqual([{ code: "market_closed", severity: "blocker", token: A }]);
+    expect(valuation.investedValueUsdE8).toBe(150_000_000_000n);
+    expect(valuation.positions.map(({ weightBps }) => weightBps)).toEqual([6_667, 3_333]);
+    expect(valuePortfolio({ ...closed, blockOnLastClose: false }).issues).toEqual([
+      { code: "market_closed", severity: "warning", token: A },
+    ]);
+  });
+
   test("last_close and delayed prices are warnings and still value the position", () => {
     const valuation = valuePortfolio({
       ...TWO_TOKENS,
@@ -339,12 +372,50 @@ describe("valuePortfolio: input errors", () => {
     ["a repeated price", "duplicate_token", { ...TWO_TOKENS, prices: [...TWO_TOKENS.prices, price(A, USD_E8)] }],
     ["a malformed price address", "invalid_address", { ...TWO_TOKENS, prices: [price("0xzz", USD_E8)] }],
     ["a negative quote balance", "negative_amount", { ...TWO_TOKENS, quoteBalance: -1n }],
+    ["a quote balance that is a number", "invalid_amount", { ...TWO_TOKENS, quoteBalance: 5 as unknown as bigint }],
+    [
+      "a balance that is a number",
+      "invalid_amount",
+      { ...TWO_TOKENS, holdings: [{ token: A, balance: 80_000_000 as unknown as bigint, decimals: 8 }] },
+    ],
+    [
+      "a usable price that is a number",
+      "invalid_amount",
+      { ...TWO_TOKENS, prices: [price(A, 1.5 as unknown as bigint), price(B, 50_000_000n)] },
+    ],
+    [
+      "a usable price that is missing",
+      "invalid_amount",
+      { ...TWO_TOKENS, prices: [{ token: A, status: "live" } as unknown as ReferencePrice] },
+    ],
+    [
+      "more constituents than an index can have",
+      "too_many_constituents",
+      {
+        ...TWO_TOKENS,
+        constituents: range(MAX_CONSTITUENTS + 1).map((i) => ({ token: address(i), weightBps: 1, decimals: 8 })),
+      },
+    ],
   ];
   for (const [name, code, input] of cases) {
     test(`${name} throws ${code}`, () => {
       expect(errorCode(() => valuePortfolio(input))).toBe(code);
     });
   }
+});
+
+describe("valuePortfolio: limits", () => {
+  test("the largest index has 64 constituents", () => {
+    expect(MAX_CONSTITUENTS).toBe(64);
+    const tokens = range(64).map(address);
+    const valuation = valuePortfolio({
+      constituents: tokens.map((token, i) => ({ token, weightBps: i < 16 ? 157 : 156, decimals: 8 })),
+      holdings: [],
+      prices: tokens.map((token) => price(token, USD_E8)),
+      quoteBalance: 0n,
+    });
+    expect(valuation.positions.length).toBe(64);
+  });
 });
 
 describe("computeDrift", () => {

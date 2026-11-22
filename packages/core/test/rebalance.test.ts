@@ -5,11 +5,13 @@ import {
   computeEqualWeights,
   DEFAULT_MIN_LEG_VALUE_USD_E8,
   DEFAULT_RESERVE_BPS,
+  MAX_RESERVE_BPS,
   type PortfolioInput,
   planRebalance,
   type RebalancePlan,
   type RebalancePlanInput,
   type RebalanceRule,
+  type ReferencePrice,
   rebalanceEligibility,
   USD_E8,
   valuePortfolio,
@@ -38,9 +40,16 @@ function exact(input: PortfolioInput, options: Partial<RebalancePlanInput> = {})
 }
 
 function planOf(input: RebalancePlanInput): RebalancePlan {
-  const { plan, blockers } = planRebalance(input);
-  if (plan === null) throw new Error(`blocked: ${JSON.stringify(blockers)}`);
-  return plan;
+  const result = planRebalance(input);
+  if (result.status === "blocked") throw new Error(`blocked: ${result.blockers.map(({ code }) => code).join(" ")}`);
+  return result;
+}
+
+function blockersOf(input: RebalancePlanInput): unknown {
+  const result = planRebalance(input);
+  if (result.status === "ready") throw new Error("not blocked");
+  expect("legs" in result).toBe(false);
+  return result.blockers;
 }
 
 function errorCode(run: () => unknown): CalculationInputErrorCode | "no error" {
@@ -118,16 +127,55 @@ describe("rebalanceEligibility", () => {
       due: true,
       reason: "first_replication",
     });
-    const unpriced = valuePortfolio({ ...dollars([5_000, 5_000], [0n, 0n]), prices: [] });
-    expect(rebalanceEligibility({ rule: RULE, valuation: unpriced, lastRebalanceAt: null, now: NOW }).due).toBe(true);
   });
 
-  test("is not due when drift cannot be computed", () => {
-    const blocked = valuePortfolio({ ...dollars([5_000, 5_000], [56n, 44n]), prices: [price(A, USD_E8)] });
-    expect(rebalanceEligibility({ rule: RULE, valuation: blocked, lastRebalanceAt: null, now: NOW })).toEqual({
-      due: false,
-      reason: "drift_unavailable",
+  test("base units too small to have a value are still a first replication", () => {
+    // One base unit of an 18-decimal token at 1.00 USD is worth 1e-18 USD, valued at zero.
+    const dust = valuePortfolio({
+      constituents: [{ token: A, weightBps: 10_000, decimals: 18 }],
+      holdings: [{ token: A, balance: 1n, decimals: 18 }],
+      prices: [price(A, USD_E8)],
+      quoteBalance: 0n,
     });
+    expect(dust.investedValueUsdE8).toBe(0n);
+    expect(rebalanceEligibility({ rule: RULE, valuation: dust, lastRebalanceAt: NOW - 1, now: NOW })).toEqual({
+      due: true,
+      reason: "first_replication",
+    });
+  });
+
+  test("a missing price is reported, also for a wallet that holds nothing", () => {
+    const unpriced = valuePortfolio({ ...dollars([5_000, 5_000], [0n, 0n]), prices: [price(A, USD_E8)] });
+    expect(rebalanceEligibility({ rule: RULE, valuation: unpriced, lastRebalanceAt: null, now: NOW })).toEqual({
+      due: false,
+      reason: "valuation_blocked",
+      blockers: [{ code: "missing_price", severity: "blocker", token: B }],
+    });
+    const held = valuePortfolio({
+      ...dollars([5_000, 5_000], [56n, 44n]),
+      prices: [price(A, USD_E8), price(B, USD_E8, "unavailable")],
+    });
+    expect(rebalanceEligibility({ rule: RULE, valuation: held, lastRebalanceAt: null, now: NOW })).toEqual({
+      due: false,
+      reason: "valuation_blocked",
+      blockers: [{ code: "price_unavailable", severity: "blocker", token: B }],
+    });
+  });
+
+  test("a closed market does not hide the drift, with or without blockOnLastClose", () => {
+    const closed = (blockOnLastClose: boolean) =>
+      valuePortfolio({
+        ...dollars([5_000, 5_000], [56n, 44n]),
+        prices: [price(A, USD_E8, "last_close"), price(B, USD_E8)],
+        blockOnLastClose,
+      });
+    for (const valuation of [closed(false), closed(true)]) {
+      expect(rebalanceEligibility({ rule: RULE, valuation, lastRebalanceAt: null, now: NOW })).toEqual({
+        due: true,
+        reason: "drift_threshold_reached",
+        maxAbsDriftBps: 600,
+      });
+    }
   });
 
   test("times must be non-negative integers of seconds", () => {
@@ -147,6 +195,7 @@ describe("rebalanceEligibility", () => {
 describe("planRebalance: worked examples", () => {
   test("defaults", () => {
     expect(DEFAULT_RESERVE_BPS).toBe(50);
+    expect(MAX_RESERVE_BPS).toBe(2_000);
     expect(DEFAULT_MIN_LEG_VALUE_USD_E8).toBe(USD_E8);
     const plan = planOf({ mode: "rebalance", ...dollars([5_000, 5_000], [60n, 40n]) });
     expect(plan.reserveBps).toBe(50);
@@ -155,7 +204,7 @@ describe("planRebalance: worked examples", () => {
 
   test("an 8-decimal token above 1,000 USD and a token under 1 USD, with the default reserve", () => {
     // A: 0.8 tokens at 1,250.00 USD = 1,000.00 USD, target 60%. B: 1,000 tokens at 0.50 USD = 500.00 USD, target 40%.
-    const result = planRebalance({
+    const input: RebalancePlanInput = {
       mode: "rebalance",
       constituents: [
         { token: A, weightBps: 6_000, decimals: 8 },
@@ -167,11 +216,12 @@ describe("planRebalance: worked examples", () => {
       ],
       prices: [price(A, 1_250n * USD_E8), price(B, 50_000_000n)],
       quoteBalance: 0n,
-    });
-    expect(result.blockers).toEqual([]);
-    expect(result.warnings).toEqual([]);
+    };
     // Deployable 1,500.00 USD: targets 900.00 and 600.00 USD.
-    expect(result.plan).toEqual({
+    expect(planRebalance(input)).toEqual({
+      status: "ready",
+      warnings: [],
+      valuation: valuePortfolio(input),
       mode: "rebalance",
       reserveBps: 50,
       minLegValueUsdE8: 100_000_000n,
@@ -281,10 +331,11 @@ describe("planRebalance: worked examples", () => {
         token: B,
         exit: false,
         // The shortfall of 999.99999999 USD is 999.999999 USDC, rounded down to 1e-6.
-        quoteAmount: 999_999_999n,
-        valueUsdE8: 99_999_999_900n,
         // 999.999999 / 0.07 = 14,285.714271428571428571428... B, rounded down to 18 decimals.
         tokenQuantity: 14_285_714_271_428_571_428_571n,
+        // That quantity costs 999.99999899999999999997 USD, rounded up to 1e-8 and then to 1e-6.
+        quoteAmount: 999_999_999n,
+        valueUsdE8: 99_999_999_900n,
         priceE8: 7_000_000n,
       },
     ]);
@@ -298,7 +349,7 @@ describe("planRebalance: worked examples", () => {
 
   test("a first replication of about 20 USD", () => {
     // 20 USDC into A (8 decimals, 250.00 USD), B (18 decimals, 0.80 USD) and C (6 decimals, 12.50 USD).
-    const result = planRebalance({
+    const plan = planOf({
       mode: "rebalance",
       constituents: [
         { token: A, weightBps: 3_334, decimals: 8 },
@@ -309,8 +360,6 @@ describe("planRebalance: worked examples", () => {
       prices: [price(A, 250n * USD_E8), price(B, 80_000_000n), price(C, 1_250_000_000n)],
       quoteBalance: 20_000_000n,
     });
-    const plan = result.plan;
-    if (plan === null) throw new Error("blocked");
     expect(plan.deployableValueUsdE8).toBe(2_000_000_000n);
     // 6.668, 6.666 and 6.666 USD.
     expect(plan.targets.map(({ targetValueUsdE8 }) => targetValueUsdE8)).toEqual([
@@ -345,16 +394,16 @@ describe("planRebalance: worked examples", () => {
         side: "buy",
         token: C,
         exit: false,
-        quoteAmount: 6_632_670n,
-        valueUsdE8: 663_267_000n,
-        // 6.63267 / 12.50 = 0.5306136 C, rounded down to 6 decimals.
+        // The share of 6.632670 USDC buys 0.5306136 C, rounded down to 0.530613 C. That costs 6.6326625 USD,
+        // so the leg spends 6.632663 USDC and the other 0.000007 USDC stay in the wallet.
         tokenQuantity: 530_613n,
+        quoteAmount: 6_632_663n,
+        valueUsdE8: 663_266_300n,
         priceE8: 1_250_000_000n,
       },
     ]);
     expect(plan.skipped).toEqual([]);
     expect(plan.currentMaxAbsDriftBps).toBeNull();
-    // 0.530613 C is worth 6.6326625 USD.
     expect(plan.projected.positions.map(({ valueUsdE8 }) => valueUsdE8)).toEqual([
       663_466_000n,
       663_267_000n,
@@ -362,8 +411,8 @@ describe("planRebalance: worked examples", () => {
     ]);
     expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([3_334, 3_333, 3_333]);
     expect(plan.projected.maxAbsDriftBps).toBe(0);
-    expect(plan.projected.quoteBalance).toBe(100_000n);
-    expect(result.warnings).toEqual([]);
+    expect(plan.projected.quoteBalance).toBe(100_007n);
+    expect(plan.warnings).toEqual([]);
   });
 
   test("an index with one constituent", () => {
@@ -421,31 +470,26 @@ describe("planRebalance: worked examples", () => {
     expect(plan.projected.quoteBalance).toBe(0n);
   });
 
-  test("about 20 USD into 64 constituents is below the minimum leg value everywhere", () => {
-    // 20 USD: every buy is 0.314 or 0.312 USD, below 1.00 USD.
-    const plan = planOf(sixtyFour(20n * USD_E8));
-    expect(plan.legs).toEqual([]);
-    expect(plan.skipped.length).toBe(64);
-    expect(plan.skipped[0]).toEqual({
-      side: "buy",
-      token: address(0xb201),
-      exit: false,
-      valueUsdE8: 31_400_000n,
-      reason: "below_minimum",
-    });
-    expect(plan.skipped[63]?.valueUsdE8).toBe(31_200_000n);
-    expect(plan.projected.investedValueUsdE8).toBe(0n);
-    expect(plan.projected.positions.map(({ weightBps, driftBps }) => [weightBps, driftBps])).toEqual(
-      range(64).map(() => [null, null]),
-    );
-    expect(plan.projected.maxAbsDriftBps).toBeNull();
-    expect(plan.projected.quoteBalance).toBe(20_000_000n);
+  test("about 20 USD cannot replicate 64 constituents, and the result says how much can", () => {
+    // 20 USD: every buy would be 0.314 or 0.312 USD, below 1.00 USD.
+    // The smallest weight is 156 bps: (1.00 USD + one base unit of 0.000001 USD + 0.000008 USD of rounding)
+    // / 1.56% = 64.10314102... USD, rounded up.
+    expect(blockersOf(sixtyFour(20n * USD_E8))).toEqual([
+      {
+        code: "below_minimum_portfolio_value",
+        severity: "blocker",
+        token: null,
+        minimumDeployableValueUsdE8: 6_410_314_103n,
+      },
+    ]);
+    expect(planOf(sixtyFour(6_410_314_103n)).legs.length).toBe(64);
+    expect(blockersOf(sixtyFour(64n * USD_E8))).toMatchObject([{ code: "below_minimum_portfolio_value" }]);
   });
 
   test("a portfolio of about 10 million USD", () => {
     // 1,064.5 A at 4,321.00 = 4,599,704.50; 14,400 B at 187.50 = 2,700,000.00; 8,000,000 C at 0.25 = 2,000,000.00;
     // 11,300 D at 62.00 = 700,600.00. Total 10,000,304.50 USD against targets of 40%, 30%, 22.5% and 7.5%.
-    const result = planRebalance({
+    const plan = planOf({
       mode: "rebalance",
       constituents: [
         { token: A, weightBps: 4_000, decimals: 8 },
@@ -462,9 +506,7 @@ describe("planRebalance: worked examples", () => {
       prices: [price(A, 4_321n * USD_E8), price(B, 18_750_000_000n), price(C, 25_000_000n), price(D, 62n * USD_E8)],
       quoteBalance: 0n,
     });
-    const plan = result.plan;
-    if (plan === null) throw new Error("blocked");
-    expect(result.valuation.positions.map(({ weightBps }) => weightBps)).toEqual([4_599, 2_700, 2_000, 701]);
+    expect(plan.valuation.positions.map(({ weightBps }) => weightBps)).toEqual([4_599, 2_700, 2_000, 701]);
     expect(plan.currentMaxAbsDriftBps).toBe(599);
     expect(plan.deployableValueUsdE8).toBe(1_000_030_450_000_000n);
     // 4,000,121.80, 3,000,091.35, 2,250,068.5125 and 750,022.8375 USD.
@@ -510,16 +552,17 @@ describe("planRebalance: worked examples", () => {
         side: "buy",
         token: D,
         exit: false,
+        // The share of 49,175.723310 USDC buys 793.156827 D, which costs 49,175.723274 USDC.
         tokenQuantity: 793_156_827n,
-        quoteAmount: 49_175_723_310n,
-        valueUsdE8: 4_917_572_331_000n,
+        quoteAmount: 49_175_723_274n,
+        valueUsdE8: 4_917_572_327_400n,
         priceE8: 6_200_000_000n,
       },
     ]);
     expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([4_001, 2_999, 2_250, 750]);
     expect(plan.projected.maxAbsDriftBps).toBe(1);
     // The reserve of 0.5% of the proceeds, plus the base units lost to rounding down.
-    expect(plan.projected.quoteBalance).toBe(2_997_913_501n);
+    expect(plan.projected.quoteBalance).toBe(2_997_913_537n);
   });
 });
 
@@ -566,11 +609,14 @@ describe("planRebalance: funds", () => {
     expect(scaled.projected.quoteBalance).toBe(4n);
   });
 
-  test("a full reserve buys nothing", () => {
-    const plan = planOf(exact(dollars([5_000, 5_000], [0n, 0n], 10_000_000n), { reserveBps: 10_000 }));
-    expect(plan.buyBudgetQuote).toBe(0n);
-    expect(plan.legs).toEqual([]);
-    expect(plan.projected.quoteBalance).toBe(10_000_000n);
+  test("the reserve has a maximum of 20%", () => {
+    const run = (reserveBps: number) =>
+      errorCode(() => planRebalance(exact(dollars([5_000, 5_000], [60n, 40n]), { reserveBps })));
+    expect(run(2_000)).toBe("no error");
+    expect(run(2_001)).toBe("invalid_bps");
+    expect(run(10_000)).toBe("invalid_bps");
+    expect(run(-1)).toBe("invalid_bps");
+    expect(run(0.5)).toBe("invalid_bps");
   });
 
   test("a deposit is added to the quote balance, rounded down to quote base units", () => {
@@ -578,6 +624,53 @@ describe("planRebalance: funds", () => {
     expect(plan.availableQuote).toBe(5_000_000n);
     expect(plan.deployableValueUsdE8).toBe(500_000_000n);
     expect(plan.legs[0]?.quoteAmount).toBe(5_000_000n);
+  });
+
+  test("a buy spends what its whole base units cost, not everything it was given", () => {
+    // One token of 0 decimals at 1,250.00 USD and 1,999 USDC: one unit is bought for 1,250 USDC.
+    const plan = planOf(
+      exact({
+        constituents: [{ token: A, weightBps: 10_000, decimals: 0 }],
+        holdings: [],
+        prices: [price(A, 1_250n * USD_E8)],
+        quoteBalance: 1_999_000_000n,
+      }),
+    );
+    expect(plan.legs).toEqual([
+      {
+        side: "buy",
+        token: A,
+        exit: false,
+        tokenQuantity: 1n,
+        quoteAmount: 1_250_000_000n,
+        valueUsdE8: 125_000_000_000n,
+        priceE8: 125_000_000_000n,
+      },
+    ]);
+    expect(plan.projected.quoteBalance).toBe(749_000_000n);
+  });
+
+  test("the amount a buy spends rounds up to cover its quantity", () => {
+    // 1 USDC at 3.00 USD buys 0.333333 of a 6-decimal token, which costs 0.999999 USDC.
+    const three = planOf(
+      exact({
+        constituents: [{ token: A, weightBps: 10_000, decimals: 6 }],
+        holdings: [],
+        prices: [price(A, 3n * USD_E8)],
+        quoteBalance: 1_000_000n,
+      }),
+    );
+    expect(three.legs[0]).toMatchObject({ tokenQuantity: 333_333n, quoteAmount: 999_999n, valueUsdE8: 99_999_900n });
+    // 1 USDC at 0.00000007 USD buys 14,285,714.285714 tokens, which cost 0.99999999999998 USD: 1 USDC.
+    const seven = planOf(
+      exact({
+        constituents: [{ token: A, weightBps: 10_000, decimals: 6 }],
+        holdings: [],
+        prices: [price(A, 7n)],
+        quoteBalance: 1_000_000n,
+      }),
+    );
+    expect(seven.legs[0]).toMatchObject({ tokenQuantity: 14_285_714_285_714n, quoteAmount: 1_000_000n });
   });
 });
 
@@ -608,6 +701,18 @@ describe("planRebalance: order of legs", () => {
     ]);
     expect(planRebalance(exact(shuffled))).toEqual(planRebalance(exact(input)));
   });
+
+  test("skipped legs are listed in the same order", () => {
+    const plan = planOf(
+      exact(dollars([2_500, 2_500, 2_500, 2_500], [26n, 24n, 26n, 24n]), { minLegValueUsdE8: 5n * USD_E8 }),
+    );
+    expect(plan.skipped.map(({ side, token }) => [side, token])).toEqual([
+      ["sell", A],
+      ["sell", C],
+      ["buy", B],
+      ["buy", D],
+    ]);
+  });
 });
 
 describe("planRebalance: minimum leg value", () => {
@@ -624,14 +729,12 @@ describe("planRebalance: minimum leg value", () => {
   });
 
   test("a leg below the minimum is skipped, what it would have raised is not spent, and the drift stays", () => {
-    const result = planRebalance(exact(input, { minLegValueUsdE8: 200_000_001n }));
-    const plan = result.plan;
-    if (plan === null) throw new Error("blocked");
+    const plan = planOf(exact(input, { minLegValueUsdE8: 200_000_001n }));
     expect(plan.legs).toEqual([]);
     expect(plan.skipped).toEqual([
       { side: "sell", token: A, exit: false, valueUsdE8: 200_000_000n, reason: "below_minimum" },
-      // Without the proceeds of the skipped sell the budget is zero.
-      { side: "buy", token: B, exit: false, valueUsdE8: 0n, reason: "below_minimum" },
+      // Without the proceeds of the skipped sell the budget is zero, and so is the buy.
+      { side: "buy", token: B, exit: false, valueUsdE8: 0n, reason: "zero_quantity" },
     ]);
     expect(plan.buyBudgetQuote).toBe(0n);
     expect(plan.projected.positions.map(({ balance, driftBps }) => [balance, driftBps])).toEqual([
@@ -639,18 +742,7 @@ describe("planRebalance: minimum leg value", () => {
       [48_000_000n, -200],
     ]);
     expect(plan.projected.maxAbsDriftBps).toBe(200);
-    expect(result.warnings).toEqual([]);
-  });
-
-  test("a skipped buy leaves its amount in the quote asset", () => {
-    // 100 USDC into 99/1: the buy of B is 1.00 USD, below a minimum of 1.01 USD.
-    const plan = planOf(exact(dollars([9_900, 100], [0n, 0n], 100_000_000n), { minLegValueUsdE8: 101_000_000n }));
-    expect(plan.legs.map(({ token, quoteAmount }) => [token, quoteAmount])).toEqual([[A, 99_000_000n]]);
-    expect(plan.skipped).toEqual([
-      { side: "buy", token: B, exit: false, valueUsdE8: 100_000_000n, reason: "below_minimum" },
-    ]);
-    expect(plan.projected.quoteBalance).toBe(1_000_000n);
-    expect(plan.projected.positions.map(({ driftBps }) => driftBps)).toEqual([100, -100]);
+    expect(plan.warnings).toEqual([]);
   });
 
   test("the default minimum is 1.00 USD", () => {
@@ -667,40 +759,369 @@ describe("planRebalance: minimum leg value", () => {
   });
 
   test("a leg that rounds to zero base units is never proposed", () => {
-    // One whole-unit token at 1,000.00 USD: 500 USDC cannot buy a unit, and an excess of 500 USD cannot sell one.
-    const whole = (balance: bigint, quoteBalance: bigint): PortfolioInput => ({
-      constituents: [
-        { token: A, weightBps: 5_000, decimals: 0 },
-        { token: B, weightBps: 5_000, decimals: 6 },
-      ],
-      holdings: [{ token: A, balance, decimals: 0 }],
-      prices: [price(A, 1_000n * USD_E8), price(B, USD_E8)],
-      quoteBalance,
-    });
-    const buy = planOf(exact(whole(0n, 1_000_000_000n)));
-    expect(buy.skipped).toEqual([
-      { side: "buy", token: A, exit: false, valueUsdE8: 50_000_000_000n, reason: "zero_quantity" },
-    ]);
-    expect(buy.legs.map(({ token }) => token)).toEqual([B]);
-    expect(buy.projected.quoteBalance).toBe(500_000_000n);
-    // 1 A and no B: the excess of A is 500 USD, less than one unit.
-    const sell = planOf(exact(whole(1n, 0n)));
-    expect(sell.skipped).toEqual([
-      { side: "sell", token: A, exit: false, valueUsdE8: 0n, reason: "zero_quantity" },
+    // A is a whole-unit token at 1,000.00 USD. The wallet holds 1 A against a target of 50%: the excess of
+    // 500 USD is less than one unit, so nothing is sold and nothing funds the buy of B.
+    const plan = planOf(
+      exact({
+        constituents: [
+          { token: A, weightBps: 5_000, decimals: 0 },
+          { token: B, weightBps: 5_000, decimals: 6 },
+        ],
+        holdings: [{ token: A, balance: 1n, decimals: 0 }],
+        prices: [price(A, 1_000n * USD_E8), price(B, USD_E8)],
+        quoteBalance: 0n,
+      }),
+    );
+    expect(plan.skipped).toEqual([
+      { side: "sell", token: A, exit: false, valueUsdE8: 50_000_000_000n, reason: "zero_quantity" },
       { side: "buy", token: B, exit: false, valueUsdE8: 0n, reason: "zero_quantity" },
     ]);
-    expect(sell.legs).toEqual([]);
+    expect(plan.legs).toEqual([]);
+  });
+});
+
+describe("planRebalance: a skipped buy never pushes the others above target", () => {
+  test("a deposit into a wallet on target is not spent when one buy is below the minimum", () => {
+    // A 9.00 USD and B 1.00 USD against 90/10, with a deposit of 10 USD and every default. B would get
+    // 0.995 USD, below 1.00 USD. Buying only A would move the wallet from 90/10 to 94.7/5.3.
+    const plan = planOf({
+      mode: "rebalance",
+      constituents: [
+        { token: A, weightBps: 9_000, decimals: 8 },
+        { token: B, weightBps: 1_000, decimals: 8 },
+      ],
+      holdings: [
+        { token: A, balance: 900_000_000n, decimals: 8 },
+        { token: B, balance: 100_000_000n, decimals: 8 },
+      ],
+      prices: [price(A, USD_E8), price(B, USD_E8)],
+      quoteBalance: 0n,
+      depositUsdE8: 10n * USD_E8,
+    });
+    expect(plan.legs).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { side: "buy", token: A, exit: false, valueUsdE8: 895_500_000n, reason: "above_target_weight" },
+      { side: "buy", token: B, exit: false, valueUsdE8: 99_500_000n, reason: "below_minimum" },
+    ]);
+    expect(plan.currentMaxAbsDriftBps).toBe(0);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([9_000, 1_000]);
+    expect(plan.projected.maxAbsDriftBps).toBe(0);
+    // The whole deposit stays uninvested.
+    expect(plan.projected.quoteBalance).toBe(10_000_000n);
+    expect(plan.warnings).toEqual([]);
+  });
+
+  test("the remaining buy is capped at its target weight of the projected invested value", () => {
+    // 40/30/20 USD against 50/30/20 with 10.50 USDC: targets 50.25, 30.15 and 20.10 USD. The buys of B (0.15)
+    // and C (0.10) are below 1.00 USD. With B and C fixed at 50 USD together, A can hold 50 USD: it buys 10.
+    const plan = planOf(
+      exact(dollars([5_000, 3_000, 2_000], [40n, 30n, 20n], 10_500_000n), { minLegValueUsdE8: USD_E8 }),
+    );
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["buy", A, 10_000_000n],
+    ]);
+    expect(plan.skipped).toEqual([
+      { side: "buy", token: B, exit: false, valueUsdE8: 15_000_000n, reason: "below_minimum" },
+      { side: "buy", token: C, exit: false, valueUsdE8: 10_000_000n, reason: "below_minimum" },
+    ]);
+    expect(plan.currentMaxAbsDriftBps).toBe(555);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([5_000, 3_000, 2_000]);
+    expect(plan.projected.quoteBalance).toBe(500_000n);
+  });
+
+  test("a cap that leaves a buy under the minimum skips it as above target weight", () => {
+    // 99/1 USD against 99/1 with 100 USDC and a minimum of 1.01 USD: the buy of B is 1.00 USD.
+    const plan = planOf(exact(dollars([9_900, 100], [99n, 1n], 100_000_000n), { minLegValueUsdE8: 101_000_000n }));
+    expect(plan.legs).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { side: "buy", token: A, exit: false, valueUsdE8: 9_900_000_000n, reason: "above_target_weight" },
+      { side: "buy", token: B, exit: false, valueUsdE8: 100_000_000n, reason: "below_minimum" },
+    ]);
+    expect(plan.projected.quoteBalance).toBe(100_000_000n);
+    expect(plan.projected.maxAbsDriftBps).toBe(0);
+  });
+
+  test("without a skipped buy nothing is capped", () => {
+    const plan = planOf(exact(dollars([9_900, 100], [99n, 1n], 100_000_000n), { minLegValueUsdE8: USD_E8 }));
+    expect(plan.legs.map(({ token, quoteAmount }) => [token, quoteAmount])).toEqual([
+      [A, 99_000_000n],
+      [B, 1_000_000n],
+    ]);
+    expect(plan.skipped).toEqual([]);
+  });
+});
+
+describe("planRebalance: the cap on a buy rounds down", () => {
+  test("a buy that would end a fraction above its target weight is not proposed", () => {
+    // A (0.99%) holds nothing, B (98.01%) holds 0.0001 USD and C (1%) is a whole-unit token at 1,000.00 USD
+    // that 0.000002 USDC cannot buy. With C skipped, A may hold 99/9901 of the 0.0001 USD of B: 0.99989...
+    // millionths of a USD, less than the one quote base unit a buy needs.
+    const plan = planOf({
+      mode: "buy_only",
+      reserveBps: 0,
+      minLegValueUsdE8: 0n,
+      constituents: [
+        { token: A, weightBps: 99, decimals: 6 },
+        { token: B, weightBps: 9_801, decimals: 6 },
+        { token: C, weightBps: 100, decimals: 0 },
+      ],
+      holdings: [{ token: B, balance: 100n, decimals: 6 }],
+      prices: [price(A, USD_E8), price(B, USD_E8), price(C, 1_000n * USD_E8)],
+      quoteBalance: 2n,
+    });
+    expect(plan.legs).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { side: "buy", token: A, exit: false, valueUsdE8: 100n, reason: "above_target_weight" },
+      { side: "buy", token: C, exit: false, valueUsdE8: 100n, reason: "zero_quantity" },
+    ]);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([0, 10_000, 0]);
+    expect(plan.projected.quoteBalance).toBe(2n);
+  });
+});
+
+describe("planRebalance: a first replication buys every constituent or nothing", () => {
+  const ninetyTen: RebalancePlanInput = {
+    mode: "rebalance",
+    constituents: [
+      { token: A, weightBps: 9_000, decimals: 8 },
+      { token: B, weightBps: 1_000, decimals: 8 },
+    ],
+    holdings: [],
+    prices: [price(A, USD_E8), price(B, USD_E8)],
+    quoteBalance: 9_000_000n,
+  };
+
+  test("9 USD into 90/10 is blocked with the value that would be enough", () => {
+    // B would get 0.8955 USD. It needs 1.00 USD plus one base unit (0.00000001 USD) plus 0.000008 USD of
+    // rounding, at a weight of 10% after a reserve of 0.5%: 1.00000801 / (0.1 * 0.995) = 10.05033175... USD.
+    const result = planRebalance(ninetyTen);
+    expect(result).toEqual({
+      status: "blocked",
+      blockers: [
+        {
+          code: "below_minimum_portfolio_value",
+          severity: "blocker",
+          token: null,
+          minimumDeployableValueUsdE8: 1_005_033_176n,
+        },
+      ],
+      warnings: [],
+      valuation: valuePortfolio(ninetyTen),
+    });
+    expect("legs" in result).toBe(false);
+  });
+
+  test("that value is enough", () => {
+    // 10.050332 USDC, the minimum rounded up to a quote base unit.
+    const plan = planOf({ ...ninetyTen, quoteBalance: 10_050_332n });
+    expect(plan.legs.map(({ token, valueUsdE8 }) => [token, valueUsdE8])).toEqual([
+      [A, 900_007_200n],
+      [B, 100_000_700n],
+    ]);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([9_000, 1_000]);
+  });
+
+  test("a whole-unit token needs the price of one unit", () => {
+    // A is a whole-unit token at 1,000.00 USD with a weight of 50%: 1,000 USDC cannot buy a unit of it.
+    const whole = (quoteBalance: bigint): RebalancePlanInput =>
+      exact({
+        constituents: [
+          { token: A, weightBps: 5_000, decimals: 0 },
+          { token: B, weightBps: 5_000, decimals: 6 },
+        ],
+        holdings: [],
+        prices: [price(A, 1_000n * USD_E8), price(B, USD_E8)],
+        quoteBalance,
+      });
+    // (1,000.00 USD + 0.000008 USD) / 50% = 2,000.000016 USD.
+    expect(blockersOf(whole(1_000_000_000n))).toEqual([
+      {
+        code: "below_minimum_portfolio_value",
+        severity: "blocker",
+        token: null,
+        minimumDeployableValueUsdE8: 200_000_001_600n,
+      },
+    ]);
+    expect(planOf(whole(2_000_000_016n)).legs.map(({ token, tokenQuantity }) => [token, tokenQuantity])).toEqual([
+      [A, 1n],
+      [B, 1_000_000_008n],
+    ]);
+  });
+
+  test("a wallet that only holds a removed token is not sold into the quote asset when the buys cannot follow", () => {
+    // 2.00 USD of the removed token C: the sale passes the minimum, the buy of B (0.199 USD) does not.
+    const migration: RebalancePlanInput = {
+      ...ninetyTen,
+      quoteBalance: 0n,
+      holdings: [{ token: C, balance: 2_000_000n, decimals: 6 }],
+      prices: [...ninetyTen.prices, price(C, USD_E8)],
+      exitTokens: [C],
+    };
+    // One more quote base unit of rounding for the exit: 1.00000901 / (0.1 * 0.995) = 10.05034180... USD.
+    expect(blockersOf(migration)).toEqual([
+      {
+        code: "below_minimum_portfolio_value",
+        severity: "blocker",
+        token: null,
+        minimumDeployableValueUsdE8: 1_005_034_181n,
+      },
+    ]);
+    const plan = planOf({ ...migration, minLegValueUsdE8: 0n });
+    expect(plan.legs.map(({ side, token }) => [side, token])).toEqual([
+      ["sell", C],
+      ["buy", A],
+      ["buy", B],
+    ]);
+  });
+});
+
+describe("planRebalance: sells are scaled to what the buys spend", () => {
+  test("a sell whose proceeds no buy would spend is not proposed", () => {
+    // 46/18/18/18 USD against 40/20/20/20 with a minimum of 3.00 USD: the sell of A is 6.00 USD and each buy
+    // is 2.00 USD. Selling A alone would leave 6 USD idle and the three others further from target.
+    const plan = planOf(
+      exact(dollars([4_000, 2_000, 2_000, 2_000], [46n, 18n, 18n, 18n]), { minLegValueUsdE8: 3n * USD_E8 }),
+    );
+    expect(plan.legs).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { side: "sell", token: A, exit: false, valueUsdE8: 600_000_000n, reason: "not_needed" },
+      { side: "buy", token: B, exit: false, valueUsdE8: 200_000_000n, reason: "below_minimum" },
+      { side: "buy", token: C, exit: false, valueUsdE8: 200_000_000n, reason: "below_minimum" },
+      { side: "buy", token: D, exit: false, valueUsdE8: 200_000_000n, reason: "below_minimum" },
+    ]);
+    expect(plan.projected.maxAbsDriftBps).toBe(600);
+    expect(plan.projected.quoteBalance).toBe(0n);
+  });
+
+  test("a sell is reduced to the proceeds the remaining buys need", () => {
+    // 60.00/39.50/0.50 USD against 50/49/1: A sells 10.00, B wants 9.50 and C wants 0.50, below 1.00 USD.
+    // With A at 50.00 and C at 0.50, B can hold 49/51 of 50.50 = 48.5196... USD: it buys 9.019607 USDC.
+    // The sell is scaled to exactly those 9.019607 USDC.
+    const plan = planOf(
+      exact(
+        {
+          ...dollars([5_000, 4_900, 100], [60n, 0n, 0n]),
+          holdings: [
+            { token: A, balance: 60_000_000n, decimals: 6 },
+            { token: B, balance: 39_500_000n, decimals: 6 },
+            { token: C, balance: 500_000n, decimals: 6 },
+          ],
+        },
+        { minLegValueUsdE8: USD_E8 },
+      ),
+    );
+    expect(
+      plan.legs.map(({ side, token, tokenQuantity, quoteAmount }) => [side, token, tokenQuantity, quoteAmount]),
+    ).toEqual([
+      ["sell", A, 9_019_607n, 9_019_607n],
+      ["buy", B, 9_019_607n, 9_019_607n],
+    ]);
+    expect(plan.skipped).toEqual([
+      { side: "buy", token: C, exit: false, valueUsdE8: 50_000_000n, reason: "below_minimum" },
+    ]);
+    expect(plan.buyBudgetQuote).toBe(9_019_607n);
+    expect(plan.currentMaxAbsDriftBps).toBe(1_000);
+    expect(plan.projected.positions.map(({ driftBps }) => driftBps)).toEqual([98, -48, -50]);
+    expect(plan.projected.quoteBalance).toBe(0n);
+  });
+
+  test("with a reserve the sell raises the buys plus their reserve, rounded up", () => {
+    // The same wallet with a reserve of 0.5%: B still buys 9.019607 USDC. That needs 9.019607 / 0.995 =
+    // 9.064931658... USDC of proceeds, rounded up, so that the budget after the reserve covers the buy.
+    const plan = planOf({
+      mode: "rebalance",
+      ...dollars([5_000, 4_900, 100], [60n, 0n, 0n]),
+      holdings: [
+        { token: A, balance: 60_000_000n, decimals: 6 },
+        { token: B, balance: 39_500_000n, decimals: 6 },
+        { token: C, balance: 500_000n, decimals: 6 },
+      ],
+    });
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["sell", A, 9_064_932n],
+      ["buy", B, 9_019_607n],
+    ]);
+    expect(plan.buyBudgetQuote).toBe(9_019_607n);
+    expect(plan.projected.quoteBalance).toBe(45_325n);
+  });
+
+  test("several scaled sells together raise at least what the buys need", () => {
+    // A and B (6 decimals, 3.00 USD) hold 30 USD each against 20% each, C holds 39 USD against 59% and D holds
+    // 1 USD against 1%. C wants 20 and D wants nothing: both sells are needed in full.
+    const input = (dBalance: bigint): RebalancePlanInput => ({
+      mode: "rebalance",
+      reserveBps: 0,
+      constituents: [
+        { token: A, weightBps: 2_000, decimals: 6 },
+        { token: B, weightBps: 2_000, decimals: 6 },
+        { token: C, weightBps: 5_900, decimals: 6 },
+        { token: D, weightBps: 100, decimals: 6 },
+      ],
+      holdings: [
+        { token: A, balance: 10_000_000n, decimals: 6 },
+        { token: B, balance: 10_000_000n, decimals: 6 },
+        { token: C, balance: 39_000_000n, decimals: 6 },
+        { token: D, balance: dBalance, decimals: 6 },
+      ],
+      prices: [price(A, 3n * USD_E8), price(B, 3n * USD_E8), price(C, USD_E8), price(D, USD_E8)],
+      quoteBalance: 0n,
+    });
+    const full = planOf(input(1_000_000n));
+    expect(full.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
+      ["sell", 9_999_999n],
+      ["sell", 9_999_999n],
+      ["buy", 19_999_998n],
+    ]);
+    // With D at 0.50 USD, D wants 0.495 USD, below the minimum. A and B end at 19.900002 USD each after a
+    // full sell, so C can hold 59/41 of 40.300004 = 57.992688... USD: it buys 18.992688 USDC. Each sell of
+    // 3.366666 tokens is scaled by (18.992688 + 0.000001) / 20.199996 to 3.1654481..., rounded up to
+    // 3.165449 tokens, worth 9.496347 USDC.
+    const scaled = planOf(input(500_000n));
+    expect(scaled.legs.map(({ side, tokenQuantity, quoteAmount }) => [side, tokenQuantity, quoteAmount])).toEqual([
+      ["sell", 3_165_449n, 9_496_347n],
+      ["sell", 3_165_449n, 9_496_347n],
+      ["buy", 18_992_688n, 18_992_688n],
+    ]);
+    expect(scaled.buyBudgetQuote).toBe(18_992_694n);
+    expect(scaled.projected.quoteBalance).toBe(6n);
+  });
+
+  test("a scaled sell is never smaller than the minimum leg value", () => {
+    // 70/20/5/5 USD against 50/40/5/5 with 19.50 USDC: targets 59.75, 47.80, 5.975 and 5.975 USD. A sells
+    // 10.25, B wants 27.80, C and D want 0.975 each. Without a minimum every buy goes through and the sell is
+    // needed in full.
+    const full = planOf(exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n)));
+    expect(full.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
+      ["sell", 10_250_000n],
+      ["buy", 27_800_000n],
+      ["buy", 975_000n],
+      ["buy", 975_000n],
+    ]);
+    // With a minimum of 5.00 USD the buys of C and D are skipped. A at 59.75 with C and D at 5.00 each is
+    // 69.75 USD, so B can hold 40/60 of that, 46.50 USD: it buys 26.50 USDC, which needs 7.00 USDC of proceeds.
+    const scaled = planOf(
+      exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n), { minLegValueUsdE8: 5n * USD_E8 }),
+    );
+    expect(scaled.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
+      ["sell", 7_000_000n],
+      ["buy", 26_500_000n],
+    ]);
+    // With a minimum of 9.00 USD the scaled sell would be 7.00 USD: it is raised to the minimum.
+    const raised = planOf(
+      exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n), { minLegValueUsdE8: 9n * USD_E8 }),
+    );
+    expect(raised.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
+      ["sell", 9_000_000n],
+      ["buy", 26_500_000n],
+    ]);
+    expect(raised.projected.quoteBalance).toBe(2_000_000n);
   });
 });
 
 describe("planRebalance: buy only", () => {
   test("a deposit buys what is below target and sells nothing", () => {
     // 60/40 USD against 50/50 with a deposit of 10 USD: targets 55/55, B wants 15 and gets the 10 there are.
-    const result = planRebalance(
-      exact(dollars([5_000, 5_000], [60n, 40n]), { mode: "buy_only", depositUsdE8: 10n * USD_E8 }),
-    );
-    const plan = result.plan;
-    if (plan === null) throw new Error("blocked");
+    const plan = planOf(exact(dollars([5_000, 5_000], [60n, 40n]), { mode: "buy_only", depositUsdE8: 10n * USD_E8 }));
     expect(plan.legs).toEqual([
       {
         side: "buy",
@@ -720,7 +1141,7 @@ describe("planRebalance: buy only", () => {
       [4_545, -455],
     ]);
     expect(plan.projected.maxAbsDriftBps).toBe(455);
-    expect(result.valuation.quoteBalance).toBe(0n);
+    expect(plan.valuation.quoteBalance).toBe(0n);
   });
 
   test("the same wallet in rebalance mode sells the excess", () => {
@@ -747,6 +1168,13 @@ describe("planRebalance: buy only", () => {
     );
     expect(plan.legs.map(({ side, token }) => [side, token])).toEqual([["buy", A]]);
     expect(plan.deployableValueUsdE8).toBe(1_500_000_000n);
+  });
+
+  test("an unknown mode is an input error, not a buy-only plan", () => {
+    const input = { ...exact(dollars([5_000, 5_000], [60n, 40n], 10_000_000n)), mode: "sell_only" };
+    expect(errorCode(() => planRebalance(input as unknown as RebalancePlanInput))).toBe("invalid_mode");
+    const missing = { ...dollars([5_000, 5_000], [60n, 40n], 10_000_000n) };
+    expect(errorCode(() => planRebalance(missing as unknown as RebalancePlanInput))).toBe("invalid_mode");
   });
 });
 
@@ -792,9 +1220,9 @@ describe("planRebalance: tokens to exit", () => {
   test("a token outside the index that is not listed is never sold or counted", () => {
     const listed = planOf(exact(input, { exitTokens: [C] }));
     expect(listed.legs.some(({ token }) => token === D)).toBe(false);
-    const none = planRebalance(exact(input));
-    expect(none.plan?.legs).toEqual([]);
-    expect(none.plan?.deployableValueUsdE8).toBe(1_000_000_000n);
+    const none = planOf(exact(input));
+    expect(none.legs).toEqual([]);
+    expect(none.deployableValueUsdE8).toBe(1_000_000_000n);
     expect(none.valuation.outsideIndex.map(({ token }) => token)).toEqual([C, D]);
   });
 
@@ -817,36 +1245,56 @@ describe("planRebalance: tokens to exit", () => {
     ]);
   });
 
-  test("an exit below the minimum leg value is skipped and not spent", () => {
+  test("an exit below the minimum leg value is skipped and is not deployable", () => {
     const plan = planOf(exact(input, { exitTokens: [C], minLegValueUsdE8: 6_000_000_001n }));
-    expect(plan.skipped[0]).toEqual({
-      side: "sell",
-      token: C,
-      exit: true,
-      valueUsdE8: 6_000_000_000n,
-      reason: "below_minimum",
-    });
+    expect(plan.skipped).toEqual([
+      { side: "sell", token: C, exit: true, valueUsdE8: 6_000_000_000n, reason: "below_minimum" },
+    ]);
     expect(plan.legs).toEqual([]);
+    // Only the 10 USD of A: the 60 USD of C stay in the wallet and do not raise any target.
+    expect(plan.deployableValueUsdE8).toBe(1_000_000_000n);
+    expect(plan.targets[0]).toMatchObject({ targetValueUsdE8: 1_000_000_000n, deltaUsdE8: 0n });
+  });
+
+  test("an exit is sold in full even when a buy is skipped", () => {
+    // The target version is 50/50 of A and B. The wallet holds 60 USD of the removed C and 30 USD of A. B wants
+    // 45 and A wants 15; with a minimum of 20 USD the buy of A is skipped, and B is capped at its weight.
+    const two = dollars([5_000, 5_000], [30n, 0n]);
+    const plan = planOf(
+      exact(
+        {
+          ...two,
+          holdings: [...two.holdings, { token: C, balance: 30_000_000n, decimals: 6 }],
+          prices: [...two.prices, price(C, 2n * USD_E8)],
+        },
+        { exitTokens: [C], minLegValueUsdE8: 20n * USD_E8 },
+      ),
+    );
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["sell", C, 60_000_000n],
+      ["buy", B, 30_000_000n],
+    ]);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([5_000, 5_000]);
+    expect(plan.projected.quoteBalance).toBe(30_000_000n);
   });
 
   test("a listed token the wallet does not hold needs no price", () => {
-    const result = planRebalance(exact(base, { exitTokens: [C, D] }));
-    expect(result.blockers).toEqual([]);
-    expect(result.plan?.legs).toEqual([]);
+    const plan = planOf(exact(base, { exitTokens: [C, D] }));
+    expect(plan.legs).toEqual([]);
   });
 
   test("a held token to exit without a usable price blocks the plan", () => {
-    const prices = (c: ReturnType<typeof price>[]) =>
-      exact({ ...input, prices: [...base.prices, ...c] }, { exitTokens: [C] });
-    expect(planRebalance(prices([])).blockers).toEqual([{ code: "missing_price", severity: "blocker", token: C }]);
-    expect(planRebalance(prices([price(C, USD_E8, "unavailable")])).blockers).toEqual([
+    const prices = (c: ReferencePrice[]) => exact({ ...input, prices: [...base.prices, ...c] }, { exitTokens: [C] });
+    expect(blockersOf(prices([]))).toEqual([{ code: "missing_price", severity: "blocker", token: C }]);
+    expect(blockersOf(prices([price(C, USD_E8, "unavailable")]))).toEqual([
       { code: "price_unavailable", severity: "blocker", token: C },
     ]);
-    expect(planRebalance(prices([price(C, 0n)])).blockers).toEqual([
-      { code: "zero_price", severity: "blocker", token: C },
-    ]);
-    expect(planRebalance(prices([price(C, USD_E8, "last_close")])).warnings).toEqual([
+    expect(blockersOf(prices([price(C, 0n)]))).toEqual([{ code: "zero_price", severity: "blocker", token: C }]);
+    expect(planOf(prices([price(C, USD_E8, "last_close")])).warnings).toEqual([
       { code: "market_closed", severity: "warning", token: C },
+    ]);
+    expect(blockersOf({ ...prices([price(C, USD_E8, "last_close")]), blockOnLastClose: true })).toEqual([
+      { code: "market_closed", severity: "blocker", token: C },
     ]);
   });
 
@@ -859,114 +1307,190 @@ describe("planRebalance: tokens to exit", () => {
 
 describe("planRebalance: blockers and warnings", () => {
   const input = dollars([5_000, 5_000], [60n, 40n]);
-  const withPrices = (...prices: ReturnType<typeof price>[]) => exact({ ...input, prices });
+  const withPrices = (...prices: ReferencePrice[]) => exact({ ...input, prices });
 
-  test("a missing price blocks the plan and still returns the valuation", () => {
+  test("a blocked result has no legs and still returns the valuation", () => {
     const result = planRebalance(withPrices(price(A, USD_E8)));
-    expect(result.blockers).toEqual([{ code: "missing_price", severity: "blocker", token: B }]);
-    expect(result.plan).toBeNull();
+    expect(result.status).toBe("blocked");
+    expect(Object.keys(result).sort()).toEqual(["blockers", "status", "valuation", "warnings"]);
+    expect(blockersOf(withPrices(price(A, USD_E8)))).toEqual([
+      { code: "missing_price", severity: "blocker", token: B },
+    ]);
     expect(result.valuation.positions[0]?.valueUsdE8).toBe(6_000_000_000n);
   });
 
   test("an unavailable price and a zero price block the plan", () => {
-    expect(planRebalance(withPrices(price(A, USD_E8, "unavailable"), price(B, USD_E8)))).toMatchObject({
-      blockers: [{ code: "price_unavailable", severity: "blocker", token: A }],
-      plan: null,
-    });
-    expect(planRebalance(withPrices(price(A, USD_E8), price(B, 0n)))).toMatchObject({
-      blockers: [{ code: "zero_price", severity: "blocker", token: B }],
-      plan: null,
-    });
+    expect(blockersOf(withPrices(price(A, USD_E8, "unavailable"), price(B, USD_E8)))).toEqual([
+      { code: "price_unavailable", severity: "blocker", token: A },
+    ]);
+    expect(blockersOf(withPrices(price(A, USD_E8), price(B, 0n)))).toEqual([
+      { code: "zero_price", severity: "blocker", token: B },
+    ]);
+  });
+
+  test("a price without a status, or with an unknown one, is unavailable and never a number", () => {
+    const noStatus = { token: B, priceE8: USD_E8 } as unknown as ReferencePrice;
+    const stale = { token: B, priceE8: USD_E8, status: "stale" } as unknown as ReferencePrice;
+    const garbage = { token: B, priceE8: "1", status: null } as unknown as ReferencePrice;
+    for (const bad of [noStatus, stale, garbage]) {
+      const result = planRebalance({
+        mode: "buy_only",
+        ...input,
+        prices: [price(A, USD_E8), bad],
+        quoteBalance: 50_000_000n,
+      });
+      expect(result.status).toBe("blocked");
+      expect(blockersOf(withPrices(price(A, USD_E8), bad))).toEqual([
+        { code: "price_unavailable", severity: "blocker", token: B },
+      ]);
+      expect(result.valuation.positions[1]).toMatchObject({
+        priceE8: null,
+        priceStatus: "unavailable",
+        valueUsdE8: null,
+      });
+    }
+  });
+
+  test("an unavailable price is a blocker whatever value it carries", () => {
+    expect(blockersOf(withPrices(price(A, USD_E8), price(B, -5n, "unavailable")))).toEqual([
+      { code: "price_unavailable", severity: "blocker", token: B },
+    ]);
+    expect(errorCode(() => planRebalance(withPrices(price(A, USD_E8), price(B, -5n, "live"))))).toBe("negative_amount");
   });
 
   test("a decimals mismatch blocks the plan", () => {
-    const result = planRebalance(exact({ ...input, holdings: [{ token: A, balance: 60_000_000n, decimals: 8 }] }));
-    expect(result.blockers).toEqual([{ code: "decimals_mismatch", severity: "blocker", token: A }]);
-    expect(result.plan).toBeNull();
+    const mismatch = exact({ ...input, holdings: [{ token: A, balance: 60_000_000n, decimals: 8 }] });
+    expect(blockersOf(mismatch)).toEqual([{ code: "decimals_mismatch", severity: "blocker", token: A }]);
   });
 
   test("nothing to deploy blocks the plan", () => {
-    const result = planRebalance(exact(dollars([5_000, 5_000], [0n, 0n])));
-    expect(result.blockers).toEqual([{ code: "zero_deployable_value", severity: "blocker", token: null }]);
-    expect(result.plan).toBeNull();
+    expect(blockersOf(exact(dollars([5_000, 5_000], [0n, 0n])))).toEqual([
+      { code: "zero_deployable_value", severity: "blocker", token: null },
+    ]);
     // A deposit below one quote base unit is still nothing.
-    expect(planRebalance(exact(dollars([10_000], [0n]), { depositUsdE8: 99n })).plan).toBeNull();
-    expect(planRebalance(exact(dollars([10_000], [0n]), { depositUsdE8: 100n })).blockers).toEqual([]);
+    expect(blockersOf(exact(dollars([10_000], [0n]), { depositUsdE8: 99n }))).toMatchObject([
+      { code: "zero_deployable_value" },
+    ]);
+    expect(planOf(exact(dollars([10_000], [0n]), { depositUsdE8: 100n })).legs.length).toBe(1);
   });
 
   test("a last_close price warns and the plan is still computed", () => {
-    const result = planRebalance(withPrices(price(A, USD_E8, "last_close"), price(B, USD_E8)));
-    expect(result.blockers).toEqual([]);
-    expect(result.warnings).toEqual([{ code: "market_closed", severity: "warning", token: A }]);
-    expect(result.plan?.legs.length).toBe(2);
+    const plan = planOf(withPrices(price(A, USD_E8, "last_close"), price(B, USD_E8)));
+    expect(plan.warnings).toEqual([{ code: "market_closed", severity: "warning", token: A }]);
+    expect(plan.valuation.issues).toEqual([{ code: "market_closed", severity: "warning", token: A }]);
+    expect(plan.legs.length).toBe(2);
   });
 
-  test("blockOnLastClose turns that warning into a blocker", () => {
+  test("blockOnLastClose turns that warning into a blocker everywhere it is reported", () => {
     const prices = withPrices(price(A, USD_E8, "last_close"), price(B, USD_E8, "delayed"));
     const result = planRebalance({ ...prices, blockOnLastClose: true });
-    expect(result.blockers).toEqual([{ code: "market_closed", severity: "blocker", token: A }]);
-    expect(result.warnings).toEqual([{ code: "price_delayed", severity: "warning", token: B }]);
-    expect(result.plan).toBeNull();
-    expect(planRebalance({ ...prices, blockOnLastClose: false }).plan).not.toBeNull();
+    expect(result).toEqual({
+      status: "blocked",
+      blockers: [{ code: "market_closed", severity: "blocker", token: A }],
+      warnings: [{ code: "price_delayed", severity: "warning", token: B }],
+      valuation: valuePortfolio({ ...prices, blockOnLastClose: true }),
+    });
+    expect(result.valuation.issues).toEqual([
+      { code: "market_closed", severity: "blocker", token: A },
+      { code: "price_delayed", severity: "warning", token: B },
+    ]);
+    // The last close is a published value: the position is still valued.
+    expect(result.valuation.positions.map(({ weightBps }) => weightBps)).toEqual([6_000, 4_000]);
+    expect(planRebalance({ ...prices, blockOnLastClose: false }).status).toBe("ready");
     // Without a last_close price the option changes nothing.
-    expect(planRebalance({ ...exact(input), blockOnLastClose: true }).plan).not.toBeNull();
+    expect(planRebalance({ ...exact(input), blockOnLastClose: true }).status).toBe("ready");
   });
 
   test("a delayed price warns", () => {
-    const result = planRebalance(withPrices(price(A, USD_E8), price(B, USD_E8, "delayed")));
-    expect(result.warnings).toEqual([{ code: "price_delayed", severity: "warning", token: B }]);
-    expect(result.plan).not.toBeNull();
+    const plan = planOf(withPrices(price(A, USD_E8), price(B, USD_E8, "delayed")));
+    expect(plan.warnings).toEqual([{ code: "price_delayed", severity: "warning", token: B }]);
   });
 
-  test("a plan that would raise the maximum drift says so", () => {
-    // A 51 and B 149 USD against targets of 5% and 15%, eight more constituents at 10% each, and 800 USDC.
-    // Deployable 1,000: A is 1 USD above its target and is sold. With a full reserve nothing is bought, so the
-    // invested value shrinks and B, already the widest drift, takes a larger share.
-    const tokens = range(10).map((i) => address(0xa0 + i));
-    const weights = [500, 1_500, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000];
-    const result = planRebalance({
-      mode: "rebalance",
-      reserveBps: 10_000,
+  test("a plan that would raise the maximum drift says so, with both numbers", () => {
+    // Five constituents of 0.2% hold 110 USD each (2.2%), F of 89% holds 4,450 USD (89%), five of 2% hold
+    // nothing: the widest drift is 200 bps. A buy-only plan with 5,000 USDC cannot sell the first five, so the
+    // 5,000 are shared pro rata between F (shortfall 4,450) and the last five (200 each): F gets 4,082.57 and
+    // ends at 85.33% of 10,000 USD, 367 bps under its target.
+    const tokens = range(11).map((i) => address(0xa0 + i));
+    const weights = [20, 20, 20, 20, 20, 8_900, 200, 200, 200, 200, 200];
+    const held = [110n, 110n, 110n, 110n, 110n, 4_450n];
+    const plan = planOf({
+      mode: "buy_only",
+      reserveBps: 0,
       minLegValueUsdE8: 0n,
       constituents: tokens.map((token, i) => ({ token, weightBps: weights[i] ?? 0, decimals: 6 })),
-      holdings: [
-        { token: address(0xa1), balance: 51_000_000n, decimals: 6 },
-        { token: address(0xa2), balance: 149_000_000n, decimals: 6 },
-      ],
+      holdings: held.map((balance, i) => ({ token: address(0xa1 + i), balance: balance * 1_000_000n, decimals: 6 })),
       prices: tokens.map((token) => price(token, USD_E8)),
-      quoteBalance: 800_000_000n,
+      quoteBalance: 5_000_000_000n,
     });
-    // 149 / 200 = 7,450 bps before, 149 / 199 = 7,487 bps after.
-    expect(result.plan?.currentMaxAbsDriftBps).toBe(5_950);
-    expect(result.plan?.projected.maxAbsDriftBps).toBe(5_987);
-    expect(result.plan?.legs.map(({ side, token }) => [side, token])).toEqual([["sell", address(0xa1)]]);
-    expect(result.warnings).toEqual([{ code: "projected_drift_increase", severity: "warning", token: null }]);
+    expect(plan.legs.map(({ quoteAmount }) => quoteAmount)).toEqual([
+      4_082_568_807n,
+      183_486_238n,
+      183_486_238n,
+      183_486_238n,
+      183_486_238n,
+      183_486_238n,
+    ]);
+    expect(plan.projected.positions.map(({ driftBps }) => driftBps)).toEqual([
+      90, 90, 90, 90, 90, -367, -16, -16, -17, -17, -17,
+    ]);
+    expect(plan.warnings).toEqual([
+      {
+        code: "projected_drift_increase",
+        severity: "warning",
+        token: null,
+        currentMaxAbsDriftBps: 200,
+        projectedMaxAbsDriftBps: 367,
+      },
+    ]);
   });
 
-  test("parameters out of range throw", () => {
-    const run = (options: Partial<RebalancePlanInput>) => errorCode(() => planRebalance(exact(input, options)));
-    expect(run({ reserveBps: -1 })).toBe("invalid_bps");
-    expect(run({ reserveBps: 10_001 })).toBe("invalid_bps");
-    expect(run({ reserveBps: 0.5 })).toBe("invalid_bps");
+  test("a first replication is compared against a drift of zero", () => {
+    // 3 quote base units into 50/50 of a 6-decimal token at 1.00 USD: one unit each, and one unit left.
+    // 0.000003 USDC into 60/40 buys one unit of A and one of B: 50/50 against 60/40.
+    const plan = planOf(exact(dollars([6_000, 4_000], [0n, 0n], 3n)));
+    expect(plan.legs.map(({ quoteAmount }) => quoteAmount)).toEqual([1n, 1n]);
+    expect(plan.currentMaxAbsDriftBps).toBeNull();
+    expect(plan.warnings).toEqual([
+      {
+        code: "projected_drift_increase",
+        severity: "warning",
+        token: null,
+        currentMaxAbsDriftBps: null,
+        projectedMaxAbsDriftBps: 1_000,
+      },
+    ]);
+  });
+
+  test("amounts that are not bigints and parameters out of range throw typed errors", () => {
+    const run = (options: object) =>
+      errorCode(() => planRebalance({ ...exact(input), ...options } as unknown as RebalancePlanInput));
     expect(run({ minLegValueUsdE8: -1n })).toBe("negative_amount");
     expect(run({ depositUsdE8: -1n })).toBe("negative_amount");
     expect(run({ quoteBalance: -1n })).toBe("negative_amount");
-    expect(run({ reserveBps: 10_000 })).toBe("no error");
+    expect(run({ minLegValueUsdE8: 100 })).toBe("invalid_amount");
+    expect(run({ depositUsdE8: 10.5 })).toBe("invalid_amount");
+    expect(run({ quoteBalance: 5 })).toBe("invalid_amount");
+    expect(run({ quoteBalance: "5" })).toBe("invalid_amount");
+    expect(run({ holdings: [{ token: A, balance: 60, decimals: 6 }] })).toBe("invalid_amount");
+    expect(run({ prices: [{ token: A, priceE8: 1, status: "live" }, price(B, USD_E8)] })).toBe("invalid_amount");
+    expect(run({ reserveBps: 2_000 })).toBe("no error");
   });
 });
 
 describe("planRebalance: a portfolio on target", () => {
   test("proposes nothing", () => {
-    const result = planRebalance({ mode: "rebalance", ...dollars([7_500, 2_500], [75n, 25n]) });
-    expect(result.plan?.legs).toEqual([]);
-    expect(result.plan?.skipped).toEqual([]);
-    expect(result.plan?.projected.maxAbsDriftBps).toBe(0);
+    const plan = planOf({ mode: "rebalance", ...dollars([7_500, 2_500], [75n, 25n]) });
+    expect(plan.legs).toEqual([]);
+    expect(plan.skipped).toEqual([]);
+    expect(plan.projected.maxAbsDriftBps).toBe(0);
   });
 
   test("the projection of an empty plan is the current portfolio", () => {
-    const input = dollars([5_000, 5_000], [50n, 50n], 123n);
-    const result = planRebalance({ mode: "buy_only", reserveBps: 10_000, ...input });
-    expect(result.plan?.projected.quoteBalance).toBe(123n);
-    expect(result.plan?.projected.positions.map(({ balance }) => balance)).toEqual([50_000_000n, 50_000_000n]);
+    // 0.000123 USDC next to 100 USD on target: both buys are far below the minimum.
+    const plan = planOf({ mode: "buy_only", ...dollars([5_000, 5_000], [50n, 50n], 123n) });
+    expect(plan.legs).toEqual([]);
+    expect(plan.projected.quoteBalance).toBe(123n);
+    expect(plan.projected.positions.map(({ balance }) => balance)).toEqual([50_000_000n, 50_000_000n]);
   });
 });

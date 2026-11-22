@@ -12,7 +12,7 @@
 
 import { BPS, mulDivDown } from "./fixed-point.ts";
 import { MAX_TOKEN_DECIMALS, positionValueUsdE8, USD_E8 } from "./position-value.ts";
-import { type Address, isAddress, TOTAL_WEIGHT_BPS } from "./spec.ts";
+import { type Address, isAddress, MAX_CONSTITUENTS, TOTAL_WEIGHT_BPS } from "./spec.ts";
 import type { StalenessStatus } from "./staleness.ts";
 
 /** Decimals of the quote asset (USDC). */
@@ -31,10 +31,16 @@ export type CalculationInputErrorCode =
   | "invalid_address"
   | "duplicate_token"
   | "negative_amount"
+  /** A balance, price or value that is not a `bigint`. */
+  | "invalid_amount"
+  /** More constituents than `MAX_CONSTITUENTS`. */
+  | "too_many_constituents"
+  /** A plan mode that is not `rebalance` or `buy_only`. */
+  | "invalid_mode"
   | "invalid_decimals"
   /** No constituent, a weight outside `[1, 10_000]`, or weights that do not sum to 10_000. */
   | "invalid_weights"
-  /** A basis point parameter that is not an integer in its range. */
+  /** A basis point parameter that is not an integer in its range, such as a reserve above `MAX_RESERVE_BPS`. */
   | "invalid_bps"
   /** A time or duration that is not a non-negative safe integer of seconds. */
   | "invalid_time"
@@ -71,7 +77,10 @@ export interface Holding {
   readonly decimals: number;
 }
 
-/** A reference price with its staleness class. */
+/**
+ * A reference price with its staleness class. Prices come from outside the calculation: a `status` that is
+ * absent or not one of the four classes is read as `unavailable`, and `priceE8` is then never read.
+ */
 export interface ReferencePrice {
   readonly token: Address;
   /** USD per whole token scaled by 1e8. */
@@ -87,36 +96,71 @@ export interface PortfolioInput {
   readonly prices: readonly ReferencePrice[];
   /** Quote asset balance counted toward this replication, in base units of `QUOTE_DECIMALS` decimals. */
   readonly quoteBalance: bigint;
+  /**
+   * Makes a `last_close` price a blocker instead of a warning. Defaults to `false`: the calculation reports a
+   * closed market and the layer above decides whether to act on it.
+   */
+  readonly blockOnLastClose?: boolean;
 }
 
 /** The staleness class of a price, or `missing` when no price was supplied for the token. */
 export type PriceStatus = StalenessStatus | "missing";
 
-export type CalculationIssueCode =
-  /** No price was supplied for a token the calculation needs. */
-  | "missing_price"
-  /** The price has status `unavailable`: there is no usable value. */
-  | "price_unavailable"
-  /** The price is zero, which no listed token has. */
-  | "zero_price"
-  /** A holding reports different decimals than the constituent it is matched with. */
-  | "decimals_mismatch"
-  /** There is nothing to deploy: no constituent value, no quote asset and no proceeds from exits. */
-  | "zero_deployable_value"
-  /** The price has status `last_close`: the market is closed and execution prices will differ. */
-  | "market_closed"
-  /** The price has status `delayed`. */
-  | "price_delayed"
-  /** The projected maximum drift is above the current one. */
-  | "projected_drift_increase";
-
-/** A data-quality finding. A blocker means the affected numbers are not computed. */
-export interface CalculationIssue {
-  readonly code: CalculationIssueCode;
+/** A finding about the price or the decimals of one token. */
+export interface TokenIssue {
+  readonly code: /** No price was supplied for a token the calculation needs. */
+    | "missing_price"
+    /** The price has status `unavailable`, or a status that is not a known class: there is no usable value. */
+    | "price_unavailable"
+    /** The price is zero, which no listed token has. */
+    | "zero_price"
+    /** A holding reports different decimals than the constituent it is matched with. */
+    | "decimals_mismatch"
+    /** The price has status `last_close`: the market is closed and execution prices will differ. */
+    | "market_closed"
+    /** The price has status `delayed`. */
+    | "price_delayed";
   readonly severity: "blocker" | "warning";
-  /** The token concerned, or `null` for a finding about the whole portfolio. */
-  readonly token: Address | null;
+  readonly token: Address;
 }
+
+/** There is nothing to deploy: no constituent value, no quote asset and no proceeds from exits. */
+export interface ZeroDeployableValueIssue {
+  readonly code: "zero_deployable_value";
+  readonly severity: "blocker";
+  readonly token: null;
+}
+
+/**
+ * A first replication that cannot buy every constituent, because a buy is below the minimum leg value or rounds
+ * to zero base units. Buying only some constituents would not replicate the index, so nothing is proposed.
+ */
+export interface BelowMinimumPortfolioValueIssue {
+  readonly code: "below_minimum_portfolio_value";
+  readonly severity: "blocker";
+  readonly token: null;
+  /** A deployable value from which every constituent gets a buy leg with the same reserve and minimum. */
+  readonly minimumDeployableValueUsdE8: bigint;
+}
+
+/** The projected maximum drift is above the current one. A first replication is compared against zero. */
+export interface ProjectedDriftIncreaseIssue {
+  readonly code: "projected_drift_increase";
+  readonly severity: "warning";
+  readonly token: null;
+  /** Maximum absolute drift before the plan, or `null` when nothing is invested. */
+  readonly currentMaxAbsDriftBps: number | null;
+  readonly projectedMaxAbsDriftBps: number;
+}
+
+/** A finding returned as data. A blocker prevents a plan. */
+export type CalculationIssue =
+  | TokenIssue
+  | ZeroDeployableValueIssue
+  | BelowMinimumPortfolioValueIssue
+  | ProjectedDriftIncreaseIssue;
+
+export type CalculationIssueCode = CalculationIssue["code"];
 
 /** A constituent of the index as held by the wallet. */
 export interface PositionValuation {
@@ -128,7 +172,7 @@ export interface PositionValuation {
   /** The reference price, or `null` when it is missing or `unavailable`. */
   readonly priceE8: bigint | null;
   readonly priceStatus: PriceStatus;
-  /** `floor(balance * priceE8 / 10^decimals)`, or `null` when a blocker concerns this token. */
+  /** `floor(balance * priceE8 / 10^decimals)`, or `null` without a usable price or with a decimals mismatch. */
   readonly valueUsdE8: bigint | null;
   /** Share of `investedValueUsdE8` in basis points, or `null` when that value is unknown or zero. */
   readonly weightBps: number | null;
@@ -165,7 +209,7 @@ export interface PortfolioValuation {
    */
   readonly cashShareBps: number | null;
   /** Blockers and warnings, constituents in ascending token order. */
-  readonly issues: readonly CalculationIssue[];
+  readonly issues: readonly TokenIssue[];
 }
 
 function fail(code: CalculationInputErrorCode, message: string): never {
@@ -179,16 +223,23 @@ export function checkToken(token: string, seen: Set<string>, where: string): voi
   seen.add(token);
 }
 
-/** @throws {CalculationInputError} if `value` is negative. */
+/** @throws {CalculationInputError} if `value` is not a `bigint` or is negative. */
 export function checkAmount(value: bigint, name: string): void {
+  // The type says bigint; a caller outside TypeScript can still pass a number, which must not reach the arithmetic.
+  if (typeof value !== "bigint") fail("invalid_amount", `${name} must be a bigint`);
   if (value < 0n) fail("negative_amount", `${name} must not be negative, received ${value}`);
 }
 
-/** @throws {CalculationInputError} if `value` is not an integer in `[min, 10_000]`. */
-export function checkBps(value: number, min: number, name: string): void {
-  if (!Number.isInteger(value) || value < min || value > TOTAL_WEIGHT_BPS) {
-    fail("invalid_bps", `${name} must be an integer between ${min} and ${TOTAL_WEIGHT_BPS}, received ${value}`);
+/** @throws {CalculationInputError} if `value` is not an integer in `[min, max]`. */
+export function checkBps(value: number, min: number, max: number, name: string): void {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    fail("invalid_bps", `${name} must be an integer between ${min} and ${max}, received ${value}`);
   }
+}
+
+/** True for the statuses whose price is a value: `live`, `delayed` and `last_close`. Anything else is not. */
+function isUsableStatus(status: unknown): status is "live" | "delayed" | "last_close" {
+  return status === "live" || status === "delayed" || status === "last_close";
 }
 
 function checkDecimals(decimals: number, where: string): void {
@@ -199,6 +250,9 @@ function checkDecimals(decimals: number, where: string): void {
 
 function checkPortfolioInput(input: PortfolioInput): void {
   if (input.constituents.length === 0) fail("invalid_weights", "at least one constituent is required");
+  if (input.constituents.length > MAX_CONSTITUENTS) {
+    fail("too_many_constituents", `an index has at most ${MAX_CONSTITUENTS} constituents`);
+  }
   const constituents = new Set<string>();
   let totalBps = 0;
   for (const { token, weightBps, decimals } of input.constituents) {
@@ -217,9 +271,10 @@ function checkPortfolioInput(input: PortfolioInput): void {
     checkAmount(balance, `balance of ${token}`);
   }
   const prices = new Set<string>();
-  for (const { token, priceE8 } of input.prices) {
+  for (const { token, priceE8, status } of input.prices) {
     checkToken(token, prices, "prices");
-    checkAmount(priceE8, `price of ${token}`);
+    // A price that is not usable is a blocker whatever it holds, so its amount is not read.
+    if (isUsableStatus(status)) checkAmount(priceE8, `price of ${token}`);
   }
   checkAmount(input.quoteBalance, "quoteBalance");
 }
@@ -256,19 +311,30 @@ export function apportionBps(values: readonly bigint[]): number[] | null {
 }
 
 /** The finding a price leads to, or `null` for a usable `live` price. */
-export function priceIssue(token: Address, status: PriceStatus, priceE8: bigint | null): CalculationIssue | null {
+export function priceIssue(
+  token: Address,
+  status: PriceStatus,
+  priceE8: bigint | null,
+  blockOnLastClose: boolean,
+): TokenIssue | null {
   if (status === "missing") return { code: "missing_price", severity: "blocker", token };
   if (status === "unavailable") return { code: "price_unavailable", severity: "blocker", token };
   if (priceE8 === 0n) return { code: "zero_price", severity: "blocker", token };
-  if (status === "last_close") return { code: "market_closed", severity: "warning", token };
+  if (status === "last_close") {
+    return { code: "market_closed", severity: blockOnLastClose ? "blocker" : "warning", token };
+  }
   if (status === "delayed") return { code: "price_delayed", severity: "warning", token };
   return null;
 }
 
-/** The price to show for a token: an `unavailable` price is not a value and is not carried into the output. */
+/**
+ * The price to show for a token. Only the three usable statuses carry a value: an `unavailable` price, and a
+ * price whose status is absent or unknown, is reported as `unavailable` without a number.
+ */
 function readPrice(price: ReferencePrice | undefined): { priceE8: bigint | null; priceStatus: PriceStatus } {
   if (price === undefined) return { priceE8: null, priceStatus: "missing" };
-  return { priceE8: price.status === "unavailable" ? null : price.priceE8, priceStatus: price.status };
+  if (!isUsableStatus(price.status)) return { priceE8: null, priceStatus: "unavailable" };
+  return { priceE8: price.priceE8, priceStatus: price.status };
 }
 
 /**
@@ -279,8 +345,9 @@ function readPrice(price: ReferencePrice | undefined): { priceE8: bigint | null;
  * `deployableValueUsdE8` is the sum of both. Position values round down, and weights follow `apportionBps`, so
  * they sum to exactly 10_000 whenever the invested value is above zero.
  *
- * A constituent needs a usable price even when its balance is zero. With a blocker on any constituent, the
- * totals and every weight are `null`; the values of the unaffected constituents are still returned.
+ * A constituent needs a usable price even when its balance is zero. When a constituent has no usable price or
+ * mismatched decimals, the totals and every weight are `null`; the values of the other constituents are still
+ * returned.
  *
  * @throws {CalculationInputError} for malformed or repeated addresses, negative amounts, decimals out of range
  * or weights that are not a valid composition.
@@ -289,20 +356,22 @@ export function valuePortfolio(input: PortfolioInput): PortfolioValuation {
   checkPortfolioInput(input);
   const prices = new Map(input.prices.map((price) => [price.token, price]));
   const holdings = new Map(input.holdings.map((holding) => [holding.token, holding]));
-  const issues: CalculationIssue[] = [];
+  const issues: TokenIssue[] = [];
+  const blockOnLastClose = input.blockOnLastClose === true;
 
   const valued = byToken(input.constituents).map((constituent) => {
     const { token, decimals } = constituent;
     const holding = holdings.get(token);
     const { priceE8, priceStatus } = readPrice(prices.get(token));
-    const issue = priceIssue(token, priceStatus, priceE8);
+    const issue = priceIssue(token, priceStatus, priceE8, blockOnLastClose);
     if (issue !== null) issues.push(issue);
     const mismatch = holding !== undefined && holding.decimals !== decimals;
     if (mismatch) issues.push({ code: "decimals_mismatch", severity: "blocker", token });
     const balance = holding?.balance ?? 0n;
-    const blocked = priceE8 === null || issue?.severity === "blocker" || mismatch;
+    // A `last_close` price is a published value: it values the position even when it blocks a plan.
+    const unusable = priceE8 === null || priceE8 === 0n || mismatch;
     // Rounds down: a position is never shown as worth more than its balance at the reference price.
-    const valueUsdE8 = blocked ? null : positionValueUsdE8(balance, priceE8, decimals, "down");
+    const valueUsdE8 = unusable ? null : positionValueUsdE8(balance, priceE8, decimals, "down");
     return { token, balance, decimals, targetWeightBps: constituent.weightBps, priceE8, priceStatus, valueUsdE8 };
   });
 
@@ -382,15 +451,15 @@ export interface WeightedPosition {
 /**
  * Drift of each constituent against its target weight.
  *
- * Returns `null` when the current weights are not defined: a blocker concerns a constituent, or the invested
- * value is zero. Zero is never substituted for an undefined weight.
+ * Returns `null` when the current weights are not defined: a constituent has no value, or the invested value
+ * is zero. Zero is never substituted for an undefined weight.
  *
  * @param positions constituents in ascending token order, as returned by `valuePortfolio`
  * @param driftThresholdBps `rebalance.driftThresholdBps` of the spec, an integer in `[1, 10_000]`
  * @throws {CalculationInputError} if the threshold is out of range.
  */
 export function computeDrift(positions: readonly WeightedPosition[], driftThresholdBps: number): DriftReport | null {
-  checkBps(driftThresholdBps, 1, "driftThresholdBps");
+  checkBps(driftThresholdBps, 1, TOTAL_WEIGHT_BPS, "driftThresholdBps");
   const constituents: ConstituentDrift[] = [];
   for (const { token, targetWeightBps, weightBps } of positions) {
     if (weightBps === null) return null;
