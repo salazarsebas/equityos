@@ -1,7 +1,7 @@
 import "server-only";
 import type { Address } from "viem";
+import { type Cache, type Cached, type CachePolicy, createCache } from "../cache";
 import { type AssetList, type AssetListOptions, fetchAssetList, type ListedAsset } from "./asset-list";
-import { type Cache, type Cached, type CachePolicy, createCache } from "./cache";
 import { assessEligibility, type Eligibility } from "./eligibility";
 import {
   IneligibleTokenError,
