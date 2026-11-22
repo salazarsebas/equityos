@@ -21,7 +21,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
     "test:e2e": "bun run --filter @equityos/web test:e2e",
-    "test:integration": "forge build --root contracts && CONTRACT_ARTIFACTS=required bun run --filter @equityos/contracts-abi test && bun run --filter @equityos/web test:integration",
+    "test:integration": "forge build --root contracts && CONTRACT_ARTIFACTS=required bun run --filter @equityos/contracts-abi test && bun run --filter @equityos/web test:integration && bun run --filter @equityos/web test:e2e:chain",
     "build": "bun run --filter '*' build",
     "contracts:build": "forge build --root contracts",
     "contracts:test": "forge test --root contracts",

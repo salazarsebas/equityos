@@ -116,6 +116,11 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -129,7 +134,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: bunx playwright install --with-deps --only-shell chromium
+
       # Builds the contracts, fails if the committed ABI modules differ from the build artifacts, then runs the
-      # deployment script, the seed and the registry reader against a local Anvil node.
+      # deployment script, the seed and the registry reader against a local Anvil node. Last, it publishes an
+      # index from the Studio in a browser against a second local node. Every transaction goes to chain 31337.
       - name: Integration test
         run: bun run test:integration

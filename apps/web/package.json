@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "seed:local": "bun --conditions=react-server scripts/seed-local.ts",
     "record:registry": "bun --conditions=react-server scripts/record-registry.ts",
-    "test:integration": "INTEGRATION_TESTS=1 bun test test/registry/integration.test.ts"
+    "test:integration": "INTEGRATION_TESTS=1 bun test test/registry/integration.test.ts",
+    "test:e2e:chain": "playwright test --config playwright.chain.config.ts"
   },
   "dependencies": {
     "@base-org/account": "2.6.0",
