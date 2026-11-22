@@ -5,11 +5,9 @@ import { resolveNetworks, type WalletEnvironment, walletEnvironment } from "./ch
 export const WALLET_STORAGE_KEY = "equityos.wallet";
 
 /**
- * The wagmi configuration, as its SSR guide prescribes for the App Router: `ssr` defers every read of browser
- * storage to after mount, and the connection state lives in a cookie so that the server can render it.
- *
- * The server calls this with no connectors, to read the cookie. The browser passes the connectors of
- * `connectors.ts`, which is the only module that imports wallet SDKs.
+ * The wagmi configuration. It is created in the browser only, by `WalletRuntime`, with the connectors of
+ * `connectors.ts`. `ssr` keeps wagmi from reading storage on its own, asynchronously: the runtime hands it the
+ * state of the cookie instead, synchronously, with `cookieToInitialState` and `hydrate`.
  */
 export function createWalletConfig(
   connectors: readonly CreateConnectorFn[] = [],

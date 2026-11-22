@@ -18,8 +18,8 @@ export function parseAddressLookup(parameter: string | readonly string[] | undef
 }
 
 /**
- * The account a stored connection state points at, for the first server render. The state comes from a cookie,
- * so nothing about its shape is trusted. `null` when it holds no well-formed current account.
+ * The account a stored connection state points at. The state comes from a cookie, so nothing about its shape is
+ * trusted. `null` when it holds no well-formed current account, in which case no reconnection is attempted.
  */
 export function storedAccount(state: unknown): string | null {
   if (typeof state !== "object" || state === null || !("current" in state) || !("connections" in state)) return null;

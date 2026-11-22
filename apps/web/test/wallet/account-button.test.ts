@@ -9,6 +9,7 @@ describe("AccountButton", () => {
   test("offers the connection when there is no account", () => {
     const html = renderToStaticMarkup(createElement(AccountButton, { account: null }));
     expect(html).toContain(">Connect wallet</button>");
+    expect(html).toContain("w-full");
     expect(html).not.toContain("aria-label");
   });
 

@@ -1,38 +1,23 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useLayoutEffect, useRef } from "react";
-import { AccountButton } from "./account-button";
-import { handoff, useWalletBoot } from "./boot";
+import { ACCOUNT_SLOT } from "./account-button";
 
 /**
- * Stands in for the account control until its code has loaded. It shows the account stored in the cookie, so a
- * connected visitor never sees a disconnected state. A click is remembered and keyboard focus is handed over, so
- * the stand-in is never a dead control.
+ * What the server renders in place of the account control: a neutral block of exactly its size. The server does
+ * not know whether the visitor has a wallet connected, so it shows neither state, and pages stay static.
  */
-function AccountStandIn() {
-  const { account } = useWalletBoot();
-  const ref = useRef<HTMLButtonElement>(null);
-  useLayoutEffect(() => {
-    const button = ref.current;
-    return () => {
-      handoff.focus = button !== null && document.activeElement === button;
-    };
-  }, []);
+function AccountPlaceholder() {
   return (
-    <AccountButton
-      ref={ref}
-      account={account}
-      onClick={() => {
-        handoff.open = true;
-      }}
-    />
+    <div className={ACCOUNT_SLOT}>
+      <span aria-hidden="true" className="block h-8 rounded-md bg-subtle pointer-coarse:h-11" />
+    </div>
   );
 }
 
 const AccountControl = dynamic(() => import("./account-control").then((module) => module.AccountControl), {
   ssr: false,
-  loading: AccountStandIn,
+  loading: AccountPlaceholder,
 });
 
 /**

@@ -32,6 +32,21 @@ for (const route of routes) {
   });
 }
 
+// A layout that reads the request (cookies, headers) stops every page under it from being prerendered. This
+// fails when that happens to a static page, or when a page that must render on request becomes static.
+for (const [route, prerendered] of [
+  ["/", true],
+  ["/dev/components", true],
+  ["/assets", false],
+  ["/wallet", false],
+] as const) {
+  test(`${route} is ${prerendered ? "prerendered at build time" : "rendered on request"}`, async ({ request }) => {
+    const response = await request.get(route);
+    expect(response.status()).toBe(200);
+    expect("x-nextjs-prerender" in response.headers()).toBe(prerendered);
+  });
+}
+
 test("no font is requested from another origin", async ({ page, baseURL }) => {
   const fonts: string[] = [];
   page.on("request", (request) => {
