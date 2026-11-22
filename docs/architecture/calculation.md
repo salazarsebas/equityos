@@ -180,7 +180,7 @@ later step has to round them.
 1. **Available quote**: `quoteBalance + floor(depositUsdE8 / 100)` quote base units.
 2. **Tokens to exit** (`rebalance` mode): every token of `exitTokens` that the wallet holds sells its whole
    balance. The leg value is `floor(balance * priceE8 / 10^decimals)` and its proceeds are `floor(value / 100)`.
-   An exit that fails the minimum (step 8) is skipped and takes no further part.
+   An exit that fails the minimum (step 9) is skipped and takes no further part.
 3. **Deployable value**: invested value, plus `availableQuote * 100`, plus the values of the exits that are
    sold.
 4. **Target value** of each constituent: `floor(deployable * targetWeightBps / 10000)`.
@@ -192,18 +192,21 @@ later step has to round them.
    exceeds the budget, the share of each buy is `floor(wanted * budget / sumWanted)`; otherwise it is the
    amount wanted. A buy of share `q` buys `floor(q * 100 * 10^decimals / priceE8)` base units and spends what
    that quantity costs: `ceil(ceil(quantity * priceE8 / 10^decimals) / 100)` quote base units, never more than
-   `q`. A buy that fails the minimum is skipped, and then the remaining buys are capped as described in
-   [A skipped buy](#a-skipped-buy).
-7. **Sells are scaled to the buys.** With `spent` the sum the buys spend, the sells have to raise
+   `q`. A buy that fails the minimum is skipped, and its share is not given to the others.
+7. **Sells are scaled to the buys.** With `spent` the sum those buys spend, the sells have to raise
    `needed = ceil(spent * 10000 / (10000 - reserveBps)) - availableQuote - exit proceeds`. When `needed` is
    zero or less, no constituent is sold (`not_needed`). When it is below the proceeds of the full sells, each
    sell is scaled: see [Sells follow the buys](#sells-follow-the-buys). Tokens to exit are always sold in full.
-8. **Minimum**: a leg whose token quantity or quote amount is zero is skipped as `zero_quantity`. A remaining
+   The sells are final after this step.
+8. **Two candidates.** When a buy was skipped in step 6, a second set of buys is derived in which no bought
+   constituent ends above its target weight, and the set with the lower projected maximum drift is used: see
+   [A skipped buy](#a-skipped-buy).
+9. **Minimum**: a leg whose token quantity or quote amount is zero is skipped as `zero_quantity`. A remaining
    leg whose value is below `minLegValueUsdE8` is skipped as `below_minimum`. A leg worth exactly the minimum is
    proposed.
-9. **Projection**: every proposed leg applied at its reference price. Balances, values, weights and drift of the
-   constituents are computed as in a valuation, and the quote asset left is
-   `availableQuote + proceeds - amounts spent`.
+10. **Projection**: every proposed leg applied at its reference price. Balances, values, weights and drift of the
+    constituents are computed as in a valuation, and the quote asset left is
+    `availableQuote + proceeds - amounts spent`.
 
 `legs` is the execution order: every sell in ascending token order, then every buy in ascending token order.
 Sells come first because they fund the buys. `skipped` is in the same order.
@@ -267,34 +270,58 @@ rule.
 
 ### A skipped buy
 
-What a skipped buy would have spent is not given to the other buys. Giving it to them, or simply letting them
-go ahead, would push a wallet off target: with targets of 90/10, holdings of 9.00 and 1.00 USD and a deposit of
-10 USD, the buy of the smaller constituent is 0.995 USD and is skipped; buying only the larger one would move
-the wallet from 9000/1000 to 9472/528.
+What a skipped buy would have spent is not given to the other buys. Letting the other buys simply go ahead can
+still push a wallet off target: with targets of 90/10, holdings of 9.00 and 1.00 USD and a deposit of 10 USD,
+the buy of the smaller constituent is 0.995 USD and is skipped; buying only the larger one would move the
+wallet from 9000/1000 to 9472/528. Holding the other buys back is not always right either: it can leave a
+wallet far from target when the buys would have brought it close.
 
-So when at least one buy is skipped, the remaining buys are capped: **no bought constituent may end above its
-target weight of the projected invested value**. With `N` the sum of the values of the constituents that are
-not capped (as they would be after the full sells and the uncapped buys) and `W` the sum of the weights of the
-capped ones, a capped constituent of weight `w` may hold `floor(w * N / (10000 - W))`. A constituent is capped
-when its planned value exceeds that share. Capping lowers the total, so the check repeats until no constituent
-exceeds its share, at most once per constituent. A cap can leave a buy under the minimum; it is then skipped
-with reason `above_target_weight` and the caps are computed again, at most once per buy.
+**So when at least one buy is skipped, the plan is computed twice, with the same sells, and the candidate with
+the lower projected maximum drift is returned. On a tie the capped candidate is returned, which is the one
+that trades less.**
 
-What the capped and skipped buys do not spend stays in the quote asset and is reported as
-`projected.quoteBalance`. In the example nothing is bought and the 10 USD stay uninvested, with both buys in
-`skipped`. The cap applies only after a skip: when every buy goes through, the pro rata shares already keep the
-proportions.
+- **Uncapped**: every buy that passes the minimum spends its share.
+- **Capped**: no bought constituent may end above its target weight of the projected invested value. With
+  `N` the sum of the values of the constituents that are not capped (after the final sells and the uncapped
+  buys) and `W` the sum of the weights of the capped ones, a capped constituent of weight `w` may hold
+  `floor(w * N / (10000 - W))`. A constituent is capped when its planned value exceeds that share. Capping
+  lowers the total, so the check repeats until no constituent exceeds its share, at most once per constituent.
+  A cap can leave a buy under the minimum; it is then skipped with reason `above_target_weight` and the caps
+  are derived again from the buys that remain. The set of buys only shrinks, so this ends after at most one
+  round per buy.
 
-One consequence is stated here because it can surprise: a constituent that cannot be bought holds back the buys
-of constituents that are already at or above their target weight. They stay where they are until the amount
-is large enough for every buy.
+A cap only lowers a buy, so the capped candidate never trades more than the uncapped one. The caps are derived
+from the sells of step 7, which are the sells of the plan, never from sells that are later changed.
+
+The result states which candidate it is (`candidate`) and the projected maximum drift of the other one
+(`otherCandidateMaxAbsDriftBps`, `null` when no buy was skipped and there is one candidate). In the 90/10
+example the capped candidate buys nothing and stays at 0 bps against 472 bps, so it is returned. With targets
+of 1/98/1 and holdings of 50/40/0 USD, the buy of the third constituent is skipped, the cap does not bind, and
+the rebalance takes the drift from 5456 to 101 bps.
+
+Whatever the chosen buys do not spend stays in the quote asset. It is `projected.quoteBalance`, and it is never
+silent: see [What is left uninvested](#what-is-left-uninvested).
+
+If both candidates end further from target than the wallet is, the one with the smaller increase is returned
+with the warning `projected_drift_increase`.
+
+### What is left uninvested
+
+`uninvestedQuote = buyBudgetQuote - sum of the quote amounts of the buys` is what the plan leaves in the quote
+asset on top of the reserve. When it is worth more than `minLegValueUsdE8`, the plan carries the warning
+`uninvested_quote` with that amount in quote base units. It appears when buys were skipped or capped, when a
+coarse token cannot absorb its share, or when a sell was raised to the minimum.
+
+A ready plan without a leg always carries a reason: `uninvested_quote` when it leaves such an amount, and
+otherwise `nothing_to_do`, which means every difference to the target is below the minimum leg value or there
+is nothing to buy with.
 
 ### A first replication
 
-When the invested value is zero, the cap makes the plan all or nothing: if one constituent cannot be bought,
-every other buy is capped at zero. A plan that buys nothing, or that sells the tokens to exit and buys nothing,
-is not a replication of the index. It is reported as the blocker `below_minimum_portfolio_value` instead of a
-ready plan with no legs, so that the reason is explicit and no sale is proposed on its own.
+A first replication has no current drift to compare candidates with, and buying only some constituents is not
+a replication of the index. When the invested value is zero and a buy is skipped, the result is the blocker
+`below_minimum_portfolio_value` instead of a plan, so that the reason is explicit and no token to exit is sold
+on its own.
 
 The blocker carries `minimumDeployableValueUsdE8`, a deployable value from which every constituent gets a buy
 leg with the same reserve and minimum:
@@ -312,15 +339,16 @@ sufficient, not the exact minimum: a property test plans every blocked first rep
 in quote asset and checks that every constituent is bought. For 64 equal-weighted constituents, no reserve and
 the default minimum it is 64.11 USD, rounded up to a cent.
 
-It is a blocker and not a warning because a warning would come with a ready plan, and the only ready plans
-available here are an empty one or one that only sells.
+It is a blocker and not a warning because a warning would come with a ready plan, and the ready plans
+available here replicate only part of the index, or nothing.
 
 ### Sells follow the buys
 
 A sale whose proceeds no buy spends only moves value into the quote asset. That shrinks the invested value and
-raises the weight of everything that was not sold, so it can increase drift. Sells are therefore sized last:
+raises the weight of everything that was not sold, so it can increase drift. Sells are therefore sized after
+the buys of step 6:
 
-- `needed` is the proceeds the buys require, including their reserve (step 7).
+- `needed` is the proceeds those buys require, including their reserve (step 7).
 - If no proceeds are needed, no constituent is sold. Each full sell is listed in `skipped` as `not_needed`.
 - If less than the full proceeds is needed, each sell of quantity `q` out of full proceeds `P` over `k` sells
   becomes `min(q, max(ceil(q * (needed + k - 1) / P), smallest))`, where `smallest` is
@@ -331,7 +359,9 @@ Rounding a scaled sell down to quote base units loses less than one unit, so `k`
 sell, so no constituent is sold below its target value, and never below the minimum, so it remains a leg worth
 proposing. Raising a sell to the minimum can leave up to one minimum leg value per sell in the quote asset.
 
-`buyBudgetQuote` in the result is computed from the sells that are proposed, and the buys never exceed it.
+`buyBudgetQuote` in the result is computed from the sells that are proposed, and the buys never exceed it. When
+the capped candidate is returned its buys spend less than the sells were sized for; the difference is part of
+the uninvested amount and is reported.
 
 ### Buy only
 
@@ -378,9 +408,12 @@ has status `blocked`.
 | `market_closed`                 | Warning  | The status is `last_close`. A blocker with `blockOnLastClose`        |
 | `price_delayed`                 | Warning  | The status is `delayed`                                              |
 | `projected_drift_increase`      | Warning  | The projected maximum drift is above the current one                 |
+| `uninvested_quote`              | Warning  | More than the minimum leg value is left on top of the reserve        |
+| `nothing_to_do`                 | Warning  | The plan has no leg and leaves no such amount                        |
 
 Each finding names its token, or `null` when it concerns the whole portfolio.
-`below_minimum_portfolio_value` carries `minimumDeployableValueUsdE8`. `projected_drift_increase` carries
+`below_minimum_portfolio_value` carries `minimumDeployableValueUsdE8`. `uninvested_quote` carries
+`uninvestedQuote`. `projected_drift_increase` carries
 `currentMaxAbsDriftBps` and `projectedMaxAbsDriftBps`; a first replication has no current drift, so its
 projected drift is compared against zero and `currentMaxAbsDriftBps` is `null`.
 
@@ -439,10 +472,15 @@ portfolios: first replications, wallets on target and arbitrary wallets, in both
 - **Weights**: current and projected weights each sum to exactly 10,000 when the invested value is above zero.
 - **Order**: the output does not depend on the order of constituents, holdings, prices or tokens to exit.
 - **Buy only**: a `buy_only` plan has no sell.
-- **Skipped buys**: when a buy is skipped, no bought constituent ends above its target weight, up to the
-  rounding `E` below.
-- **Sells follow buys**: the constituents sold raise at most what the buys need, plus per sell one base unit of
-  its token, the minimum leg value and three quote base units. When no buy is proposed no constituent is sold.
+- **Candidates**: there are two candidates exactly when a buy was skipped, and the plan returned never has a
+  higher projected maximum drift than the other one.
+- **Capped buys**: when the capped candidate is returned, no bought constituent ends above its target weight,
+  up to the rounding `E` below.
+- **Sells follow buys**: when the uncapped candidate is returned, the constituents sold raise at most what the
+  buys need, plus per sell one base unit of its token, the minimum leg value and three quote base units. When
+  no buy passes the minimum no constituent is sold.
+- **Nothing silent**: the amount left on top of the reserve is reported exactly when it is above the minimum
+  leg value, and a plan without a leg carries `uninvested_quote` or `nothing_to_do`.
 - **First replication**: a first replication either buys every constituent or is blocked, and the stated
   minimum deployable value is enough.
 
@@ -469,8 +507,8 @@ For a portfolio that is large against the granularity of its tokens `G` is 1.
   large against the granularity of its tokens, and the projected maximum drift never exceeds the larger of the
   current one and that bound.
 
-A plan that is partial, because of the reserve, the minimum leg value, a cap or `buy_only`, does not always
-lower the maximum drift of a wallet that is off target. In `buy_only` mode the constituents above target cannot
+A plan that is partial, because of the reserve, the minimum leg value, a coarse token or `buy_only`, does not
+always lower the maximum drift of a wallet that is off target. In `buy_only` mode the constituents above target cannot
 be sold, and the pro rata buys can leave a large constituent further under its target than any constituent was
 before. The plan does not hide this. It reports the maximum drift before and after, and adds the warning
 `projected_drift_increase` with both numbers whenever the projected one is higher. The guarantee that holds
@@ -556,7 +594,8 @@ carry a price whose `status` is absent or not a known class.
 
 The vectors cover both modes, the defaults, every blocker, warning and skip reason, a token to exit, tokens of
 0, 6, 8 and 18 decimals, prices from 0.07 USD to 4,321.00 USD, an index of one constituent and one of 64, and
-portfolios from 9 USD to 10 million USD.
+portfolios from 9 USD to 10 million USD, and the three outcomes of two candidates: the capped one closer to
+target, the uncapped one closer, and a tie.
 
 The expected output of every vector was produced by `@equityos/core` and checked against an independent
 implementation of this page written in another language, which is not part of the repository: blockers,
