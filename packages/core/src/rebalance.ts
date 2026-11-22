@@ -29,7 +29,7 @@ import {
   type WeightedPosition,
 } from "./portfolio.ts";
 import { positionValueUsdE8, USD_E8 } from "./position-value.ts";
-import type { Address, IndexSpec } from "./spec.ts";
+import { type Address, type IndexSpec, TOTAL_WEIGHT_BPS } from "./spec.ts";
 
 /**
  * Default share of the available funds that buys leave unspent. The reference feeds publish a new value on a
@@ -249,6 +249,14 @@ export interface RebalancePlan {
   readonly skipped: readonly SkippedLeg[];
   /** Maximum absolute drift before the plan, or `null` when the invested value is zero. */
   readonly currentMaxAbsDriftBps: number | null;
+  /**
+   * Which candidate was chosen. `uncapped`: every buy that passes the minimum gets its pro rata share.
+   * `capped`: after a skipped buy, the others are held at their target weight. Without a skipped buy there is
+   * one candidate, `uncapped`.
+   */
+  readonly candidate: "uncapped" | "capped";
+  /** Projected maximum drift of the candidate that was not chosen, or `null` when there was only one. */
+  readonly otherCandidateMaxAbsDriftBps: number | null;
   readonly projected: PlanProjection;
 }
 
@@ -377,19 +385,17 @@ function weightCaps(
   }
 }
 
+/** The quote amount a buy may spend at most: its pro rata share of the budget. */
+interface BuyShare {
+  readonly position: Tradable;
+  readonly shareQuote: bigint;
+}
+
 /**
- * Sizes the buys. Each constituent below its target wants its shortfall; when the buys want more than the
- * budget, each gets its share pro rata. A buy that fails the minimum is skipped, its amount is not given to the
- * others, and the remaining buys are capped by `weightCaps` so that none ends above its target weight. A cap
- * can push another buy under the minimum, so this repeats, at most once per buy.
+ * Each constituent below its target wants its shortfall. When the buys want more than the budget, each gets
+ * its share pro rata.
  */
-function sizeBuys(
-  positions: readonly Tradable[],
-  valueAfterSells: ReadonlyMap<Address, bigint>,
-  budgetQuote: bigint,
-  minLegValueUsdE8: bigint,
-  skipped: SkippedLeg[],
-): RebalanceLeg[] {
+function buyShares(positions: readonly Tradable[], budgetQuote: bigint): BuyShare[] {
   const wanted = positions.flatMap((position) =>
     position.valueUsdE8 < position.targetValueUsdE8
       ? // Rounds down: a buy never takes a constituent above its target value.
@@ -397,19 +403,37 @@ function sizeBuys(
       : [],
   );
   const totalWanted = sum(wanted.map(({ wantedQuote }) => wantedQuote));
-  let active = wanted.map(({ position, wantedQuote }) => ({
+  return wanted.map(({ position, wantedQuote }) => ({
     position,
     // Rounds down: the scaled buys never sum to more than the budget.
     shareQuote: totalWanted > budgetQuote ? mulDivDown(wantedQuote, budgetQuote, totalWanted) : wantedQuote,
   }));
-  for (let capping = false; ; capping = true) {
-    const planned = new Map(valueAfterSells);
-    for (const { position, shareQuote } of active) {
-      planned.set(position.token, position.valueUsdE8 + shareQuote * QUOTE_UNIT_VALUE_USD_E8);
+}
+
+/**
+ * Turns shares into buy legs and skips the ones that fail the minimum. The amount of a skipped buy is not
+ * given to the others.
+ *
+ * With `valueAfterSells`, the value of every constituent after the proposed sells, the buys are also capped by
+ * `weightCaps` so that none ends above its target weight. A cap can push a buy under the minimum; it is then
+ * skipped and the caps are derived again, at most once per buy because the set of buys only shrinks.
+ */
+function sizeBuys(
+  positions: readonly Tradable[],
+  shares: readonly BuyShare[],
+  minLegValueUsdE8: bigint,
+  valueAfterSells: ReadonlyMap<Address, bigint> | null,
+): { legs: RebalanceLeg[]; kept: readonly BuyShare[]; skipped: SkippedLeg[] } {
+  const skipped: SkippedLeg[] = [];
+  for (let active: readonly BuyShare[] = shares; ; ) {
+    let caps = new Map<Address, bigint>();
+    if (valueAfterSells !== null) {
+      const planned = new Map(valueAfterSells);
+      for (const { position, shareQuote } of active) {
+        planned.set(position.token, (planned.get(position.token) ?? 0n) + shareQuote * QUOTE_UNIT_VALUE_USD_E8);
+      }
+      caps = weightCaps(positions, planned, new Set(active.map(({ position }) => position.token)));
     }
-    const caps = capping
-      ? weightCaps(positions, planned, new Set(active.map(({ position }) => position.token)))
-      : new Map<Address, bigint>();
     const sized = active.map(({ position, shareQuote }) => {
       const cap = caps.get(position.token);
       // Rounds down: a capped buy stays at or under its cap. A cap at or under the current value leaves no room.
@@ -428,9 +452,34 @@ function sizeBuys(
       const valueUsdE8 = shareQuote * QUOTE_UNIT_VALUE_USD_E8;
       skipped.push({ side: "buy", token: position.token, exit: false, valueUsdE8, reason });
     }
-    if (kept.length === sized.length) return kept.map(({ leg }) => leg);
     active = kept.map(({ position, shareQuote }) => ({ position, shareQuote }));
+    // Without caps the buys do not depend on each other, so one pass settles them.
+    if (kept.length === sized.length || valueAfterSells === null) {
+      return { legs: kept.map(({ leg }) => leg), kept: active, skipped };
+    }
   }
+}
+
+/** The constituents after `legs` are applied at their reference prices, valued and weighed as in a valuation. */
+function project(positions: readonly Tradable[], legs: readonly RebalanceLeg[]) {
+  const change = new Map(
+    legs.map(({ side, token, tokenQuantity }) => [token, side === "sell" ? -tokenQuantity : tokenQuantity]),
+  );
+  const values = positions.map(({ token, balance, decimals, priceE8, targetWeightBps }) => {
+    const projectedBalance = balance + (change.get(token) ?? 0n);
+    const valueUsdE8 = positionValueUsdE8(projectedBalance, priceE8, decimals, "down");
+    return { token, balance: projectedBalance, valueUsdE8, targetWeightBps };
+  });
+  const weights = apportionBps(values.map(({ valueUsdE8 }) => valueUsdE8));
+  const projected = values.map((position, index) => {
+    const weightBps = weights?.[index] ?? null;
+    return { ...position, weightBps, driftBps: weightBps === null ? null : weightBps - position.targetWeightBps };
+  });
+  return {
+    positions: projected,
+    investedValueUsdE8: sum(values.map(({ valueUsdE8 }) => valueUsdE8)),
+    maxAbsDriftBps: maxAbsDrift(projected),
+  };
 }
 
 /**
@@ -457,19 +506,13 @@ function minimumDeployableValue(
 }
 
 /**
- * Computes the legs that move a wallet toward the target weights at reference prices.
+ * Computes the legs that move a wallet toward the target weights at reference prices. Every rule and rounding
+ * direction is specified in `docs/architecture/calculation.md`.
  *
- * 1. Tokens to exit (`rebalance` mode) sell their whole balance.
- * 2. Deployable value: constituent values, plus `quoteBalance` and the deposit, plus the exits that are sold.
- * 3. Target value of a constituent: `floor(deployable * targetWeightBps / 10_000)`.
- * 4. Sells (`rebalance` mode): a constituent above its target sells `floor(excess * 10^decimals / price)`.
- * 5. Buys: see `sizeBuys`. The budget is the quote available plus all proceeds, less the reserve.
- * 6. Sells are scaled down to the proceeds the buys spend, so that no sale only adds to the quote balance.
- * 7. Projection: every leg applied at its reference price, then weights and drift as in `valuePortfolio`.
- *
- * A leg worth less than `minLegValueUsdE8`, or with a zero quantity, is moved to `skipped`. Every rounding
- * leaves value unspent instead of spending value that is not there. The projected value of each constituent
- * lies between its current value and its target value.
+ * Tokens to exit are sold in full. Targets are shares of the deployable value. Buys share the budget pro rata
+ * and the ones that fail the minimum are skipped. Sells are scaled to what those buys spend. When a buy was
+ * skipped there is a second candidate, in which the other buys are capped at their target weight, and the
+ * candidate with the lower projected maximum drift is returned. Every rounding leaves value unspent.
  *
  * Data-quality problems are returned, not thrown: a result with any blocker has status `blocked` and no legs.
  *
@@ -555,20 +598,13 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
     return proposed(leg, excessUsdE8) ? [{ position, leg }] : [];
   });
   const fullProceedsQuote = sum(fullSells.map(({ leg }) => leg.quoteAmount));
-  const valueAfterSells = new Map(positions.map(({ token, valueUsdE8 }) => [token, valueUsdE8]));
-  for (const { position, leg } of fullSells) {
-    const { balance, priceE8, decimals } = position;
-    valueAfterSells.set(position.token, positionValueUsdE8(balance - leg.tokenQuantity, priceE8, decimals, "down"));
-  }
-
   const keptBps = BPS - BigInt(reserveBps);
   const fundsQuote = availableQuote + exitProceedsQuote;
   // Rounds down: the reserve is never smaller than asked.
   const fullBudgetQuote = mulDivDown(fundsQuote + fullProceedsQuote, keptBps, BPS);
-  const buyLegs = sizeBuys(positions, valueAfterSells, fullBudgetQuote, minLegValueUsdE8, skipped);
-  const spentQuote = sum(buyLegs.map(({ quoteAmount }) => quoteAmount));
+  const uncapped = sizeBuys(positions, buyShares(positions, fullBudgetQuote), minLegValueUsdE8, null);
 
-  if (investedValueUsdE8 === 0n && buyLegs.length < positions.length) {
+  if (investedValueUsdE8 === 0n && uncapped.legs.length < positions.length) {
     const minimumDeployableValueUsdE8 = minimumDeployableValue(positions, reserveBps, minLegValueUsdE8, exits.length);
     return blocked([
       { code: "below_minimum_portfolio_value", severity: "blocker", token: null, minimumDeployableValueUsdE8 },
@@ -576,7 +612,7 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
   }
 
   // Rounds up: the proceeds needed are the smallest amount whose share after the reserve covers the buys.
-  const neededFundsQuote = mulDivUp(spentQuote, BPS, keptBps);
+  const neededFundsQuote = mulDivUp(sum(uncapped.legs.map(({ quoteAmount }) => quoteAmount)), BPS, keptBps);
   const neededProceedsQuote = neededFundsQuote > fundsQuote ? neededFundsQuote - fundsQuote : 0n;
   let sellLegs = fullSells.map(({ leg }) => leg);
   if (neededProceedsQuote === 0n) {
@@ -598,24 +634,33 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
       return sellLeg(token, false, smaller(larger(scaled, smallest), leg.tokenQuantity), priceE8, decimals);
     });
   }
-  const proceedsQuote = exitProceedsQuote + sum(sellLegs.map(({ quoteAmount }) => quoteAmount));
-  const legs = inExecutionOrder([...exitLegs, ...sellLegs, ...buyLegs]);
+  const sells = [...exitLegs, ...sellLegs];
+  const proceedsQuote = sum(sells.map(({ quoteAmount }) => quoteAmount));
 
-  const balanceChange = new Map(
-    legs.map(({ side, token, tokenQuantity }) => [token, side === "sell" ? -tokenQuantity : tokenQuantity]),
-  );
-  const projectedValues = positions.map(({ token, balance, decimals, priceE8, targetWeightBps }) => {
-    const projectedBalance = balance + (balanceChange.get(token) ?? 0n);
-    const valueUsdE8 = positionValueUsdE8(projectedBalance, priceE8, decimals, "down");
-    return { token, balance: projectedBalance, valueUsdE8, targetWeightBps };
-  });
-  const projectedWeights = apportionBps(projectedValues.map(({ valueUsdE8 }) => valueUsdE8));
-  const projectedPositions = projectedValues.map((position, index) => {
-    const weightBps = projectedWeights?.[index] ?? null;
-    return { ...position, weightBps, driftBps: weightBps === null ? null : weightBps - position.targetWeightBps };
-  });
+  // The sells are final here. The first candidate is the buys as they are. When a buy was skipped there is a
+  // second one, whose buys are capped against the values the sells leave.
+  const candidate = (name: RebalancePlan["candidate"], buys: RebalanceLeg[], skips: SkippedLeg[]) => {
+    const projection = project(positions, [...sells, ...buys]);
+    return { name, buys, skips, projection, driftBps: projection.maxAbsDriftBps ?? TOTAL_WEIGHT_BPS + 1 };
+  };
+  let chosen = candidate("uncapped", uncapped.legs, uncapped.skipped);
+  let otherCandidateMaxAbsDriftBps: number | null = null;
+  if (uncapped.skipped.length > 0) {
+    const afterSells = new Map(project(positions, sells).positions.map(({ token, valueUsdE8 }) => [token, valueUsdE8]));
+    const capped = sizeBuys(positions, uncapped.kept, minLegValueUsdE8, afterSells);
+    const other = candidate("capped", capped.legs, [...uncapped.skipped, ...capped.skipped]);
+    // The lower projected maximum drift wins. On a tie the candidate that trades less does, and that is the
+    // capped one: a cap only ever lowers a buy, so the capped candidate never trades more than the other.
+    const cappedWins = other.driftBps <= chosen.driftBps;
+    otherCandidateMaxAbsDriftBps = (cappedWins ? chosen : other).projection.maxAbsDriftBps;
+    if (cappedWins) chosen = other;
+  }
+  const spentQuote = sum(chosen.buys.map(({ quoteAmount }) => quoteAmount));
+  const buyBudgetQuote = mulDivDown(availableQuote + proceedsQuote, keptBps, BPS);
+  const legs = inExecutionOrder([...sells, ...chosen.buys]);
+
   const currentMaxAbsDriftBps = maxAbsDrift(valuation.positions);
-  const projectedMaxAbsDriftBps = maxAbsDrift(projectedPositions);
+  const projectedMaxAbsDriftBps = chosen.projection.maxAbsDriftBps;
   // A first replication has no drift yet: it is compared against the target itself, a drift of zero.
   if (projectedMaxAbsDriftBps !== null && projectedMaxAbsDriftBps > (currentMaxAbsDriftBps ?? 0)) {
     warnings.push({
@@ -625,6 +670,13 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
       currentMaxAbsDriftBps,
       projectedMaxAbsDriftBps,
     });
+  }
+  // What the buys leave of their budget is uninvested on top of the reserve.
+  const uninvestedQuote = buyBudgetQuote - spentQuote;
+  if (uninvestedQuote * QUOTE_UNIT_VALUE_USD_E8 > minLegValueUsdE8) {
+    warnings.push({ code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote });
+  } else if (legs.length === 0) {
+    warnings.push({ code: "nothing_to_do", severity: "warning", token: null });
   }
 
   return {
@@ -636,7 +688,7 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
     minLegValueUsdE8,
     deployableValueUsdE8,
     availableQuote,
-    buyBudgetQuote: mulDivDown(availableQuote + proceedsQuote, keptBps, BPS),
+    buyBudgetQuote,
     targets: positions.map(({ token, targetWeightBps, valueUsdE8, targetValueUsdE8 }) => ({
       token,
       targetWeightBps,
@@ -645,13 +697,10 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
       deltaUsdE8: targetValueUsdE8 - valueUsdE8,
     })),
     legs,
-    skipped: inExecutionOrder(skipped),
+    skipped: inExecutionOrder([...skipped, ...chosen.skips]),
     currentMaxAbsDriftBps,
-    projected: {
-      positions: projectedPositions,
-      investedValueUsdE8: sum(projectedValues.map(({ valueUsdE8 }) => valueUsdE8)),
-      quoteBalance: availableQuote + proceedsQuote - spentQuote,
-      maxAbsDriftBps: projectedMaxAbsDriftBps,
-    },
+    candidate: chosen.name,
+    otherCandidateMaxAbsDriftBps,
+    projected: { ...chosen.projection, quoteBalance: availableQuote + proceedsQuote - spentQuote },
   };
 }

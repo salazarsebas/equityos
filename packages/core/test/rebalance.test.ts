@@ -269,6 +269,8 @@ describe("planRebalance: worked examples", () => {
       ],
       skipped: [],
       currentMaxAbsDriftBps: 667,
+      candidate: "uncapped",
+      otherCandidateMaxAbsDriftBps: null,
       projected: {
         positions: [
           // 900.00 of 1,499.50 USD is 6,002.0007 bps; 599.50 is 3,997.9993 bps and takes the missing basis point.
@@ -742,7 +744,8 @@ describe("planRebalance: minimum leg value", () => {
       [48_000_000n, -200],
     ]);
     expect(plan.projected.maxAbsDriftBps).toBe(200);
-    expect(plan.warnings).toEqual([]);
+    // A ready plan without a leg says why: here every difference to the target is below the minimum.
+    expect(plan.warnings).toEqual([{ code: "nothing_to_do", severity: "warning", token: null }]);
   });
 
   test("the default minimum is 1.00 USD", () => {
@@ -806,9 +809,14 @@ describe("planRebalance: a skipped buy never pushes the others above target", ()
     expect(plan.currentMaxAbsDriftBps).toBe(0);
     expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([9_000, 1_000]);
     expect(plan.projected.maxAbsDriftBps).toBe(0);
-    // The whole deposit stays uninvested.
+    // The capped candidate keeps the drift at 0; the uncapped one would take it to 472 bps.
+    expect(plan.candidate).toBe("capped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(472);
+    // The whole deposit stays uninvested, and the plan says so: 9.95 USDC on top of the reserve of 0.05.
     expect(plan.projected.quoteBalance).toBe(10_000_000n);
-    expect(plan.warnings).toEqual([]);
+    expect(plan.warnings).toEqual([
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 9_950_000n },
+    ]);
   });
 
   test("the remaining buy is capped at its target weight of the projected invested value", () => {
@@ -826,7 +834,11 @@ describe("planRebalance: a skipped buy never pushes the others above target", ()
     ]);
     expect(plan.currentMaxAbsDriftBps).toBe(555);
     expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([5_000, 3_000, 2_000]);
+    // Uncapped, A would buy 10.25 and end 12 bps above target.
+    expect(plan.candidate).toBe("capped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(12);
     expect(plan.projected.quoteBalance).toBe(500_000n);
+    expect(plan.warnings).toEqual([]);
   });
 
   test("a cap that leaves a buy under the minimum skips it as above target weight", () => {
@@ -839,6 +851,10 @@ describe("planRebalance: a skipped buy never pushes the others above target", ()
     ]);
     expect(plan.projected.quoteBalance).toBe(100_000_000n);
     expect(plan.projected.maxAbsDriftBps).toBe(0);
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(50);
+    expect(plan.warnings).toEqual([
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 100_000_000n },
+    ]);
   });
 
   test("without a skipped buy nothing is capped", () => {
@@ -848,14 +864,17 @@ describe("planRebalance: a skipped buy never pushes the others above target", ()
       [B, 1_000_000n],
     ]);
     expect(plan.skipped).toEqual([]);
+    expect(plan.candidate).toBe("uncapped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBeNull();
   });
 });
 
 describe("planRebalance: the cap on a buy rounds down", () => {
-  test("a buy that would end a fraction above its target weight is not proposed", () => {
+  test("a capped buy that would end a fraction above its target weight is dropped from the capped candidate", () => {
     // A (0.99%) holds nothing, B (98.01%) holds 0.0001 USD and C (1%) is a whole-unit token at 1,000.00 USD
-    // that 0.000002 USDC cannot buy. With C skipped, A may hold 99/9901 of the 0.0001 USD of B: 0.99989...
-    // millionths of a USD, less than the one quote base unit a buy needs.
+    // that 0.000002 USDC cannot buy. With C skipped, the capped candidate lets A hold 99/9901 of the 0.0001 USD
+    // of B: 0.99989... millionths of a USD, less than the one quote base unit a buy needs. So the capped
+    // candidate buys nothing and ends 199 bps off, and the uncapped one, which buys one unit of A, is chosen.
     const plan = planOf({
       mode: "buy_only",
       reserveBps: 0,
@@ -869,13 +888,13 @@ describe("planRebalance: the cap on a buy rounds down", () => {
       prices: [price(A, USD_E8), price(B, USD_E8), price(C, 1_000n * USD_E8)],
       quoteBalance: 2n,
     });
-    expect(plan.legs).toEqual([]);
-    expect(plan.skipped).toEqual([
-      { side: "buy", token: A, exit: false, valueUsdE8: 100n, reason: "above_target_weight" },
-      { side: "buy", token: C, exit: false, valueUsdE8: 100n, reason: "zero_quantity" },
-    ]);
-    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([0, 10_000, 0]);
-    expect(plan.projected.quoteBalance).toBe(2n);
+    expect(plan.legs.map(({ token, quoteAmount }) => [token, quoteAmount])).toEqual([[A, 1n]]);
+    expect(plan.skipped).toEqual([{ side: "buy", token: C, exit: false, valueUsdE8: 100n, reason: "zero_quantity" }]);
+    expect(plan.currentMaxAbsDriftBps).toBe(199);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([99, 9_901, 0]);
+    expect(plan.projected.maxAbsDriftBps).toBe(100);
+    expect(plan.candidate).toBe("uncapped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(199);
   });
 });
 
@@ -991,58 +1010,66 @@ describe("planRebalance: sells are scaled to what the buys spend", () => {
     ]);
     expect(plan.projected.maxAbsDriftBps).toBe(600);
     expect(plan.projected.quoteBalance).toBe(0n);
+    expect(plan.warnings).toEqual([{ code: "nothing_to_do", severity: "warning", token: null }]);
   });
 
-  test("a sell is reduced to the proceeds the remaining buys need", () => {
-    // 60.00/39.50/0.50 USD against 50/49/1: A sells 10.00, B wants 9.50 and C wants 0.50, below 1.00 USD.
-    // With A at 50.00 and C at 0.50, B can hold 49/51 of 50.50 = 48.5196... USD: it buys 9.019607 USDC.
-    // The sell is scaled to exactly those 9.019607 USDC.
-    const plan = planOf(
-      exact(
-        {
-          ...dollars([5_000, 4_900, 100], [60n, 0n, 0n]),
-          holdings: [
-            { token: A, balance: 60_000_000n, decimals: 6 },
-            { token: B, balance: 39_500_000n, decimals: 6 },
-            { token: C, balance: 500_000n, decimals: 6 },
-          ],
-        },
-        { minLegValueUsdE8: USD_E8 },
-      ),
-    );
+  /** 60.00/39.50/0.50 USD against 50/49/1: A would sell 10.00, B wants 9.50 and C wants 0.50, below 1.00 USD. */
+  const skippedC: PortfolioInput = {
+    ...dollars([5_000, 4_900, 100], [60n, 0n, 0n]),
+    holdings: [
+      { token: A, balance: 60_000_000n, decimals: 6 },
+      { token: B, balance: 39_500_000n, decimals: 6 },
+      { token: C, balance: 500_000n, decimals: 6 },
+    ],
+  };
+
+  test("a sell is reduced to the proceeds the buys that pass the minimum need", () => {
+    // B buys its 9.50 USDC, so A sells 9.50 instead of 10.00. With A at 50.50 and C at 0.50, B at 49.00 is
+    // exactly 49% of 100: the cap does not bind and both candidates are the same plan.
+    const plan = planOf(exact(skippedC, { minLegValueUsdE8: USD_E8 }));
     expect(
       plan.legs.map(({ side, token, tokenQuantity, quoteAmount }) => [side, token, tokenQuantity, quoteAmount]),
     ).toEqual([
-      ["sell", A, 9_019_607n, 9_019_607n],
-      ["buy", B, 9_019_607n, 9_019_607n],
+      ["sell", A, 9_500_000n, 9_500_000n],
+      ["buy", B, 9_500_000n, 9_500_000n],
     ]);
     expect(plan.skipped).toEqual([
       { side: "buy", token: C, exit: false, valueUsdE8: 50_000_000n, reason: "below_minimum" },
     ]);
-    expect(plan.buyBudgetQuote).toBe(9_019_607n);
+    expect(plan.buyBudgetQuote).toBe(9_500_000n);
     expect(plan.currentMaxAbsDriftBps).toBe(1_000);
-    expect(plan.projected.positions.map(({ driftBps }) => driftBps)).toEqual([98, -48, -50]);
+    expect(plan.projected.positions.map(({ driftBps }) => driftBps)).toEqual([50, 0, -50]);
     expect(plan.projected.quoteBalance).toBe(0n);
+    // On a tie in drift the capped candidate is the one returned.
+    expect(plan.candidate).toBe("capped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(50);
   });
 
   test("with a reserve the sell raises the buys plus their reserve, rounded up", () => {
-    // The same wallet with a reserve of 0.5%: B still buys 9.019607 USDC. That needs 9.019607 / 0.995 =
-    // 9.064931658... USDC of proceeds, rounded up, so that the budget after the reserve covers the buy.
-    const plan = planOf({
+    // With a reserve of 0.5% the budget is 9.95 USDC and B gets 9.50 * 9.95 / 10 = 9.4525 USDC. That needs
+    // 9.4525 / 0.995 = 9.50 USDC of proceeds.
+    const plan = planOf({ mode: "rebalance", ...skippedC });
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["sell", A, 9_500_000n],
+      ["buy", B, 9_452_500n],
+    ]);
+    expect(plan.buyBudgetQuote).toBe(9_452_500n);
+    expect(plan.projected.quoteBalance).toBe(47_500n);
+    // 9.50 USDC more of B at 3.00 USD per 6-decimal token: 9.452501 USDC buys 3.150833 tokens for 9.452499,
+    // which needs 9.452499 / 0.995 = 9.49999899... USDC of proceeds, rounded up to 9.499999.
+    const three = planOf({
       mode: "rebalance",
-      ...dollars([5_000, 4_900, 100], [60n, 0n, 0n]),
+      ...skippedC,
+      prices: [price(A, USD_E8), price(B, 3n * USD_E8), price(C, USD_E8)],
       holdings: [
         { token: A, balance: 60_000_000n, decimals: 6 },
-        { token: B, balance: 39_500_000n, decimals: 6 },
+        { token: B, balance: 13_166_667n, decimals: 6 },
         { token: C, balance: 500_000n, decimals: 6 },
       ],
     });
-    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
-      ["sell", A, 9_064_932n],
-      ["buy", B, 9_019_607n],
-    ]);
-    expect(plan.buyBudgetQuote).toBe(9_019_607n);
-    expect(plan.projected.quoteBalance).toBe(45_325n);
+    const [sell, buy] = three.legs;
+    expect([sell?.quoteAmount, buy?.quoteAmount]).toEqual([9_499_999n, 9_452_499n]);
+    expect(three.buyBudgetQuote).toBe(9_452_499n);
   });
 
   test("several scaled sells together raise at least what the buys need", () => {
@@ -1072,49 +1099,192 @@ describe("planRebalance: sells are scaled to what the buys spend", () => {
       ["sell", 9_999_999n],
       ["buy", 19_999_998n],
     ]);
-    // With D at 0.50 USD, D wants 0.495 USD, below the minimum. A and B end at 19.900002 USD each after a
-    // full sell, so C can hold 59/41 of 40.300004 = 57.992688... USD: it buys 18.992688 USDC. Each sell of
-    // 3.366666 tokens is scaled by (18.992688 + 0.000001) / 20.199996 to 3.1654481..., rounded up to
-    // 3.165449 tokens, worth 9.496347 USDC.
+    // With D at 0.50 USD, D wants 0.495 USD, below the minimum, and C gets its share of 19.704996 USDC. Each
+    // full sell of 3.366666 tokens is scaled by (19.704996 + 0.000001) / 20.199996 to 3.2841661..., rounded up
+    // to 3.284167 tokens, worth 9.852501 USDC.
     const scaled = planOf(input(500_000n));
     expect(scaled.legs.map(({ side, tokenQuantity, quoteAmount }) => [side, tokenQuantity, quoteAmount])).toEqual([
-      ["sell", 3_165_449n, 9_496_347n],
-      ["sell", 3_165_449n, 9_496_347n],
-      ["buy", 18_992_688n, 18_992_688n],
+      ["sell", 3_284_167n, 9_852_501n],
+      ["sell", 3_284_167n, 9_852_501n],
+      ["buy", 19_704_996n, 19_704_996n],
     ]);
-    expect(scaled.buyBudgetQuote).toBe(18_992_694n);
+    expect(scaled.buyBudgetQuote).toBe(19_705_002n);
     expect(scaled.projected.quoteBalance).toBe(6n);
   });
 
   test("a scaled sell is never smaller than the minimum leg value", () => {
-    // 70/20/5/5 USD against 50/40/5/5 with 19.50 USDC: targets 59.75, 47.80, 5.975 and 5.975 USD. A sells
-    // 10.25, B wants 27.80, C and D want 0.975 each. Without a minimum every buy goes through and the sell is
-    // needed in full.
-    const full = planOf(exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n)));
+    // 70/20/5/5 USD against 50/40/5/5 with 19.50 USDC: targets 59.75, 47.80, 5.975 and 5.975 USD. A would
+    // sell 10.25, B wants 27.80, C and D want 0.975 each. Without a minimum every buy goes through and the
+    // sell is needed in full.
+    const wallet = dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n);
+    const full = planOf(exact(wallet));
     expect(full.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
       ["sell", 10_250_000n],
       ["buy", 27_800_000n],
       ["buy", 975_000n],
       ["buy", 975_000n],
     ]);
-    // With a minimum of 5.00 USD the buys of C and D are skipped. A at 59.75 with C and D at 5.00 each is
-    // 69.75 USD, so B can hold 40/60 of that, 46.50 USD: it buys 26.50 USDC, which needs 7.00 USDC of proceeds.
-    const scaled = planOf(
-      exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n), { minLegValueUsdE8: 5n * USD_E8 }),
-    );
+    // With a minimum of 5.00 USD the buys of C and D are skipped. B spends 27.80 USDC, 8.30 more than the
+    // quote available, so A sells 8.30.
+    const scaled = planOf(exact(wallet, { minLegValueUsdE8: 5n * USD_E8 }));
     expect(scaled.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
-      ["sell", 7_000_000n],
-      ["buy", 26_500_000n],
+      ["sell", 8_300_000n],
+      ["buy", 27_800_000n],
     ]);
-    // With a minimum of 9.00 USD the scaled sell would be 7.00 USD: it is raised to the minimum.
-    const raised = planOf(
-      exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n), { minLegValueUsdE8: 9n * USD_E8 }),
-    );
+    // With a minimum of 9.00 USD the scaled sell of 8.30 USD is raised to the minimum, and 0.70 USDC are left.
+    const raised = planOf(exact(wallet, { minLegValueUsdE8: 9n * USD_E8 }));
     expect(raised.legs.map(({ side, quoteAmount }) => [side, quoteAmount])).toEqual([
       ["sell", 9_000_000n],
-      ["buy", 26_500_000n],
+      ["buy", 27_800_000n],
     ]);
-    expect(raised.projected.quoteBalance).toBe(2_000_000n);
+    expect(raised.projected.quoteBalance).toBe(700_000n);
+  });
+});
+
+describe("planRebalance: two candidates after a skipped buy", () => {
+  test("the candidate with the lower projected maximum drift is returned", () => {
+    // The wallet above with a minimum of 9.00 USD. A ends at 61.00 USD, C and D stay at 5.00 USD each.
+    // Uncapped, B holds 47.80 of 118.80 USD: 4,023 bps against 4,000, and A is the widest at +135 bps.
+    // Capped, B may hold 40/60 of 71.00 = 47.33 USD: it is on target, but A is then 5,155 bps, +155.
+    const plan = planOf(
+      exact(dollars([5_000, 4_000, 500, 500], [70n, 20n, 5n, 5n], 19_500_000n), { minLegValueUsdE8: 9n * USD_E8 }),
+    );
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([5_135, 4_023, 421, 421]);
+    expect(plan.currentMaxAbsDriftBps).toBe(2_000);
+    expect(plan.projected.maxAbsDriftBps).toBe(135);
+    expect(plan.candidate).toBe("uncapped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(155);
+    expect(plan.skipped.map(({ reason }) => reason)).toEqual(["below_minimum", "below_minimum"]);
+  });
+
+  test("a due rebalance is not held back by a skipped buy", () => {
+    // 50/40/0 USD against 1/98/1 with every default: the buy of C (0.8955 USD) is skipped. A sells 48.20 and
+    // B buys 47.959 USDC. With A at 1.80 USD, B at 87.959 is under 98% of the total, so the cap does not bind.
+    const plan = planOf({
+      mode: "rebalance",
+      constituents: [
+        { token: A, weightBps: 100, decimals: 8 },
+        { token: B, weightBps: 9_800, decimals: 8 },
+        { token: C, weightBps: 100, decimals: 8 },
+      ],
+      holdings: [
+        { token: A, balance: 50n * USD_E8, decimals: 8 },
+        { token: B, balance: 40n * USD_E8, decimals: 8 },
+      ],
+      prices: [price(A, USD_E8), price(B, USD_E8), price(C, USD_E8)],
+      quoteBalance: 0n,
+    });
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["sell", A, 48_200_000n],
+      ["buy", B, 47_959_000n],
+    ]);
+    expect(plan.currentMaxAbsDriftBps).toBe(5_456);
+    expect(plan.projected.positions.map(({ weightBps }) => weightBps)).toEqual([201, 9_799, 0]);
+    expect(plan.projected.maxAbsDriftBps).toBe(101);
+    expect(plan.warnings).toEqual([]);
+  });
+
+  test("on a tie in drift the candidate that trades less is returned, and the idle amount is reported", () => {
+    // 5,000 USD of A against 9999/1 and a deposit of 5,000 USD: the buy of B (0.4975 USD) is skipped. Buying
+    // 4,974 USD of A leaves the drift at 1 bps, and so does buying nothing.
+    const plan = planOf({
+      mode: "rebalance",
+      constituents: [
+        { token: A, weightBps: 9_999, decimals: 8 },
+        { token: B, weightBps: 1, decimals: 8 },
+      ],
+      holdings: [{ token: A, balance: 5_000n * USD_E8, decimals: 8 }],
+      prices: [price(A, USD_E8), price(B, USD_E8)],
+      quoteBalance: 0n,
+      depositUsdE8: 5_000n * USD_E8,
+    });
+    expect(plan.legs).toEqual([]);
+    expect(plan.currentMaxAbsDriftBps).toBe(1);
+    expect(plan.projected.maxAbsDriftBps).toBe(1);
+    expect(plan.candidate).toBe("capped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(1);
+    expect(plan.warnings).toEqual([
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 4_975_000_000n },
+    ]);
+  });
+});
+
+describe("planRebalance: caps are derived again when a capped buy is skipped", () => {
+  test("the buys that remain are capped against the wallet without the skipped one", () => {
+    // Buy only, 10.50 USDC, minimum 1.40 USD. A 9.50, B 40 and C 50 USD against 10/44/45, and D (1%) is a
+    // whole-unit token at 1,000.00 USD that cannot be bought. A gets 1.4318 and B 8.0182 USDC.
+    // Capped: with C at 50 and D at 0, A and B may hold 10/46 and 44/46 of 50, which leaves A a buy of 1.3696
+    // USD, below the minimum. Without A, B may hold 44/56 of 59.50 = 46.75 USD and buys 6.75, not the 7.826
+    // of the first round. C then is the widest at 50 / 106.25 = 4,706 bps, 206 above target.
+    // Uncapped: A at 10.9318 and B at 48.0182 of 108.95 USD leave D as the widest at -100 bps, which is lower.
+    const plan = planOf({
+      mode: "buy_only",
+      reserveBps: 0,
+      minLegValueUsdE8: 140_000_000n,
+      constituents: [
+        { token: A, weightBps: 1_000, decimals: 6 },
+        { token: B, weightBps: 4_400, decimals: 6 },
+        { token: C, weightBps: 4_500, decimals: 6 },
+        { token: D, weightBps: 100, decimals: 0 },
+      ],
+      holdings: [
+        { token: A, balance: 9_500_000n, decimals: 6 },
+        { token: B, balance: 40_000_000n, decimals: 6 },
+        { token: C, balance: 50_000_000n, decimals: 6 },
+      ],
+      prices: [price(A, USD_E8), price(B, USD_E8), price(C, USD_E8), price(D, 1_000n * USD_E8)],
+      quoteBalance: 10_500_000n,
+    });
+    expect(plan.legs.map(({ token, quoteAmount }) => [token, quoteAmount])).toEqual([
+      [A, 1_431_818n],
+      [B, 8_018_181n],
+    ]);
+    expect(plan.candidate).toBe("uncapped");
+    expect(plan.projected.maxAbsDriftBps).toBe(100);
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(206);
+  });
+});
+
+describe("planRebalance: what is left uninvested", () => {
+  const wallet = dollars([5_000, 5_000], [60n, 40n], 10_000_000n);
+
+  test("an amount on top of the reserve above the minimum leg value is reported", () => {
+    // In buy-only mode B wants 15 and gets the budget of 9.95 USDC: nothing is left on top of the reserve.
+    expect(planOf({ mode: "buy_only", ...wallet }).warnings).toEqual([]);
+    // 60/60 with 10 USDC and a minimum of 6 USD: both buys of 4.975 are skipped and 9.95 USDC stay idle.
+    const idle = planOf({
+      mode: "buy_only",
+      ...dollars([5_000, 5_000], [60n, 60n], 10_000_000n),
+      minLegValueUsdE8: 6n * USD_E8,
+    });
+    expect(idle.legs).toEqual([]);
+    expect(idle.warnings).toEqual([
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 9_950_000n },
+    ]);
+  });
+
+  test("exactly the minimum leg value is not reported, one base unit more is", () => {
+    // 60/60 with a minimum of 9.95 USD: the budget of 9.95 USDC is left, which is not more than the minimum.
+    const at = (quoteBalance: bigint) =>
+      planOf({
+        mode: "buy_only",
+        ...dollars([5_000, 5_000], [60n, 60n], quoteBalance),
+        minLegValueUsdE8: 995_000_000n,
+      });
+    expect(at(10_000_000n).warnings).toEqual([{ code: "nothing_to_do", severity: "warning", token: null }]);
+    // 10.000002 USDC less the reserve is 9.950001 USDC.
+    expect(at(10_000_002n).warnings).toEqual([
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 9_950_001n },
+    ]);
+  });
+
+  test("a plan without a leg always carries a reason, and a plan with legs never says nothing to do", () => {
+    const balanced = planOf({ mode: "rebalance", ...dollars([5_000, 5_000], [50n, 50n]) });
+    expect(balanced.legs).toEqual([]);
+    expect(balanced.warnings).toEqual([{ code: "nothing_to_do", severity: "warning", token: null }]);
+    const traded = planOf({ mode: "rebalance", ...wallet });
+    expect(traded.legs.length).toBe(2);
+    expect(traded.warnings).toEqual([]);
   });
 });
 
@@ -1442,6 +1612,8 @@ describe("planRebalance: blockers and warnings", () => {
         currentMaxAbsDriftBps: 200,
         projectedMaxAbsDriftBps: 367,
       },
+      // Three quote base units are lost to rounding the shares down.
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 3n },
     ]);
   });
 
@@ -1459,6 +1631,8 @@ describe("planRebalance: blockers and warnings", () => {
         currentMaxAbsDriftBps: null,
         projectedMaxAbsDriftBps: 1_000,
       },
+      // The third quote base unit buys nothing, and with a minimum of zero any amount left is reported.
+      { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 1n },
     ]);
   });
 
@@ -1484,6 +1658,7 @@ describe("planRebalance: a portfolio on target", () => {
     expect(plan.legs).toEqual([]);
     expect(plan.skipped).toEqual([]);
     expect(plan.projected.maxAbsDriftBps).toBe(0);
+    expect(plan.warnings).toEqual([{ code: "nothing_to_do", severity: "warning", token: null }]);
   });
 
   test("the projection of an empty plan is the current portfolio", () => {

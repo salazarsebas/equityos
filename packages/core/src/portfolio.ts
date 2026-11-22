@@ -153,9 +153,30 @@ export interface ProjectedDriftIncreaseIssue {
   readonly projectedMaxAbsDriftBps: number;
 }
 
+/**
+ * The plan leaves more than the minimum leg value in the quote asset on top of the reserve: buys were skipped
+ * or capped, or a sale raised more than the buys spend.
+ */
+export interface UninvestedQuoteIssue {
+  readonly code: "uninvested_quote";
+  readonly severity: "warning";
+  readonly token: null;
+  /** Quote base units left on top of the reserve: the buy budget less what the buys spend. */
+  readonly uninvestedQuote: bigint;
+}
+
+/** The plan has no leg and leaves nothing to invest: every difference to the target is below the minimum. */
+export interface NothingToDoIssue {
+  readonly code: "nothing_to_do";
+  readonly severity: "warning";
+  readonly token: null;
+}
+
 /** A finding returned as data. A blocker prevents a plan. */
 export type CalculationIssue =
   | TokenIssue
+  | UninvestedQuoteIssue
+  | NothingToDoIssue
   | ZeroDeployableValueIssue
   | BelowMinimumPortfolioValueIssue
   | ProjectedDriftIncreaseIssue;
