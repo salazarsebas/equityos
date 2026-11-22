@@ -4,11 +4,13 @@ EquityOS serves a public, keyless, read-only HTTP API from the web app. This pag
 The endpoints are described in:
 
 - [Assets](./assets.md): the tokenized stock universe and the API status.
+- [Indexes](./indexes.md): the published indexes, their versions, their verification and their composition.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
 
 The implementation lives in `apps/web/src/server/api` (envelope, errors, validation, OpenAPI document, handlers)
 and `apps/web/src/app/api/v1` (one `route.ts` per path, each a single line that binds a handler to the market
-data service). The data comes from the [market data layer](../architecture/market-data.md).
+data service). The data comes from the [market data layer](../architecture/market-data.md) and the
+[registry reader](../architecture/registry-reader.md).
 
 The API names the Coinbase tokenized stocks API, Base mainnet and Chainlink feeds as the sources of its data.
 EquityOS is not affiliated with their operators. Nothing the API returns is investment advice.
@@ -57,24 +59,31 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
 
 ## Errors
 
-| Status | `code`                  | When                                                                         |
-| ------ | ----------------------- | ---------------------------------------------------------------------------- |
-| 400    | `invalid_parameter`     | A query parameter is unknown, given twice or has a value that is not allowed |
-| 400    | `invalid_address`       | A path address is not `0x` followed by 40 hex digits                         |
-| 404    | `asset_not_found`       | The address is well formed and no listed asset has it                        |
-| 409    | `ineligible_token`      | A value was requested that an ineligible token does not have                 |
-| 409    | `token_paused`          | The issuer paused transfers of the token                                     |
-| 409    | `missing_feed`          | The token has no usable reference feed                                       |
-| 409    | `stale_feed`            | The reference feed of the token missed its heartbeat                         |
-| 500    | `service_misconfigured` | The server is not configured to read its data sources                        |
-| 500    | `internal_error`        | Anything unexpected                                                          |
-| 502    | `upstream_malformed`    | A data source answered with a payload of an unexpected shape                 |
-| 503    | `upstream_unavailable`  | A data source did not answer and no recent copy of its data is cached        |
+| Status | `code`                   | When                                                                         |
+| ------ | ------------------------ | ---------------------------------------------------------------------------- |
+| 400    | `invalid_parameter`      | A query parameter is unknown, given twice or has a value that is not allowed |
+| 400    | `invalid_address`        | A path address is not `0x` followed by 40 hex digits                         |
+| 400    | `invalid_identifier`     | An index identifier is neither an index id nor a slug with an id prefix      |
+| 404    | `asset_not_found`        | The address is well formed and no listed asset has it                        |
+| 404    | `index_not_found`        | The registry holds no index with the identifier                              |
+| 404    | `version_not_found`      | The index has no version with the number                                     |
+| 409    | `registry_not_deployed`  | The index registry has no code on the configured chain. A normal state       |
+| 409    | `version_not_conformant` | A composition was asked of a version that fails verification                 |
+| 409    | `ineligible_token`       | A value was requested that an ineligible token does not have                 |
+| 409    | `token_paused`           | The issuer paused transfers of the token                                     |
+| 409    | `missing_feed`           | The token has no usable reference feed                                       |
+| 409    | `stale_feed`             | The reference feed of the token missed its heartbeat                         |
+| 500    | `service_misconfigured`  | The server is not configured to read its data sources                        |
+| 500    | `internal_error`         | Anything unexpected                                                          |
+| 502    | `upstream_malformed`     | A data source answered with a payload of an unexpected shape                 |
+| 503    | `upstream_unavailable`   | A data source did not answer and no recent copy of its data is cached        |
 
 - An unknown query parameter is an error and is not ignored, so a misspelled filter cannot return unfiltered data.
-- A 503 carries `Retry-After: 15`. A 502 and a 503 carry `details.source`: `coinbase_api` or `base_rpc`.
+- A 503 carries `Retry-After: 15`. A 502 and a 503 carry `details.source`: `coinbase_api`, `base_rpc` or
+  `registry_rpc`.
 - A 500 never says what is misconfigured or what failed. The cause is written to the server log.
-- The four 409 codes are the per-token conditions of the market data layer. No endpoint of this version returns
+- `ineligible_token`, `token_paused`, `missing_feed` and `stale_feed` are the per-token conditions of the market
+  data layer. No endpoint of this version returns
   them: the asset endpoints report these conditions as data. They are reserved for endpoints that need a value a
   token cannot provide.
 - A source that is down does not immediately produce a 503. The last successful read is served for a bounded time
@@ -110,6 +119,7 @@ guaranteed at it.
 | ------------------------------------------ | ------------------------------------------------------ |
 | Assets, built from a fresh snapshot        | `public, max-age=N`: what is left of the 15 second TTL |
 | Assets, built from a snapshot served stale | `no-store`                                             |
+| Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
 | Status                                     | `no-store`: it depends on where the request comes from |
 | OpenAPI document                           | `public, max-age=3600`                                 |
 | Any error                                  | `no-store`                                             |
@@ -126,7 +136,8 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.0.0`.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.1.0`, which
+  added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
 
 ## The OpenAPI document is the contract

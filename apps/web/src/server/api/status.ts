@@ -2,6 +2,7 @@ import "server-only";
 import { marketPhaseAt } from "@equityos/core";
 import { classifyJurisdiction, type Jurisdiction } from "@/server/jurisdiction";
 import { BASE_CHAIN_ID, type MarketData, type MarketDataMode } from "@/server/market";
+import type { RegistryMode, RegistryReader } from "@/server/registry";
 import { toApiDatasets } from "./assets";
 import { toApiError } from "./errors";
 import { API_VERSION, isoTimestamp, NO_STORE, ok, route } from "./http";
@@ -30,18 +31,33 @@ function executionAvailability(jurisdiction: Jurisdiction): {
 export interface StatusOptions {
   readonly marketData: () => MarketData;
   readonly mode: () => MarketDataMode;
+  readonly registry: () => RegistryReader;
+  readonly registryMode: () => RegistryMode;
   /** Clock in Unix seconds, used when the market data cannot be loaded. */
   readonly now?: () => number;
 }
 
 /**
- * `GET /api/v1/status`: what the API is, what it reads and how current each dataset is. It answers 200 when a
- * source is down and reports the failure in the body, so that it stays usable as a diagnostic. It names sources
+ * `GET /api/v1/status`: what the API is, what it reads, how current each dataset is and whether the index
+ * registry is deployed on the configured chain. It answers 200 when a source is down and reports the failure
+ * in the body, so that it stays usable as a diagnostic. It names sources
  * by identifier and never exposes an endpoint URL or any other configuration.
  */
-export function statusHandler({ marketData, mode, now = () => Math.floor(Date.now() / 1000) }: StatusOptions) {
+export function statusHandler(options: StatusOptions) {
+  const { marketData, mode, now = () => Math.floor(Date.now() / 1000) } = options;
   return route(async (request: Request) => {
     parseQuery(request, []);
+    const reader = options.registry();
+    const registry = await reader.listIndexes({ limit: 1 }).then(
+      (page) =>
+        page.status === "ok"
+          ? { deployed: true, notDeployedReason: null, indexCount: page.total, error: null }
+          : { deployed: false, notDeployedReason: page.reason, indexCount: null, error: null },
+      (error: unknown) => {
+        const { code, details } = toApiError(error);
+        return { deployed: null, notDeployedReason: null, indexCount: null, error: { code, details } };
+      },
+    );
     const market = await marketData()
       .getSnapshot()
       .then(
@@ -63,6 +79,7 @@ export function statusHandler({ marketData, mode, now = () => Math.floor(Date.no
         datasets: market.datasets,
         error: market.error,
       },
+      registry: { chainId: reader.chainId, address: reader.registry, mode: options.registryMode(), ...registry },
     };
     // Never stored: the answer depends on where the request comes from and reports the state of this moment.
     return ok(data, { asOf: isoTimestamp(market.at) }, NO_STORE);

@@ -9,14 +9,15 @@ deterministic methodology. It is not a pooled fund: users replicate an index in 
 
 ## Layout
 
-| Path                | Contents                                                              |
-| ------------------- | --------------------------------------------------------------------- |
-| `apps/web`          | Next.js app (App Router, React, Tailwind CSS), sources under `src/`   |
-| `packages/core`     | `@equityos/core`: methodology and calculation engine, pure TypeScript |
-| `packages/sdk`      | `@equityos/sdk`: TypeScript SDK                                       |
-| `contracts`         | Foundry project, dependencies as git submodules in `contracts/lib`    |
-| `docs`              | Technical documentation, indexed in `docs/README.md`                  |
-| `.github/workflows` | CI                                                                    |
+| Path                     | Contents                                                              |
+| ------------------------ | --------------------------------------------------------------------- |
+| `apps/web`               | Next.js app (App Router, React, Tailwind CSS), sources under `src/`   |
+| `packages/core`          | `@equityos/core`: methodology and calculation engine, pure TypeScript |
+| `packages/contracts-abi` | `@equityos/contracts-abi`: typed contract ABIs and deployment map     |
+| `packages/sdk`           | `@equityos/sdk`: TypeScript SDK                                       |
+| `contracts`              | Foundry project, dependencies as git submodules in `contracts/lib`    |
+| `docs`                   | Technical documentation, indexed in `docs/README.md`                  |
+| `.github/workflows`      | CI                                                                    |
 
 ## Commands
 
@@ -34,11 +35,13 @@ or yarn, and do not commit any lockfile other than `bun.lock`.
 | `bun run test`                | Run unit tests with `bun test`        |
 | `bun run build`               | Build the packages and the web app    |
 | `bun run test:e2e`            | Playwright smoke test, after a build  |
+| `bun run test:integration`    | Deploy, seed and read on local Anvil  |
 | `bun run contracts:build`     | `forge build`                         |
 | `bun run contracts:test`      | `forge test`                          |
 | `bun run contracts:fmt:check` | `forge fmt --check`                   |
 
-Every one of these must pass before a change is pushed. CI runs them in the `web` and `contracts` jobs.
+Every one of these must pass before a change is pushed. CI runs them in the `web`, `contracts` and `integration`
+jobs.
 
 ## TypeScript
 
@@ -80,6 +83,9 @@ Every one of these must pass before a change is pushed. CI runs them in the `web
 Tests are required for every change in behavior. TypeScript tests use `bun test` and live in the `test/`
 directory of their workspace. Browser smoke tests for the web app use Playwright and live in `apps/web/e2e`.
 Solidity tests use Foundry and live in `contracts/test`.
+
+After a change to a contract interface, regenerate the ABI modules with
+`bun run --filter @equityos/contracts-abi generate` and commit them.
 
 ## Git
 

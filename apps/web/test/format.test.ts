@@ -15,6 +15,7 @@ import {
   formatUtcMinute,
   MINUS,
   shortenAddress,
+  shortenHash,
   toIsoInstant,
 } from "../src/lib/format";
 
@@ -210,5 +211,16 @@ describe("shortenAddress", () => {
     expect(() => shortenAddress("0x1234")).toThrow(TypeError);
     expect(() => shortenAddress("1234567890abcdef1234567890abcdef1234abcd00")).toThrow(TypeError);
     expect(() => shortenAddress("0xZZ34567890abcdef1234567890abcdef1234abcd")).toThrow(TypeError);
+  });
+});
+
+describe("shortenHash", () => {
+  test("keeps the first eight hexadecimal digits of a 32-byte value", () => {
+    expect(shortenHash("0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6")).toBe("0x90d5104e");
+  });
+
+  test("rejects anything that is not 32 bytes of hexadecimal", () => {
+    expect(() => shortenHash("0x90d5104e")).toThrow(TypeError);
+    expect(() => shortenHash("0x1234567890abcdef1234567890abcdef1234abcd")).toThrow(TypeError);
   });
 });

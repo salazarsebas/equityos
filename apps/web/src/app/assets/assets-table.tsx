@@ -1,3 +1,11 @@
+import {
+  INELIGIBILITY_LABELS,
+  Missing,
+  PRICE_DECIMALS,
+  PriceStatus,
+  shownRound,
+  tokenExplorerUrl,
+} from "@/components/market/reference-price";
 import { cx } from "@/components/ui/cx";
 import { Link } from "@/components/ui/link";
 import {
@@ -11,37 +19,12 @@ import {
   TableRowHeader,
 } from "@/components/ui/table";
 import { StatusTag } from "@/components/ui/tag";
-import { formatFixed, formatPrice, formatUtcMinute, MISSING, shortenAddress, toIsoInstant } from "@/lib/format";
-import type { AssetMarketData, IneligibilityCode, PricePoint, ReferencePrice } from "@/server/market";
+import { formatFixed, formatPrice, formatUtcMinute, shortenAddress, toIsoInstant } from "@/lib/format";
+import type { AssetMarketData } from "@/server/market";
 
-/** Decimals of the multiplier (WAD) and of a reference price. */
+/** Decimals of the share multiplier (WAD). */
 const MULTIPLIER_DECIMALS = 18;
-const PRICE_DECIMALS = 8;
 const ONE_SHARE_WAD = 10n ** BigInt(MULTIPLIER_DECIMALS);
-
-const INELIGIBILITY_LABELS: Record<IneligibilityCode, string> = {
-  not_listed: "Not listed",
-  onchain_read_failed: "Token unreadable",
-  not_initialized: "Not initialized",
-  decimals_mismatch: "Decimals mismatch",
-  not_minted: "Not minted",
-  missing_feed: "No feed",
-  feed_mismatch: "Feed changed",
-};
-
-const STATUS_LABELS: Record<ReferencePrice["status"], string> = {
-  live: "Live",
-  delayed: "Delayed",
-  last_close: "Last close",
-  unavailable: "Unavailable",
-};
-
-const UNAVAILABLE_LABELS: Record<Extract<ReferencePrice, { status: "unavailable" }>["reason"], string> = {
-  feed_read_failed: "feed not readable",
-  feed_mismatch: "feed identity changed",
-  invalid_round: "invalid round",
-  stale_feed: "feed stale",
-};
 
 /** Four fixed decimals, so that the column aligns and a multiplier such as 1.0005 is told apart from 1. */
 function formatMultiplier(multiplierWad: bigint): string {
@@ -52,38 +35,6 @@ function formatMultiplier(multiplierWad: bigint): string {
 function formatSupply(totalSupply: bigint, decimals: number): string {
   const text = formatFixed(totalSupply, decimals, 2);
   return totalSupply > 0n && text === "0.00" ? "<0.01" : text;
-}
-
-function Missing() {
-  return <span className="text-tertiary">{MISSING}</span>;
-}
-
-function explorerUrl(address: string): string {
-  return `https://basescan.org/address/${address}`;
-}
-
-/** The round whose publication time is shown: the usable one, or the stale one a feed last published. */
-function shownRound(price: ReferencePrice | null): PricePoint | null {
-  if (price === null) return null;
-  return price.status === "unavailable" ? price.lastObserved : price;
-}
-
-/** Publication time of the oldest round the rows show, Unix seconds, or `null` when no row shows one. */
-export function oldestUpdate(rows: readonly AssetMarketData[]): number | null {
-  const times = rows.flatMap(({ referencePrice }) => shownRound(referencePrice)?.updatedAt ?? []);
-  return times.length === 0 ? null : Math.min(...times);
-}
-
-function PriceStatus({ price }: { price: ReferencePrice }) {
-  const label = STATUS_LABELS[price.status];
-  if (price.status === "unavailable") {
-    return (
-      <span className="text-warning">
-        {label}: {UNAVAILABLE_LABELS[price.reason]}
-      </span>
-    );
-  }
-  return <span className={price.status === "delayed" ? "text-warning" : "text-secondary"}>{label}</span>;
 }
 
 function AssetRow({ entry, showEligibility }: { entry: AssetMarketData; showEligibility: boolean }) {
@@ -123,7 +74,11 @@ function AssetRow({ entry, showEligibility }: { entry: AssetMarketData; showElig
         </TableCell>
       ) : null}
       <TableCell className="font-mono text-sm text-secondary">
-        <Link href={explorerUrl(asset.address)} variant="quiet" aria-label={`${asset.symbol} token ${asset.address}`}>
+        <Link
+          href={tokenExplorerUrl(asset.address)}
+          variant="quiet"
+          aria-label={`${asset.symbol} token ${asset.address}`}
+        >
           <span title={asset.address}>{shortenAddress(asset.address)}</span>
         </Link>
       </TableCell>

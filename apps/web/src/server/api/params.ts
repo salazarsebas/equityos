@@ -54,3 +54,19 @@ export function booleanParameter(query: URLSearchParams, name: string): boolean 
   }
   return value === "true";
 }
+
+/**
+ * Reads a non-negative integer query parameter written in decimal digits, within `[min, max]`.
+ *
+ * @returns `undefined` when the parameter is absent
+ * @throws {ApiError} 400 `invalid_parameter`
+ */
+export function integerParameter(query: URLSearchParams, name: string, min: number, max: number): number | undefined {
+  const value = query.get(name);
+  if (value === null) return undefined;
+  const parsed = /^(0|[1-9][0-9]{0,15})$/.test(value) ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw invalidParameter(name, `Query parameter "${name}" must be an integer from ${min} to ${max}.`);
+  }
+  return parsed;
+}

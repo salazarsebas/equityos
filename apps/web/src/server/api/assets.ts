@@ -1,5 +1,6 @@
 import "server-only";
 import { type MarketPhase, marketPhaseAt } from "@equityos/core";
+import type { Address } from "viem";
 import {
   type AssetMarketData,
   type IneligibilityCode,
@@ -11,6 +12,7 @@ import {
   type PricePoint,
   type PriceUnavailableReason,
   REFERENCE_FEEDS,
+  type ReferencePrice,
   type SourceFreshness,
   type TokenRead,
   type UpstreamSource,
@@ -75,7 +77,7 @@ interface ApiTokenState {
  * Reference price of a token. It is an indication of value, not a price a trade executes at. `priceE8`,
  * `updatedAt` and `roundId` are `null` exactly when `status` is `unavailable`, and `unavailableReason` says why.
  */
-interface ApiReferencePrice {
+export interface ApiReferencePrice {
   readonly status: "live" | "delayed" | "last_close" | "unavailable";
   readonly priceE8: string | null;
   readonly updatedAt: string | null;
@@ -132,8 +134,9 @@ function tokenState(token: TokenRead): ApiTokenState {
   };
 }
 
-function referencePrice({ asset, referencePrice: price }: AssetMarketData): ApiReferencePrice {
-  const feedProxy = REFERENCE_FEEDS.get(asset.address)?.proxy.toLowerCase() ?? null;
+/** The reference price of a token, or the stated absence of one. `price` is `null` for a token that is not eligible. */
+export function toApiReferencePrice(token: Address, price: ReferencePrice | null): ApiReferencePrice {
+  const feedProxy = REFERENCE_FEEDS.get(token)?.proxy.toLowerCase() ?? null;
   if (price !== null && price.status !== "unavailable") {
     return { status: price.status, ...pricePoint(price), unavailableReason: null, lastObserved: null, feedProxy };
   }
@@ -158,7 +161,7 @@ export function toApiAsset(entry: AssetMarketData): ApiAsset {
     isin: asset.isin,
     onchain: tokenState(token),
     eligibility: { eligible: eligibility.eligible, reasons: eligibility.eligible ? [] : eligibility.reasons },
-    referencePrice: referencePrice(entry),
+    referencePrice: toApiReferencePrice(asset.address, entry.referencePrice),
   };
 }
 
@@ -184,7 +187,7 @@ export function toApiDatasets({ assetList, onchain, observedAt }: MarketSnapshot
   };
 }
 
-function snapshotMeta(snapshot: MarketSnapshot): ApiSnapshotMeta {
+export function snapshotMeta(snapshot: MarketSnapshot): ApiSnapshotMeta {
   return {
     asOf: isoTimestamp(snapshot.observedAt),
     marketPhase: marketPhaseAt(snapshot.observedAt),
@@ -197,7 +200,7 @@ function snapshotMeta(snapshot: MarketSnapshot): ApiSnapshotMeta {
  * Cache lifetime of a response built from a snapshot: what is left of the TTL of the onchain read, the
  * shortest-lived data in it. A snapshot served past its TTL because a source is down is not cacheable.
  */
-function snapshotCache({ assetList, onchain, observedAt }: MarketSnapshot): string {
+export function snapshotCache({ assetList, onchain, observedAt }: MarketSnapshot): string {
   if (assetList.servedStale || onchain.servedStale) return NO_STORE;
   return publicCache(ONCHAIN_CACHE.ttlSeconds - (observedAt - onchain.fetchedAt));
 }

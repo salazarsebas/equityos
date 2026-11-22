@@ -26,11 +26,12 @@ git submodule update --init --recursive
 
 ## Workspaces
 
-| Workspace        | Path            | Notes                                            |
-| ---------------- | --------------- | ------------------------------------------------ |
-| `@equityos/web`  | `apps/web`      | Next.js app, sources in `src/`                   |
-| `@equityos/core` | `packages/core` | Compiled with `tsc` to `dist/`, tests in `test/` |
-| `@equityos/sdk`  | `packages/sdk`  | Compiled with `tsc` to `dist/`, tests in `test/` |
+| Workspace                 | Path                     | Notes                                               |
+| ------------------------- | ------------------------ | --------------------------------------------------- |
+| `@equityos/web`           | `apps/web`               | Next.js app, sources in `src/`                      |
+| `@equityos/core`          | `packages/core`          | Compiled with `tsc` to `dist/`, tests in `test/`    |
+| `@equityos/contracts-abi` | `packages/contracts-abi` | Typed contract ABIs and addresses, same build setup |
+| `@equityos/sdk`           | `packages/sdk`           | Compiled with `tsc` to `dist/`, tests in `test/`    |
 
 `contracts` is a Foundry project and is not a Bun workspace.
 
@@ -61,13 +62,16 @@ bun run test:e2e
 ```
 
 `test:e2e` is a Playwright smoke test that runs against the production build. Install its browser once with
-`bunx playwright install chromium` from `apps/web`.
+`bunx playwright install chromium` from `apps/web`. It starts three servers on ports 3100 to 3102, each on
+recorded data: set `E2E_PORT` to use three other consecutive ports.
 
 ```sh
 bun run contracts:fmt:check
 bun run contracts:build
 bun run contracts:test
 ```
+
+`bun run test:integration` needs Foundry as well as Bun. It is described in [Local chain](local-chain.md).
 
 `bun run format` rewrites files to match the formatter. `forge fmt --root contracts` does the same for Solidity.
 
@@ -79,14 +83,28 @@ bun run --filter @equityos/core test
 
 ## Environment
 
-| Variable               | Used by    | Purpose                                                                                |
-| ---------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SITE_URL` | `apps/web` | Public origin for canonical URLs, `robots.txt` and the sitemap. Defaults to localhost. |
-| `BASE_RPC_URL`         | `apps/web` | Base mainnet JSON-RPC endpoint for server-side market data. Required in production.    |
+| Variable                               | Used by    | Purpose                                                                                |
+| -------------------------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                 | `apps/web` | Public origin for canonical URLs, `robots.txt` and the sitemap. Defaults to localhost. |
+| `BASE_RPC_URL`                         | `apps/web` | Base mainnet JSON-RPC endpoint for server-side market data. Required in production.    |
+| `EQUITYOS_CHAIN_ID`                    | `apps/web` | Chain the index registry is read from: 8453 (default), 84532 or 31337.                 |
+| `EQUITYOS_RPC_URL`                     | `apps/web` | JSON-RPC endpoint of the registry chain when it is 84532 or 31337.                     |
+| `EQUITYOS_LOG_CHUNK_BLOCKS`            | `apps/web` | Blocks per `eth_getLogs` request of the registry event scan. Defaults to 2000.         |
+| `NEXT_PUBLIC_BASE_RPC_URL`             | `apps/web` | Base mainnet JSON-RPC endpoint the browser reads balances from. Set it in production.  |
+| `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`     | `apps/web` | Base Sepolia JSON-RPC endpoint for the browser. Set it in production.                  |
+| `NEXT_PUBLIC_ANVIL_RPC_URL`            | `apps/web` | Local Anvil endpoint, development builds only. Defaults to `http://127.0.0.1:8545`.    |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | `apps/web` | Enables the WalletConnect option of the connect dialog. Unset: the option is absent.   |
 
 `apps/web/.env.example` lists the variables. Outside production, an unset `BASE_RPC_URL` falls back to the public
 Base endpoint, which is rate limited. The market data layer is described in
-[Market data layer](../architecture/market-data.md).
+[Market data layer](../architecture/market-data.md), the registry variables in
+[Registry reader](../architecture/registry-reader.md), and running against a local node in
+[Local chain](local-chain.md).
+
+The `NEXT_PUBLIC_*` variables are compiled into the browser bundle when the app is built, so they are public and
+a change needs a new build. The two browser RPC endpoints fall back to the public Base endpoints, which are rate
+limited: that is acceptable for local development and not for a deployment. The wallet layer is described in
+[Wallet connection](../architecture/wallet.md).
 
 ## TypeScript configuration
 
@@ -94,11 +112,12 @@ Every workspace extends `tsconfig.base.json`. The packages have two configuratio
 sources and tests without emitting, and `tsconfig.build.json` emits `dist/` from `src/` only. The web app
 type-checks its unit tests with `tsconfig.test.json`, which adds the Bun types that application code must not see.
 
-The web app imports `@equityos/core` from source through a `paths` entry in `apps/web/tsconfig.json`, so
-type-checking and unit tests do not depend on a prior build of the package.
+The web app imports `@equityos/core` and `@equityos/contracts-abi` from source through `paths` entries in
+`apps/web/tsconfig.json`, so type-checking and unit tests do not depend on a prior build of the packages.
 
-`apps/web/test/market/live.test.ts` reads the live issuer API and Base mainnet. It is skipped unless
-`LIVE_TESTS=1` is set and is not part of CI.
+`apps/web/test/market/live.test.ts` reads the live issuer API and Base mainnet, and
+`apps/web/test/registry/live.test.ts` checks the deployment map against Base mainnet and Base Sepolia. Both are
+read-only, skipped unless `LIVE_TESTS=1` is set, and not part of CI.
 
 ## Solidity toolchain
 
@@ -112,6 +131,8 @@ deliberate. CI runs the tests with `FOUNDRY_PROFILE=ci`, which raises the number
 
 - `web`: install with a frozen lockfile, format check, lint, typecheck, test, build, Playwright smoke test.
 - `contracts`: format check, build, test.
+- `integration`: builds the contracts, checks the committed ABI modules against the build artifacts, then runs
+  the deployment script, the seed and the registry reader against a local Anvil node.
 
 When a dependency changes, commit the updated `bun.lock`. CI fails if the lockfile does not match
 `package.json`.

@@ -2,13 +2,14 @@ import { marketPhaseAt } from "@equityos/core";
 import type { Metadata } from "next";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
+import { oldestUpdate } from "@/components/market/reference-price";
 import { Container } from "@/components/shell/container";
 import { Callout } from "@/components/ui/callout";
 import { cx } from "@/components/ui/cx";
 import { SourceLine } from "@/components/ui/source-line";
 import { formatCount, formatUtcDateTime } from "@/lib/format";
 import { getMarketData, listAssets, type MarketSnapshot, marketDataMode } from "@/server/market";
-import { AssetsTable, oldestUpdate } from "./assets-table";
+import { AssetsTable } from "./assets-table";
 
 export const metadata: Metadata = {
   title: "Assets",

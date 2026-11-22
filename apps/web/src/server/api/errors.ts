@@ -1,5 +1,6 @@
 import "server-only";
-import { MarketDataError, type MarketDataErrorCode, MalformedResponseError, UpstreamError } from "@/server/market";
+import { MalformedResponseError, MarketDataError, type MarketDataErrorCode, UpstreamError } from "@/server/market";
+import { RegistryError } from "@/server/registry";
 
 /**
  * Error codes of the public API. A code is stable: clients branch on it, never on the message.
@@ -8,7 +9,12 @@ import { MarketDataError, type MarketDataErrorCode, MalformedResponseError, Upst
 export const API_ERROR_CODES = [
   "invalid_parameter",
   "invalid_address",
+  "invalid_identifier",
   "asset_not_found",
+  "index_not_found",
+  "version_not_found",
+  "registry_not_deployed",
+  "version_not_conformant",
   "upstream_unavailable",
   "upstream_malformed",
   "service_misconfigured",
@@ -77,9 +83,17 @@ export const MARKET_ERROR_CODES = Object.keys(MARKET_ERRORS);
 
 const INTERNAL_ERROR = "The request could not be completed because of an unexpected error.";
 
-/** Maps anything a handler can throw to an `ApiError`. An unrecognized error becomes a 500 with no detail. */
+/**
+ * Maps anything a handler can throw to an `ApiError`. A failed read of the index registry has the status and
+ * code of the same failure of the market data layer, with the source `registry_rpc`. An unrecognized error
+ * becomes a 500 with no detail.
+ */
 export function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error;
+  if (error instanceof RegistryError) {
+    const { status, code, message } = MARKET_ERRORS[error.code];
+    return new ApiError(status, code, message, status === 500 ? null : { source: "registry_rpc" });
+  }
   if (!(error instanceof MarketDataError)) return new ApiError(500, "internal_error", INTERNAL_ERROR);
   const { status, code, message } = MARKET_ERRORS[error.code];
   const source = error instanceof UpstreamError || error instanceof MalformedResponseError ? error.source : null;

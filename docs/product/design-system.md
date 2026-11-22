@@ -92,23 +92,29 @@ serves them from the app's own origin.
 
 All components live in `apps/web/src/components/ui`. They have no dependency beyond React and Next.js.
 
-| Component                              | File              | Notes                                                                                   |
-| -------------------------------------- | ----------------- | --------------------------------------------------------------------------------------- |
-| `Button`                               | `button.tsx`      | `primary`, `secondary`, `ghost`, `destructive`. Sizes `md` and `lg`. Loading, disabled. |
-| `Link`                                 | `link.tsx`        | `inline` and `quiet`. Absolute URLs get the external link icon.                         |
-| `Field`, `Input`, `Select`, `Checkbox` | `field.tsx`       | `Field` wires label, hint and error to the control through a render prop.               |
-| `Tabs`                                 | `tabs.tsx`        | ARIA tabs pattern, automatic activation, arrow keys, Home and End.                      |
-| `Tag`, `StatusTag`                     | `tag.tsx`         | Five tones. `StatusTag` accepts only the fixed status set.                              |
-| `Callout`                              | `callout.tsx`     | `neutral`, `info`, `warning`, `negative`.                                               |
-| `Table` and its parts                  | `table.tsx`       | Sticky header, pinned first column, numeric cells, dense variant, caption, totals.      |
-| `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards.                                          |
-| `SourceLine`                           | `source-line.tsx` | Source name and as-of time in UTC for one data region. Warning tone when stale.         |
-| `Skeleton`                             | `skeleton.tsx`    | Static placeholder sized like the content it replaces.                                  |
-| `EmptyState`, `ErrorState`             | `state.tsx`       | Text and one action. No illustration.                                                   |
-| `Dialog`                               | `dialog.tsx`      | Native `<dialog>`: focus trap, Escape, inert background, focus return.                  |
+| Component                              | File              | Notes                                                                                    |
+| -------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| `Button`                               | `button.tsx`      | `primary`, `secondary`, `ghost`, `destructive`. Sizes `md` and `lg`. Loading, disabled.  |
+| `Link`                                 | `link.tsx`        | `inline` and `quiet`. Absolute URLs get the external link icon.                          |
+| `Field`, `Input`, `Select`, `Checkbox` | `field.tsx`       | `Field` wires label, hint and error to the control through a render prop.                |
+| `Tabs`                                 | `tabs.tsx`        | ARIA tabs pattern, automatic activation, arrow keys, Home and End.                       |
+| `Tag`, `StatusTag`                     | `tag.tsx`         | Five tones. `StatusTag` accepts only the fixed status set.                               |
+| `Callout`                              | `callout.tsx`     | `neutral`, `info`, `warning`, `negative`.                                                |
+| `Table` and its parts                  | `table.tsx`       | Sticky header, pinned first column, numeric cells, dense variant, caption, totals.       |
+| `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards. Four or six to a row.                     |
+| `CopyButton`                           | `copy-button.tsx` | Copies an exact value and confirms in place. Rendered only once the page is interactive. |
+| `SourceLine`                           | `source-line.tsx` | Source name and as-of time in UTC for one data region. Warning tone when stale.          |
+| `Skeleton`                             | `skeleton.tsx`    | Static placeholder sized like the content it replaces.                                   |
+| `EmptyState`, `ErrorState`             | `state.tsx`       | Text and one action. No illustration.                                                    |
+| `Dialog`                               | `dialog.tsx`      | Native `<dialog>`: focus trap, Escape, inert background, focus return.                   |
 
 The shell is in `apps/web/src/components/shell`: `Header`, `PrimaryNav`, `ThemeToggle`, `Footer`, `Container` and
 `Grid`. The root layout adds a skip link before the header.
+
+The top bar ends with the account control from `apps/web/src/components/wallet`: "Connect wallet", or the
+shortened account in mono with a menu. It has a fixed width of 176 px and is a neutral block of that size until
+its code has loaded, so the bar never shifts. Under 640 px the primary navigation moves to a second row of 40 px,
+because the wordmark, the navigation, the theme toggle and the account control do not fit in one.
 
 ### Usage rules
 
@@ -155,6 +161,7 @@ returns a string. No value passes through a floating-point number. The helpers l
 | `formatUtcMinute`        | Unix seconds            | `2026-11-20 21:00`     | minute, down        |
 | `formatRelativeTime`     | Unix seconds, now       | `4 s ago`              | largest unit, down  |
 | `shortenAddress`         | 20-byte hex address     | `0x1234...abcd`        | not applicable      |
+| `shortenHash`            | 32-byte hex value       | `0x90d5104e`           | not applicable      |
 
 - A non-zero USD amount under one cent renders as `<0.01`.
 - Prices under 1.00 use 4 decimals.
@@ -172,5 +179,6 @@ that adds its page: `apps/web/test/navigation.test.ts` fails when an entry point
 
 - `bun run test` runs the contrast, formatting and navigation tests.
 - `bun run test:e2e` runs the Playwright smoke test against the production build: every page renders with no
-  console errors, there is no horizontal overflow at 375 px, the theme toggle persists, fonts are served from
+  console errors, static pages are still prerendered, there is no horizontal overflow at 375 px, the theme
+  toggle persists, fonts are served from
   the app's origin, and tabs and the dialog respond to the keyboard. Run `bun run build` first.
