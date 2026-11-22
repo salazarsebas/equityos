@@ -277,8 +277,12 @@ wallet from 9000/1000 to 9472/528. Holding the other buys back is not always rig
 wallet far from target when the buys would have brought it close.
 
 **So when at least one buy is skipped, the plan is computed twice, with the same sells, and the candidate with
-the lower projected maximum drift is returned. On a tie the capped candidate is returned, which is the one
-that trades less.**
+the lower projected maximum drift is returned. On a tie, a call that carries a deposit returns the candidate
+that leaves less quote asset uninvested, any other call returns the candidate that trades less, and if they
+are still tied the capped one is returned.**
+
+A deposit is made to be invested, so with equal drift it is. Without a deposit, trading for no gain in drift
+is not proposed.
 
 - **Uncapped**: every buy that passes the minimum spends its share.
 - **Capped**: no bought constituent may end above its target weight of the projected invested value. With
@@ -290,7 +294,8 @@ that trades less.**
   are derived again from the buys that remain. The set of buys only shrinks, so this ends after at most one
   round per buy.
 
-A cap only lowers a buy, so the capped candidate never trades more than the uncapped one. The caps are derived
+A cap only lowers a buy, so the capped candidate never trades more than the uncapped one: on a tie without a
+deposit it is the one returned, and on a tie with a deposit it is returned only when it spends as much. The caps are derived
 from the sells of step 7, which are the sells of the plan, never from sells that are later changed.
 
 The result states which candidate it is (`candidate`) and the projected maximum drift of the other one
