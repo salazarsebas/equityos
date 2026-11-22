@@ -123,6 +123,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 1000,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -143,8 +145,8 @@
             }
           ],
           "investedValueUsdE8": "10992500000",
-          "quoteBalance": "75000",
-          "maxAbsDriftBps": 3
+          "maxAbsDriftBps": 3,
+          "quoteBalance": "75000"
         }
       }
     },
@@ -275,6 +277,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 667,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -295,8 +299,8 @@
             }
           ],
           "investedValueUsdE8": "149950000000",
-          "quoteBalance": "500000",
-          "maxAbsDriftBps": 2
+          "maxAbsDriftBps": 2,
+          "quoteBalance": "500000"
         }
       }
     },
@@ -422,6 +426,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 5000,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -442,8 +448,8 @@
             }
           ],
           "investedValueUsdE8": "199999999898",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "0"
         }
       }
     },
@@ -599,6 +605,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": null,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -627,8 +635,8 @@
             }
           ],
           "investedValueUsdE8": "1989999250",
-          "quoteBalance": "100007",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "100007"
         }
       }
     },
@@ -712,6 +720,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": null,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -724,8 +734,8 @@
             }
           ],
           "investedValueUsdE8": "99500000000",
-          "quoteBalance": "5000000",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "5000000"
         }
       }
     },
@@ -3077,6 +3087,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": null,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -3593,8 +3605,8 @@
             }
           ],
           "investedValueUsdE8": "1000000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "0"
         }
       }
     },
@@ -5118,6 +5130,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": null,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -5138,14 +5152,14 @@
             }
           ],
           "investedValueUsdE8": "1000007900",
-          "quoteBalance": "50253",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "50253"
         }
       }
     },
     {
       "name": "on-target-deposit-with-a-skipped-buy",
-      "description": "A wallet on target at 90/10 and a deposit of 10 USD: one buy is below the minimum, the other is not proposed because it would leave its token above target, and the deposit stays uninvested.",
+      "description": "A wallet on target at 90/10 and a deposit of 10 USD: one buy is below the minimum. The capped candidate buys nothing and keeps the drift at 0, the uncapped one would take it to 472 bps. The idle deposit is reported.",
       "input": {
         "mode": "rebalance",
         "constituents": [
@@ -5193,7 +5207,14 @@
       },
       "expected": {
         "status": "ready",
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "uninvested_quote",
+            "severity": "warning",
+            "token": null,
+            "uninvestedQuote": "9950000"
+          }
+        ],
         "valuation": {
           "positions": [
             {
@@ -5266,6 +5287,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 0,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 472,
         "projected": {
           "positions": [
             {
@@ -5286,8 +5309,863 @@
             }
           ],
           "investedValueUsdE8": "1000000000",
-          "quoteBalance": "10000000",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "10000000"
+        }
+      }
+    },
+    {
+      "name": "due-rebalance-with-a-skipped-buy",
+      "description": "50/40/0 USD against 1/98/1 with every default: the smallest buy is skipped, and the rebalance still takes the drift from 5456 to 101 bps.",
+      "input": {
+        "mode": "rebalance",
+        "constituents": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "weightBps": 100,
+            "decimals": 8
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "weightBps": 9800,
+            "decimals": 8
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000c3",
+            "weightBps": 100,
+            "decimals": 8
+          }
+        ],
+        "holdings": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "balance": "5000000000",
+            "decimals": 8
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "balance": "4000000000",
+            "decimals": 8
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000c3",
+            "balance": "0",
+            "decimals": 8
+          }
+        ],
+        "prices": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "priceE8": "100000000",
+            "status": "live"
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "priceE8": "100000000",
+            "status": "live"
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000c3",
+            "priceE8": "100000000",
+            "status": "live"
+          }
+        ],
+        "quoteBalance": "0",
+        "depositUsdE8": "0",
+        "exitTokens": [],
+        "reserveBps": 50,
+        "minLegValueUsdE8": "100000000",
+        "blockOnLastClose": false
+      },
+      "expected": {
+        "status": "ready",
+        "warnings": [],
+        "valuation": {
+          "positions": [
+            {
+              "token": "0x00000000000000000000000000000000000000a1",
+              "balance": "5000000000",
+              "decimals": 8,
+              "targetWeightBps": 100,
+              "priceE8": "100000000",
+              "priceStatus": "live",
+              "valueUsdE8": "5000000000",
+              "weightBps": 5556
+            },
+            {
+              "token": "0x00000000000000000000000000000000000000b2",
+              "balance": "4000000000",
+              "decimals": 8,
+              "targetWeightBps": 9800,
+              "priceE8": "100000000",
+              "priceStatus": "live",
+              "valueUsdE8": "4000000000",
+              "weightBps": 4444
+            },
+            {
+              "token": "0x00000000000000000000000000000000000000c3",
+              "balance": "0",
+              "decimals": 8,
+              "targetWeightBps": 100,
+              "priceE8": "100000000",
+              "priceStatus": "live",
+              "valueUsdE8": "0",
+              "weightBps": 0
+            }
+          ],
+          "outsideIndex": [],
+          "investedValueUsdE8": "9000000000",
+          "quoteBalance": "0",
+          "quoteValueUsdE8": "0",
+          "quotePriceE8": "100000000",
+          "deployableValueUsdE8": "9000000000",
+          "cashShareBps": 0,
+          "issues": []
+        },
+        "mode": "rebalance",
+        "reserveBps": 50,
+        "minLegValueUsdE8": "100000000",
+        "deployableValueUsdE8": "9000000000",
+        "availableQuote": "0",
+        "buyBudgetQuote": "47959000",
+        "targets": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "targetWeightBps": 100,
+            "currentValueUsdE8": "5000000000",
+            "targetValueUsdE8": "90000000",
+            "deltaUsdE8": "-4910000000"
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "targetWeightBps": 9800,
+            "currentValueUsdE8": "4000000000",
+            "targetValueUsdE8": "8820000000",
+            "deltaUsdE8": "4820000000"
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000c3",
+            "targetWeightBps": 100,
+            "currentValueUsdE8": "0",
+            "targetValueUsdE8": "90000000",
+            "deltaUsdE8": "90000000"
+          }
+        ],
+        "legs": [
+          {
+            "side": "sell",
+            "token": "0x00000000000000000000000000000000000000a1",
+            "exit": false,
+            "tokenQuantity": "4820000000",
+            "quoteAmount": "48200000",
+            "valueUsdE8": "4820000000",
+            "priceE8": "100000000"
+          },
+          {
+            "side": "buy",
+            "token": "0x00000000000000000000000000000000000000b2",
+            "exit": false,
+            "tokenQuantity": "4795900000",
+            "quoteAmount": "47959000",
+            "valueUsdE8": "4795900000",
+            "priceE8": "100000000"
+          }
+        ],
+        "skipped": [
+          {
+            "side": "buy",
+            "token": "0x00000000000000000000000000000000000000c3",
+            "exit": false,
+            "valueUsdE8": "89550000",
+            "reason": "below_minimum"
+          }
+        ],
+        "currentMaxAbsDriftBps": 5456,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 101,
+        "projected": {
+          "positions": [
+            {
+              "token": "0x00000000000000000000000000000000000000a1",
+              "balance": "180000000",
+              "valueUsdE8": "180000000",
+              "targetWeightBps": 100,
+              "weightBps": 201,
+              "driftBps": 101
+            },
+            {
+              "token": "0x00000000000000000000000000000000000000b2",
+              "balance": "8795900000",
+              "valueUsdE8": "8795900000",
+              "targetWeightBps": 9800,
+              "weightBps": 9799,
+              "driftBps": -1
+            },
+            {
+              "token": "0x00000000000000000000000000000000000000c3",
+              "balance": "0",
+              "valueUsdE8": "0",
+              "targetWeightBps": 100,
+              "weightBps": 0,
+              "driftBps": -100
+            }
+          ],
+          "investedValueUsdE8": "8975900000",
+          "maxAbsDriftBps": 101,
+          "quoteBalance": "241000"
+        }
+      }
+    },
+    {
+      "name": "tie-in-drift-leaves-the-deposit-uninvested",
+      "description": "5,000 USD against 9999/1 and a deposit of 5,000 USD: both candidates end 1 bps off, the one that trades less is returned, and the idle amount is reported.",
+      "input": {
+        "mode": "rebalance",
+        "constituents": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "weightBps": 9999,
+            "decimals": 8
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "weightBps": 1,
+            "decimals": 8
+          }
+        ],
+        "holdings": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "balance": "500000000000",
+            "decimals": 8
+          }
+        ],
+        "prices": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "priceE8": "100000000",
+            "status": "live"
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "priceE8": "100000000",
+            "status": "live"
+          }
+        ],
+        "quoteBalance": "0",
+        "depositUsdE8": "500000000000",
+        "exitTokens": [],
+        "reserveBps": 50,
+        "minLegValueUsdE8": "100000000",
+        "blockOnLastClose": false
+      },
+      "expected": {
+        "status": "ready",
+        "warnings": [
+          {
+            "code": "uninvested_quote",
+            "severity": "warning",
+            "token": null,
+            "uninvestedQuote": "4975000000"
+          }
+        ],
+        "valuation": {
+          "positions": [
+            {
+              "token": "0x00000000000000000000000000000000000000a1",
+              "balance": "500000000000",
+              "decimals": 8,
+              "targetWeightBps": 9999,
+              "priceE8": "100000000",
+              "priceStatus": "live",
+              "valueUsdE8": "500000000000",
+              "weightBps": 10000
+            },
+            {
+              "token": "0x00000000000000000000000000000000000000b2",
+              "balance": "0",
+              "decimals": 8,
+              "targetWeightBps": 1,
+              "priceE8": "100000000",
+              "priceStatus": "live",
+              "valueUsdE8": "0",
+              "weightBps": 0
+            }
+          ],
+          "outsideIndex": [],
+          "investedValueUsdE8": "500000000000",
+          "quoteBalance": "0",
+          "quoteValueUsdE8": "0",
+          "quotePriceE8": "100000000",
+          "deployableValueUsdE8": "500000000000",
+          "cashShareBps": 0,
+          "issues": []
+        },
+        "mode": "rebalance",
+        "reserveBps": 50,
+        "minLegValueUsdE8": "100000000",
+        "deployableValueUsdE8": "1000000000000",
+        "availableQuote": "5000000000",
+        "buyBudgetQuote": "4975000000",
+        "targets": [
+          {
+            "token": "0x00000000000000000000000000000000000000a1",
+            "targetWeightBps": 9999,
+            "currentValueUsdE8": "500000000000",
+            "targetValueUsdE8": "999900000000",
+            "deltaUsdE8": "499900000000"
+          },
+          {
+            "token": "0x00000000000000000000000000000000000000b2",
+            "targetWeightBps": 1,
+            "currentValueUsdE8": "0",
+            "targetValueUsdE8": "100000000",
+            "deltaUsdE8": "100000000"
+          }
+        ],
+        "legs": [],
+        "skipped": [
+          {
+            "side": "buy",
+            "token": "0x00000000000000000000000000000000000000a1",
+            "exit": false,
+            "valueUsdE8": "497400500000",
+            "reason": "above_target_weight"
+          },
+          {
+            "side": "buy",
+            "token": "0x00000000000000000000000000000000000000b2",
+            "exit": false,
+            "valueUsdE8": "99500000",
+            "reason": "below_minimum"
+          }
+        ],
+        "currentMaxAbsDriftBps": 1,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 1,
+        "projected": {
+          "positions": [
+            {
+              "token": "0x00000000000000000000000000000000000000a1",
+              "balance": "500000000000",
+              "valueUsdE8": "500000000000",
+              "targetWeightBps": 9999,
+              "weightBps": 10000,
+              "driftBps": 1
+            },
+            {
+              "token": "0x00000000000000000000000000000000000000b2",
+              "balance": "0",
+              "valueUsdE8": "0",
+              "targetWeightBps": 1,
+              "weightBps": 0,
+              "driftBps": -1
+            }
+          ],
+          "investedValueUsdE8": "500000000000",
+          "maxAbsDriftBps": 1,
+          "quoteBalance": "5000000000"
+        }
+      }
+    },
+    {
+      "name": "both-candidates-raise-drift",
+      "description": "A buy-only plan over ten constituents where a whole-unit token cannot be bought: both candidates end further from target than the wallet is, the smaller increase is returned and reported.",
+      "input": {
+        "mode": "buy_only",
+        "constituents": [
+          {
+            "token": "0x000000000000000000000000000000000000c000",
+            "weightBps": 272,
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c007",
+            "weightBps": 6658,
+            "decimals": 0
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c00e",
+            "weightBps": 399,
+            "decimals": 6
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c015",
+            "weightBps": 591,
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c01c",
+            "weightBps": 456,
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c023",
+            "weightBps": 548,
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c02a",
+            "weightBps": 135,
+            "decimals": 6
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c031",
+            "weightBps": 455,
+            "decimals": 18
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c038",
+            "weightBps": 319,
+            "decimals": 18
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c03f",
+            "weightBps": 167,
+            "decimals": 0
+          }
+        ],
+        "holdings": [
+          {
+            "token": "0x000000000000000000000000000000000000c000",
+            "balance": "61949",
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c007",
+            "balance": "1",
+            "decimals": 0
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c00e",
+            "balance": "3666985240",
+            "decimals": 6
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c015",
+            "balance": "43828308461",
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c023",
+            "balance": "434440",
+            "decimals": 8
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c02a",
+            "balance": "110906",
+            "decimals": 6
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c031",
+            "balance": "4251934903051851750",
+            "decimals": 18
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c038",
+            "balance": "7429420980702",
+            "decimals": 18
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c03f",
+            "balance": "6",
+            "decimals": 0
+          }
+        ],
+        "prices": [
+          {
+            "token": "0x000000000000000000000000000000000000c000",
+            "priceE8": "57272946622",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c007",
+            "priceE8": "50350463",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c00e",
+            "priceE8": "9079",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c015",
+            "priceE8": "48784",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c01c",
+            "priceE8": "51258",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c023",
+            "priceE8": "20382743799",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c02a",
+            "priceE8": "492577270",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c031",
+            "priceE8": "9310544",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c038",
+            "priceE8": "8589102322475",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c03f",
+            "priceE8": "12210194",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c046",
+            "priceE8": "1440229879",
+            "status": "live"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c04d",
+            "priceE8": "825",
+            "status": "live"
+          }
+        ],
+        "quoteBalance": "418225",
+        "depositUsdE8": "0",
+        "exitTokens": ["0x000000000000000000000000000000000000c04d"],
+        "reserveBps": 0,
+        "minLegValueUsdE8": "0",
+        "blockOnLastClose": false
+      },
+      "expected": {
+        "status": "ready",
+        "warnings": [
+          {
+            "code": "projected_drift_increase",
+            "severity": "warning",
+            "token": null,
+            "currentMaxAbsDriftBps": 5564,
+            "projectedMaxAbsDriftBps": 5574
+          },
+          {
+            "code": "uninvested_quote",
+            "severity": "warning",
+            "token": null,
+            "uninvestedQuote": "376832"
+          }
+        ],
+        "valuation": {
+          "positions": [
+            {
+              "token": "0x000000000000000000000000000000000000c000",
+              "balance": "61949",
+              "decimals": 8,
+              "targetWeightBps": 272,
+              "priceE8": "57272946622",
+              "priceStatus": "live",
+              "valueUsdE8": "35480017",
+              "weightBps": 771
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c007",
+              "balance": "1",
+              "decimals": 0,
+              "targetWeightBps": 6658,
+              "priceE8": "50350463",
+              "priceStatus": "live",
+              "valueUsdE8": "50350463",
+              "weightBps": 1094
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c00e",
+              "balance": "3666985240",
+              "decimals": 6,
+              "targetWeightBps": 399,
+              "priceE8": "9079",
+              "priceStatus": "live",
+              "valueUsdE8": "33292558",
+              "weightBps": 723
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c015",
+              "balance": "43828308461",
+              "decimals": 8,
+              "targetWeightBps": 591,
+              "priceE8": "48784",
+              "priceStatus": "live",
+              "valueUsdE8": "21381201",
+              "weightBps": 464
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c01c",
+              "balance": "0",
+              "decimals": 8,
+              "targetWeightBps": 456,
+              "priceE8": "51258",
+              "priceStatus": "live",
+              "valueUsdE8": "0",
+              "weightBps": 0
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c023",
+              "balance": "434440",
+              "decimals": 8,
+              "targetWeightBps": 548,
+              "priceE8": "20382743799",
+              "priceStatus": "live",
+              "valueUsdE8": "88550792",
+              "weightBps": 1924
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c02a",
+              "balance": "110906",
+              "decimals": 6,
+              "targetWeightBps": 135,
+              "priceE8": "492577270",
+              "priceStatus": "live",
+              "valueUsdE8": "54629774",
+              "weightBps": 1187
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c031",
+              "balance": "4251934903051851750",
+              "decimals": 18,
+              "targetWeightBps": 455,
+              "priceE8": "9310544",
+              "priceStatus": "live",
+              "valueUsdE8": "39587826",
+              "weightBps": 860
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c038",
+              "balance": "7429420980702",
+              "decimals": 18,
+              "targetWeightBps": 319,
+              "priceE8": "8589102322475",
+              "priceStatus": "live",
+              "valueUsdE8": "63812056",
+              "weightBps": 1386
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c03f",
+              "balance": "6",
+              "decimals": 0,
+              "targetWeightBps": 167,
+              "priceE8": "12210194",
+              "priceStatus": "live",
+              "valueUsdE8": "73261164",
+              "weightBps": 1591
+            }
+          ],
+          "outsideIndex": [],
+          "investedValueUsdE8": "460345851",
+          "quoteBalance": "418225",
+          "quoteValueUsdE8": "41822500",
+          "quotePriceE8": "100000000",
+          "deployableValueUsdE8": "502168351",
+          "cashShareBps": 832,
+          "issues": []
+        },
+        "mode": "buy_only",
+        "reserveBps": 0,
+        "minLegValueUsdE8": "0",
+        "deployableValueUsdE8": "502168351",
+        "availableQuote": "418225",
+        "buyBudgetQuote": "418225",
+        "targets": [
+          {
+            "token": "0x000000000000000000000000000000000000c000",
+            "targetWeightBps": 272,
+            "currentValueUsdE8": "35480017",
+            "targetValueUsdE8": "13658979",
+            "deltaUsdE8": "-21821038"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c007",
+            "targetWeightBps": 6658,
+            "currentValueUsdE8": "50350463",
+            "targetValueUsdE8": "334343688",
+            "deltaUsdE8": "283993225"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c00e",
+            "targetWeightBps": 399,
+            "currentValueUsdE8": "33292558",
+            "targetValueUsdE8": "20036517",
+            "deltaUsdE8": "-13256041"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c015",
+            "targetWeightBps": 591,
+            "currentValueUsdE8": "21381201",
+            "targetValueUsdE8": "29678149",
+            "deltaUsdE8": "8296948"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c01c",
+            "targetWeightBps": 456,
+            "currentValueUsdE8": "0",
+            "targetValueUsdE8": "22898876",
+            "deltaUsdE8": "22898876"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c023",
+            "targetWeightBps": 548,
+            "currentValueUsdE8": "88550792",
+            "targetValueUsdE8": "27518825",
+            "deltaUsdE8": "-61031967"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c02a",
+            "targetWeightBps": 135,
+            "currentValueUsdE8": "54629774",
+            "targetValueUsdE8": "6779272",
+            "deltaUsdE8": "-47850502"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c031",
+            "targetWeightBps": 455,
+            "currentValueUsdE8": "39587826",
+            "targetValueUsdE8": "22848659",
+            "deltaUsdE8": "-16739167"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c038",
+            "targetWeightBps": 319,
+            "currentValueUsdE8": "63812056",
+            "targetValueUsdE8": "16019170",
+            "deltaUsdE8": "-47792886"
+          },
+          {
+            "token": "0x000000000000000000000000000000000000c03f",
+            "targetWeightBps": 167,
+            "currentValueUsdE8": "73261164",
+            "targetValueUsdE8": "8386211",
+            "deltaUsdE8": "-64874953"
+          }
+        ],
+        "legs": [
+          {
+            "side": "buy",
+            "token": "0x000000000000000000000000000000000000c015",
+            "exit": false,
+            "tokenQuantity": "2256682518",
+            "quoteAmount": "11009",
+            "valueUsdE8": "1100900",
+            "priceE8": "48784"
+          },
+          {
+            "side": "buy",
+            "token": "0x000000000000000000000000000000000000c01c",
+            "exit": false,
+            "tokenQuantity": "5927660072",
+            "quoteAmount": "30384",
+            "valueUsdE8": "3038400",
+            "priceE8": "51258"
+          }
+        ],
+        "skipped": [
+          {
+            "side": "buy",
+            "token": "0x000000000000000000000000000000000000c007",
+            "exit": false,
+            "valueUsdE8": "37683100",
+            "reason": "zero_quantity"
+          }
+        ],
+        "currentMaxAbsDriftBps": 5564,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 5574,
+        "projected": {
+          "positions": [
+            {
+              "token": "0x000000000000000000000000000000000000c000",
+              "balance": "61949",
+              "valueUsdE8": "35480017",
+              "targetWeightBps": 272,
+              "weightBps": 764,
+              "driftBps": 492
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c007",
+              "balance": "1",
+              "valueUsdE8": "50350463",
+              "targetWeightBps": 6658,
+              "weightBps": 1084,
+              "driftBps": -5574
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c00e",
+              "balance": "3666985240",
+              "valueUsdE8": "33292558",
+              "targetWeightBps": 399,
+              "weightBps": 717,
+              "driftBps": 318
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c015",
+              "balance": "46084990979",
+              "valueUsdE8": "22482101",
+              "targetWeightBps": 591,
+              "weightBps": 484,
+              "driftBps": -107
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c01c",
+              "balance": "5927660072",
+              "valueUsdE8": "3038399",
+              "targetWeightBps": 456,
+              "weightBps": 65,
+              "driftBps": -391
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c023",
+              "balance": "434440",
+              "valueUsdE8": "88550792",
+              "targetWeightBps": 548,
+              "weightBps": 1907,
+              "driftBps": 1359
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c02a",
+              "balance": "110906",
+              "valueUsdE8": "54629774",
+              "targetWeightBps": 135,
+              "weightBps": 1176,
+              "driftBps": 1041
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c031",
+              "balance": "4251934903051851750",
+              "valueUsdE8": "39587826",
+              "targetWeightBps": 455,
+              "weightBps": 852,
+              "driftBps": 397
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c038",
+              "balance": "7429420980702",
+              "valueUsdE8": "63812056",
+              "targetWeightBps": 319,
+              "weightBps": 1374,
+              "driftBps": 1055
+            },
+            {
+              "token": "0x000000000000000000000000000000000000c03f",
+              "balance": "6",
+              "valueUsdE8": "73261164",
+              "targetWeightBps": 167,
+              "weightBps": 1577,
+              "driftBps": 1410
+            }
+          ],
+          "investedValueUsdE8": "464485150",
+          "maxAbsDriftBps": 5574,
+          "quoteBalance": "376832"
         }
       }
     },
@@ -5456,6 +6334,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 555,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 12,
         "projected": {
           "positions": [
             {
@@ -5484,14 +6364,14 @@
             }
           ],
           "investedValueUsdE8": "10000000000",
-          "quoteBalance": "500000",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "500000"
         }
       }
     },
     {
       "name": "sell-scaled-to-the-buys",
-      "description": "A buy is skipped and the other is capped, so the sell is reduced to the proceeds the remaining buy spends.",
+      "description": "A buy is below the minimum, so the sell is reduced to the proceeds the remaining buy spends. The cap does not bind.",
       "input": {
         "mode": "rebalance",
         "constituents": [
@@ -5602,7 +6482,7 @@
         "minLegValueUsdE8": "100000000",
         "deployableValueUsdE8": "10000000000",
         "availableQuote": "0",
-        "buyBudgetQuote": "9019607",
+        "buyBudgetQuote": "9500000",
         "targets": [
           {
             "token": "0x00000000000000000000000000000000000000a1",
@@ -5631,18 +6511,18 @@
             "side": "sell",
             "token": "0x00000000000000000000000000000000000000a1",
             "exit": false,
-            "tokenQuantity": "9019607",
-            "quoteAmount": "9019607",
-            "valueUsdE8": "901960700",
+            "tokenQuantity": "9500000",
+            "quoteAmount": "9500000",
+            "valueUsdE8": "950000000",
             "priceE8": "100000000"
           },
           {
             "side": "buy",
             "token": "0x00000000000000000000000000000000000000b2",
             "exit": false,
-            "tokenQuantity": "9019607",
-            "quoteAmount": "9019607",
-            "valueUsdE8": "901960700",
+            "tokenQuantity": "9500000",
+            "quoteAmount": "9500000",
+            "valueUsdE8": "950000000",
             "priceE8": "100000000"
           }
         ],
@@ -5656,23 +6536,25 @@
           }
         ],
         "currentMaxAbsDriftBps": 1000,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 50,
         "projected": {
           "positions": [
             {
               "token": "0x00000000000000000000000000000000000000a1",
-              "balance": "50980393",
-              "valueUsdE8": "5098039300",
+              "balance": "50500000",
+              "valueUsdE8": "5050000000",
               "targetWeightBps": 5000,
-              "weightBps": 5098,
-              "driftBps": 98
+              "weightBps": 5050,
+              "driftBps": 50
             },
             {
               "token": "0x00000000000000000000000000000000000000b2",
-              "balance": "48519607",
-              "valueUsdE8": "4851960700",
+              "balance": "49000000",
+              "valueUsdE8": "4900000000",
               "targetWeightBps": 4900,
-              "weightBps": 4852,
-              "driftBps": -48
+              "weightBps": 4900,
+              "driftBps": 0
             },
             {
               "token": "0x00000000000000000000000000000000000000c3",
@@ -5684,14 +6566,14 @@
             }
           ],
           "investedValueUsdE8": "10000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 98
+          "maxAbsDriftBps": 50,
+          "quoteBalance": "0"
         }
       }
     },
     {
       "name": "sell-raised-to-the-minimum",
-      "description": "A scaled sell would be 7.00 USD under a minimum of 9.00 USD: it is raised to the minimum.",
+      "description": "A scaled sell of 8.30 USD is raised to the minimum of 9.00 USD. Of the two candidates the uncapped one has the lower projected drift (135 against 155 bps).",
       "input": {
         "mode": "rebalance",
         "constituents": [
@@ -5872,9 +6754,9 @@
             "side": "buy",
             "token": "0x00000000000000000000000000000000000000b2",
             "exit": false,
-            "tokenQuantity": "26500000",
-            "quoteAmount": "26500000",
-            "valueUsdE8": "2650000000",
+            "tokenQuantity": "27800000",
+            "quoteAmount": "27800000",
+            "valueUsdE8": "2780000000",
             "priceE8": "100000000"
           }
         ],
@@ -5895,6 +6777,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 2000,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": 155,
         "projected": {
           "positions": [
             {
@@ -5902,37 +6786,37 @@
               "balance": "61000000",
               "valueUsdE8": "6100000000",
               "targetWeightBps": 5000,
-              "weightBps": 5191,
-              "driftBps": 191
+              "weightBps": 5135,
+              "driftBps": 135
             },
             {
               "token": "0x00000000000000000000000000000000000000b2",
-              "balance": "46500000",
-              "valueUsdE8": "4650000000",
+              "balance": "47800000",
+              "valueUsdE8": "4780000000",
               "targetWeightBps": 4000,
-              "weightBps": 3957,
-              "driftBps": -43
+              "weightBps": 4023,
+              "driftBps": 23
             },
             {
               "token": "0x00000000000000000000000000000000000000c3",
               "balance": "5000000",
               "valueUsdE8": "500000000",
               "targetWeightBps": 500,
-              "weightBps": 426,
-              "driftBps": -74
+              "weightBps": 421,
+              "driftBps": -79
             },
             {
               "token": "0x00000000000000000000000000000000000000d4",
               "balance": "5000000",
               "valueUsdE8": "500000000",
               "targetWeightBps": 500,
-              "weightBps": 426,
-              "driftBps": -74
+              "weightBps": 421,
+              "driftBps": -79
             }
           ],
-          "investedValueUsdE8": "11750000000",
-          "quoteBalance": "2000000",
-          "maxAbsDriftBps": 191
+          "investedValueUsdE8": "11880000000",
+          "maxAbsDriftBps": 135,
+          "quoteBalance": "700000"
         }
       }
     },
@@ -6016,7 +6900,13 @@
       },
       "expected": {
         "status": "ready",
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "nothing_to_do",
+            "severity": "warning",
+            "token": null
+          }
+        ],
         "valuation": {
           "positions": [
             {
@@ -6137,6 +7027,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 600,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 600,
         "projected": {
           "positions": [
             {
@@ -6173,8 +7065,8 @@
             }
           ],
           "investedValueUsdE8": "10000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 600
+          "maxAbsDriftBps": 600,
+          "quoteBalance": "0"
         }
       }
     },
@@ -6207,7 +7099,14 @@
       },
       "expected": {
         "status": "ready",
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "uninvested_quote",
+            "severity": "warning",
+            "token": null,
+            "uninvestedQuote": "749000000"
+          }
+        ],
         "valuation": {
           "positions": [
             {
@@ -6258,6 +7157,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": null,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -6270,8 +7171,8 @@
             }
           ],
           "investedValueUsdE8": "125000000000",
-          "quoteBalance": "749000000",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "749000000"
         }
       }
     },
@@ -6321,6 +7222,12 @@
             "token": null,
             "currentMaxAbsDriftBps": null,
             "projectedMaxAbsDriftBps": 1000
+          },
+          {
+            "code": "uninvested_quote",
+            "severity": "warning",
+            "token": null,
+            "uninvestedQuote": "1"
           }
         ],
         "valuation": {
@@ -6399,6 +7306,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": null,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -6419,8 +7328,8 @@
             }
           ],
           "investedValueUsdE8": "200",
-          "quoteBalance": "1",
-          "maxAbsDriftBps": 1000
+          "maxAbsDriftBps": 1000,
+          "quoteBalance": "1"
         }
       }
     },
@@ -6469,7 +7378,13 @@
       },
       "expected": {
         "status": "ready",
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "nothing_to_do",
+            "severity": "warning",
+            "token": null
+          }
+        ],
         "valuation": {
           "positions": [
             {
@@ -6527,6 +7442,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 0,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -6539,8 +7456,8 @@
             }
           ],
           "investedValueUsdE8": "1000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 0
+          "maxAbsDriftBps": 0,
+          "quoteBalance": "0"
         }
       }
     },
@@ -6753,6 +7670,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 599,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -6789,8 +7708,8 @@
             }
           ],
           "investedValueUsdE8": "999730658646275",
-          "quoteBalance": "2997913537",
-          "maxAbsDriftBps": 1
+          "maxAbsDriftBps": 1,
+          "quoteBalance": "2997913537"
         }
       }
     },
@@ -6912,6 +7831,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 1000,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -6932,8 +7853,8 @@
             }
           ],
           "investedValueUsdE8": "11000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 455
+          "maxAbsDriftBps": 455,
+          "quoteBalance": "0"
         }
       }
     },
@@ -7105,6 +8026,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 4000,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -7125,8 +8048,8 @@
             }
           ],
           "investedValueUsdE8": "6969999800",
-          "quoteBalance": "300002",
-          "maxAbsDriftBps": 3
+          "maxAbsDriftBps": 3,
+          "quoteBalance": "300002"
         }
       }
     },
@@ -7180,7 +8103,13 @@
       },
       "expected": {
         "status": "ready",
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "nothing_to_do",
+            "severity": "warning",
+            "token": null
+          }
+        ],
         "valuation": {
           "positions": [
             {
@@ -7253,6 +8182,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 200,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 200,
         "projected": {
           "positions": [
             {
@@ -7273,14 +8204,14 @@
             }
           ],
           "investedValueUsdE8": "10000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 200
+          "maxAbsDriftBps": 200,
+          "quoteBalance": "0"
         }
       }
     },
     {
       "name": "minimum-leg-cascade",
-      "description": "One buy is below the minimum. Capped at its target weight the other buy falls below it too, and the sell then has nothing to fund.",
+      "description": "45/28/27 USD against 40/30/30 with a minimum of 3.00 USD: the buy of 2.00 USD is skipped, and the sell is reduced to the 3.00 USD the other buy spends.",
       "input": {
         "mode": "rebalance",
         "constituents": [
@@ -7391,7 +8322,7 @@
         "minLegValueUsdE8": "300000000",
         "deployableValueUsdE8": "10000000000",
         "availableQuote": "0",
-        "buyBudgetQuote": "0",
+        "buyBudgetQuote": "3000000",
         "targets": [
           {
             "token": "0x00000000000000000000000000000000000000a1",
@@ -7415,40 +8346,47 @@
             "deltaUsdE8": "300000000"
           }
         ],
-        "legs": [],
-        "skipped": [
+        "legs": [
           {
             "side": "sell",
             "token": "0x00000000000000000000000000000000000000a1",
             "exit": false,
-            "valueUsdE8": "500000000",
-            "reason": "not_needed"
+            "tokenQuantity": "3000000",
+            "quoteAmount": "3000000",
+            "valueUsdE8": "300000000",
+            "priceE8": "100000000"
           },
+          {
+            "side": "buy",
+            "token": "0x00000000000000000000000000000000000000c3",
+            "exit": false,
+            "tokenQuantity": "3000000",
+            "quoteAmount": "3000000",
+            "valueUsdE8": "300000000",
+            "priceE8": "100000000"
+          }
+        ],
+        "skipped": [
           {
             "side": "buy",
             "token": "0x00000000000000000000000000000000000000b2",
             "exit": false,
             "valueUsdE8": "200000000",
             "reason": "below_minimum"
-          },
-          {
-            "side": "buy",
-            "token": "0x00000000000000000000000000000000000000c3",
-            "exit": false,
-            "valueUsdE8": "300000000",
-            "reason": "above_target_weight"
           }
         ],
         "currentMaxAbsDriftBps": 500,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 200,
         "projected": {
           "positions": [
             {
               "token": "0x00000000000000000000000000000000000000a1",
-              "balance": "45000000",
-              "valueUsdE8": "4500000000",
+              "balance": "42000000",
+              "valueUsdE8": "4200000000",
               "targetWeightBps": 4000,
-              "weightBps": 4500,
-              "driftBps": 500
+              "weightBps": 4200,
+              "driftBps": 200
             },
             {
               "token": "0x00000000000000000000000000000000000000b2",
@@ -7460,16 +8398,16 @@
             },
             {
               "token": "0x00000000000000000000000000000000000000c3",
-              "balance": "27000000",
-              "valueUsdE8": "2700000000",
+              "balance": "30000000",
+              "valueUsdE8": "3000000000",
               "targetWeightBps": 3000,
-              "weightBps": 2700,
-              "driftBps": -300
+              "weightBps": 3000,
+              "driftBps": 0
             }
           ],
           "investedValueUsdE8": "10000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 500
+          "maxAbsDriftBps": 200,
+          "quoteBalance": "0"
         }
       }
     },
@@ -7518,7 +8456,13 @@
       },
       "expected": {
         "status": "ready",
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "nothing_to_do",
+            "severity": "warning",
+            "token": null
+          }
+        ],
         "valuation": {
           "positions": [
             {
@@ -7591,6 +8535,8 @@
           }
         ],
         "currentMaxAbsDriftBps": 5000,
+        "candidate": "capped",
+        "otherCandidateMaxAbsDriftBps": 5000,
         "projected": {
           "positions": [
             {
@@ -7611,8 +8557,8 @@
             }
           ],
           "investedValueUsdE8": "100000000000",
-          "quoteBalance": "0",
-          "maxAbsDriftBps": 5000
+          "maxAbsDriftBps": 5000,
+          "quoteBalance": "0"
         }
       }
     },
@@ -7765,6 +8711,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 1000,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -7785,8 +8733,8 @@
             }
           ],
           "investedValueUsdE8": "9995000000",
-          "quoteBalance": "50000",
-          "maxAbsDriftBps": 3
+          "maxAbsDriftBps": 3,
+          "quoteBalance": "50000"
         }
       }
     },
@@ -8666,6 +9614,12 @@
             "token": null,
             "currentMaxAbsDriftBps": 200,
             "projectedMaxAbsDriftBps": 367
+          },
+          {
+            "code": "uninvested_quote",
+            "severity": "warning",
+            "token": null,
+            "uninvestedQuote": "3"
           }
         ],
         "valuation": {
@@ -8933,6 +9887,8 @@
         ],
         "skipped": [],
         "currentMaxAbsDriftBps": 200,
+        "candidate": "uncapped",
+        "otherCandidateMaxAbsDriftBps": null,
         "projected": {
           "positions": [
             {
@@ -9025,8 +9981,8 @@
             }
           ],
           "investedValueUsdE8": "999999999700",
-          "quoteBalance": "3",
-          "maxAbsDriftBps": 367
+          "maxAbsDriftBps": 367,
+          "quoteBalance": "3"
         }
       }
     }

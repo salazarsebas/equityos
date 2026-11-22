@@ -46,9 +46,9 @@ function parseInput(raw: VectorInput): RebalancePlanInput {
 describe("published vectors: rebalance plans", () => {
   const { vectors } = planVectors;
 
-  test("they are for this calculation, at least 30, with unique names", () => {
+  test("they are for this calculation, at least 35, with unique names", () => {
     expect<string>(planVectors.calc).toBe(CALC_ID);
-    expect(vectors.length).toBeGreaterThanOrEqual(30);
+    expect(vectors.length).toBeGreaterThanOrEqual(35);
     expect(new Set(vectors.map(({ name }) => name)).size).toBe(vectors.length);
   });
 
@@ -68,7 +68,25 @@ describe("published vectors: rebalance plans", () => {
       "zero_price",
     ]);
     const warnings = new Set(ready.flatMap((result) => result.warnings.map(({ code }) => code)));
-    expect([...warnings].sort()).toEqual(["market_closed", "price_delayed", "projected_drift_increase"]);
+    expect([...warnings].sort()).toEqual([
+      "market_closed",
+      "nothing_to_do",
+      "price_delayed",
+      "projected_drift_increase",
+      "uninvested_quote",
+    ]);
+    expect(new Set(ready.map((result) => result.candidate))).toEqual(new Set(["uncapped", "capped"]));
+    // One vector for each outcome of two candidates: the capped one closer, the uncapped one closer, a tie.
+    const two = ready.filter((result) => typeof result.otherCandidateMaxAbsDriftBps === "number");
+    const closer = (candidate: string) =>
+      two.some(
+        (result) =>
+          result.candidate === candidate &&
+          (result.projected?.maxAbsDriftBps ?? 0) < (result.otherCandidateMaxAbsDriftBps ?? 0),
+      );
+    expect(closer("capped")).toBe(true);
+    expect(closer("uncapped")).toBe(true);
+    expect(two.some((result) => result.projected?.maxAbsDriftBps === result.otherCandidateMaxAbsDriftBps)).toBe(true);
     const reasons = new Set(ready.flatMap((result) => (result.skipped ?? []).map(({ reason }) => reason)));
     expect([...reasons].sort()).toEqual(["above_target_weight", "below_minimum", "not_needed", "zero_quantity"]);
     expect(ready.some((result) => result.legs?.some(({ exit }) => exit))).toBe(true);
