@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const routes = ["/", "/assets", "/assets?view=all", "/dev/components"];
+const routes = ["/", "/assets", "/assets?view=all", "/wallet", "/dev/components"];
 
 /** Collects console errors and uncaught exceptions for the lifetime of the page. */
 function collectErrors(page: Page): string[] {
