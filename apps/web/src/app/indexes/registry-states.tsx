@@ -18,12 +18,10 @@ export function RegistryNotDeployedState({ chainId, registry, reason }: Registry
     <EmptyState
       title={`The index registry is not deployed on ${chain} yet`}
       action={
-        <>
+        <span className="flex flex-wrap gap-x-6 gap-y-1">
           <Link href={METHODOLOGY_DOCUMENT}>Read the methodology specification</Link>
-          <Link href="/assets" className="ml-4">
-            Browse the asset universe
-          </Link>
-        </>
+          <Link href="/assets">Browse the asset universe</Link>
+        </span>
       }
     >
       <p>
