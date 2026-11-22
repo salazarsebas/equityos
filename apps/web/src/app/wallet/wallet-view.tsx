@@ -24,6 +24,7 @@ import { useTokenBalances, useWalletCapabilities } from "@/components/wallet/hoo
 import { WalletRuntime } from "@/components/wallet/runtime";
 import { formatCount, formatPrice, formatTokenQuantity, formatUsd, formatUtcDateTime, MISSING } from "@/lib/format";
 import {
+  isUsdc,
   summarizeBalances,
   type TokenRef,
   USD_E8_DECIMALS,
@@ -98,7 +99,10 @@ function BalanceRow({ row, muted = false }: { row: ValuedBalance<Tracked>; muted
         {token.name}
       </TableCell>
       <TableCell numeric>{balance === null ? <Missing /> : formatTokenQuantity(balance, token.decimals)}</TableCell>
-      <TableCell numeric>{priceE8 === null ? <Missing /> : formatPrice(priceE8, USD_E8_DECIMALS)}</TableCell>
+      <TableCell numeric>
+        {isUsdc(token) ? <span className="mr-2 text-xs text-secondary">assumed</span> : null}
+        {priceE8 === null ? <Missing /> : formatPrice(priceE8, USD_E8_DECIMALS)}
+      </TableCell>
       <TableCell numeric>{valueE8 === null ? <Missing /> : formatUsd(valueE8, USD_E8_DECIMALS)}</TableCell>
     </TableRow>
   );
@@ -177,9 +181,8 @@ function Balances({ account, assets, marketClosed, delayed }: BalancesProps) {
             <TableRow>
               <TableRowHeader>Total</TableRowHeader>
               <TableCell colSpan={3} className="font-normal text-secondary">
-                {unvalued > 0
-                  ? `Valued balances only: ${formatCount(BigInt(unvalued))} without a reference price left out`
-                  : null}
+                USDC at an assumed 1.00 USD, the rest at reference prices
+                {unvalued > 0 ? `. ${formatCount(BigInt(unvalued))} without a value left out` : null}
               </TableCell>
               <TableCell numeric>{formatUsd(totalE8, USD_E8_DECIMALS)}</TableCell>
             </TableRow>
@@ -198,8 +201,8 @@ function Balances({ account, assets, marketClosed, delayed }: BalancesProps) {
       </div>
       <p className="max-w-measure text-xs text-secondary">
         Reference price, not executable. A value is the balance at the reference price, rounded down: it is not what a
-        trade would return. USDC has no reference feed here, so it is listed as a quantity only. Balances read from Base
-        mainnet at <span className="num">{readAt}</span>.
+        trade would return. USDC is valued at an assumed 1.00 USD per unit, not at a reference feed price. Balances read
+        from Base mainnet at <span className="num">{readAt}</span>.
       </p>
     </>
   );

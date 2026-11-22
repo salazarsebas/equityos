@@ -70,19 +70,41 @@ test("without a wallet in the browser the dialog still offers Base Account", asy
   ]);
 });
 
-test("a click made before the wallet code has loaded opens the dialog once it has", async ({ page }) => {
-  // The chunks that are not in the first HTML are the wallet code. They are held back for a second.
+/** Holds back the chunks that are not in the first HTML, which are the wallet code, for a second. */
+async function delayWalletCode(page: Page) {
   const html = await (await page.request.get("/")).text();
   await page.route("**/_next/static/chunks/*.js", async (route) => {
     const name = route.request().url().split("/").pop() ?? "";
     if (!html.includes(name)) await new Promise((resolve) => setTimeout(resolve, 1000));
     await route.continue();
   });
-  await page.goto("/", { waitUntil: "load" });
-  const dialog = page.getByRole("dialog", { name: "Connect a wallet" });
-  await connectButton(page).click();
-  await expect(dialog).toBeHidden();
-  await expect(dialog).toBeVisible();
+}
+
+test("a connected visitor never sees a disconnected control, and nothing moves when it resolves", async ({ page }) => {
+  await installMockWallet(page, { chainId: 8453 });
+  await page.goto("/");
+  await connect(page);
+
+  // Records every text the account control shows from the first paint of the next load.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    Object.assign(window, { accountTexts: seen });
+    new MutationObserver(() => {
+      const text = document.querySelector("header button:not([aria-label='Switch color theme'])")?.textContent;
+      if (text && seen.at(-1) !== text) seen.push(text);
+    }).observe(document, { childList: true, subtree: true, characterData: true });
+  });
+  await delayWalletCode(page);
+  await page.reload();
+
+  const toggle = page.getByRole("button", { name: "Switch color theme" });
+  const before = await toggle.boundingBox();
+  await expect(accountButton(page)).toHaveCount(0);
+  await expect(accountButton(page)).toContainText(SHORT_ACCOUNT);
+  expect(await toggle.boundingBox()).toEqual(before);
+  expect(await page.evaluate(() => (window as unknown as { accountTexts: string[] }).accountTexts)).toEqual([
+    SHORT_ACCOUNT,
+  ]);
 });
 
 test("connect, wrong network, switch to Base, reload and disconnect", async ({ page, baseURL }) => {
@@ -113,17 +135,15 @@ test("connect, wrong network, switch to Base, reload and disconnect", async ({ p
   await expect(menu).toBeHidden();
   await expect(accountButton(page)).toBeFocused();
 
-  // The server renders the account from the cookie: the first HTML is already connected.
-  const html = await (await page.request.get("/")).text();
-  expect(html).toContain(SHORT_ACCOUNT);
-  expect(html).not.toContain("Connect wallet");
+  // The connection survives a reload.
   await page.reload();
   await expect(accountButton(page)).toContainText(SHORT_ACCOUNT);
 
   await accountButton(page).click();
   await accountMenu(page).getByRole("button", { name: "Disconnect" }).click();
   await expect(connectButton(page)).toBeFocused();
-  expect(await (await page.request.get("/")).text()).toContain("Connect wallet");
+  await page.reload();
+  await expect(connectButton(page)).toBeVisible();
   expect(errors).toEqual([]);
   expect(external).toEqual([]);
 });
@@ -172,14 +192,20 @@ test.describe("wallet page", () => {
     await expect(table.getByText("Market closed")).toBeVisible();
     // Header, three held balances and the total. Zero balances are collapsed.
     await expect(table.getByRole("row")).toHaveCount(5);
-    await expect(table.getByRole("row", { name: /USDC/ })).toContainText("1,250.5");
+    // USDC is valued at an assumed 1.00 USD per unit, and the row says so.
+    const usdc = table.getByRole("row", { name: /^USDC/ });
+    await expect(usdc).toContainText("assumed1.00");
+    await expect(usdc).toContainText("1,250.50");
     const nvda = table.getByRole("row", { name: /NVDAc/ });
     await expect(nvda).toContainText("4.125");
     await expect(nvda).toContainText("129.82");
     await expect(nvda).toContainText("535.53");
     await expect(table.getByRole("row", { name: /AAPLc/ })).toContainText("517.95");
-    // 535.5273014 + 517.94654527 is 1,053.47384667. USDC has no reference price and is left out.
-    await expect(table.getByRole("row", { name: /^Total/ })).toContainText("1,053.47");
+    // 1,250.5 + 535.5273014 + 517.94654527 is 2,303.97384667.
+    const total = table.getByRole("row", { name: /^Total/ });
+    await expect(total).toContainText("USDC at an assumed 1.00 USD, the rest at reference prices");
+    await expect(total).toContainText("2,303.97");
+    await expect(page.getByRole("main")).toContainText("not at a reference feed price");
     await expect(page.getByRole("main")).toContainText("Reference price, not executable.");
 
     const toggle = page.getByRole("button", { name: "Show 11 zero balances" });

@@ -1,4 +1,4 @@
-import { mulDivDown } from "@equityos/core";
+import { positionValueUsdE8, USD_E8 } from "@equityos/core";
 import type { Address } from "viem";
 
 /** A token whose balance is read: its address on Base mainnet and its decimals. */
@@ -42,8 +42,7 @@ export type BalanceRead = { readonly status: "success"; readonly result: unknown
 
 /** USDC first, then the given tokens in their order, without a second entry for USDC. */
 export function withUsdc<token extends TokenRef>(tokens: readonly token[]): (token | typeof USDC)[] {
-  const usdc = USDC.address.toLowerCase();
-  return [USDC, ...tokens.filter(({ address }) => address.toLowerCase() !== usdc)];
+  return [USDC, ...tokens.filter((token) => !isUsdc(token))];
 }
 
 /** Pairs each token with its multicall result. A failed, missing or non-integer result is `null`. */
@@ -62,20 +61,18 @@ export function toTokenBalances<token extends TokenRef>(
 export const USD_E8_DECIMALS = 8;
 
 /**
- * Value of a balance at a reference price, in USD scaled by 1e8. Rounded down, so a shown value never exceeds
- * the exact one. It is an indication of value, not what a trade would return.
- *
- * @param balance token base units
- * @param decimals decimals of the token
- * @param priceE8 USD per whole token, scaled by 1e8
+ * The price USDC is valued at: exactly 1 USD per unit. It is an assumption of parity, stated wherever it is
+ * used, and not a reference feed price.
  */
-export function referenceValueE8(balance: bigint, decimals: number, priceE8: bigint): bigint {
-  return mulDivDown(balance, priceE8, 10n ** BigInt(decimals));
+export const USDC_ASSUMED_PRICE_E8 = USD_E8;
+
+export function isUsdc({ address }: TokenRef): boolean {
+  return address.toLowerCase() === USDC.address.toLowerCase();
 }
 
-/** A row of the balances table: a balance and, when both exist, its reference price and value. */
+/** A row of the balances table: a balance and, when both exist, the price it is valued at and its value. */
 export interface ValuedBalance<token extends TokenRef = TokenRef> extends TokenBalance<token> {
-  /** USD per whole token, scaled by 1e8. `null` when the token has no usable reference price. */
+  /** USD per whole token, scaled by 1e8: the assumed parity for USDC, else the reference price or `null`. */
   readonly priceE8: bigint | null;
   /** `null` when the balance or the price is missing. Never defaulted to zero. */
   readonly valueE8: bigint | null;
@@ -88,22 +85,24 @@ export interface BalanceSummary<token extends TokenRef = TokenRef> {
   readonly empty: readonly ValuedBalance<token>[];
   /** Sum of the values that exist, USD scaled by 1e8. `null` when no held balance has a value. */
   readonly totalE8: bigint | null;
-  /** Number of held balances left out of the total because they have no value. */
+  /** Number of held balances left out of the total: unread, or without a reference price. */
   readonly unvalued: number;
 }
 
 /**
- * Values each balance and splits the rows into held and empty.
+ * Values each balance and splits the rows into held and empty. USDC is valued at the assumed parity and every
+ * other token at its reference price. Values are rounded down, so a shown value never exceeds the exact one.
  *
- * @param priceE8Of the usable reference price of a token, or `null` when it has none
+ * @param referencePriceE8Of the usable reference price of a token, or `null` when it has none
  */
 export function summarizeBalances<token extends TokenRef>(
   balances: readonly TokenBalance<token>[],
-  priceE8Of: (token: token) => bigint | null,
+  referencePriceE8Of: (token: token) => bigint | null,
 ): BalanceSummary<token> {
   const rows = balances.map(({ token, balance }): ValuedBalance<token> => {
-    const priceE8 = priceE8Of(token);
-    const valueE8 = balance === null || priceE8 === null ? null : referenceValueE8(balance, token.decimals, priceE8);
+    const priceE8 = isUsdc(token) ? USDC_ASSUMED_PRICE_E8 : referencePriceE8Of(token);
+    const valueE8 =
+      balance === null || priceE8 === null ? null : positionValueUsdE8(balance, priceE8, token.decimals, "down");
     return { token, balance, priceE8, valueE8 };
   });
   const held = rows.filter(({ balance }) => balance !== 0n);

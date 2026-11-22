@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   type BalanceRead,
-  referenceValueE8,
+  isUsdc,
   summarizeBalances,
   type TokenRef,
   toTokenBalances,
@@ -40,32 +40,38 @@ describe("toTokenBalances", () => {
   });
 });
 
-describe("referenceValueE8", () => {
-  test("multiplies base units by the price and rounds down", () => {
-    // 4.125 tokens at 129.82480034 USD is 535.5273014025 USD: the ninth decimal is dropped.
-    expect(referenceValueE8(412_500_000n, 8, 12_982_480_034n)).toBe(53_552_730_140n);
-    expect(referenceValueE8(1n, 8, 12_982_480_034n)).toBe(129n);
-    expect(referenceValueE8(1n, 18, 99_999_999n)).toBe(0n);
-    expect(referenceValueE8(0n, 8, 12_982_480_034n)).toBe(0n);
-  });
-
-  test("handles tokens with other decimals", () => {
-    expect(referenceValueE8(1_500_000n, 6, 100_000_000n)).toBe(150_000_000n);
-    expect(referenceValueE8(2n * 10n ** 18n, 18, 250_000_000n)).toBe(500_000_000n);
-  });
-});
-
 describe("summarizeBalances", () => {
   const balances = toTokenBalances(withUsdc([NVDA, AAPL]), [ok(1_250_500_000n), ok(412_500_000n), ok(0n)]);
 
-  test("splits held from empty and totals the values that exist", () => {
+  test("values USDC at the assumed parity and the rest at reference prices, rounded down", () => {
     const summary = summarizeBalances(balances, priceOf);
     expect(summary.held.map(({ token }) => token.symbol)).toEqual(["USDC", "NVDAc"]);
     expect(summary.empty.map(({ token }) => token.symbol)).toEqual(["AAPLc"]);
-    expect(summary.totalE8).toBe(53_552_730_140n);
-    expect(summary.unvalued).toBe(1);
-    expect(summary.held[0]).toMatchObject({ priceE8: null, valueE8: null });
+    // 1,250.5 USDC at 1.00 USD.
+    expect(summary.held[0]).toMatchObject({ priceE8: 100_000_000n, valueE8: 125_050_000_000n });
+    // 4.125 tokens at 129.82480034 USD is 535.5273014025 USD: the ninth decimal is dropped.
+    expect(summary.held[1]).toMatchObject({ priceE8: 12_982_480_034n, valueE8: 53_552_730_140n });
+    expect(summary.totalE8).toBe(178_602_730_140n);
+    expect(summary.unvalued).toBe(0);
     expect(summary.empty[0]).toMatchObject({ valueE8: 0n });
+  });
+
+  test("the parity applies to USDC only and never comes from the price lookup", () => {
+    const lower = { ...USDC, address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" } as const;
+    expect(isUsdc(lower)).toBe(true);
+    expect(isUsdc(NVDA)).toBe(false);
+    const summary = summarizeBalances(toTokenBalances([USDC, NVDA], [ok(1n), ok(1n)]), () => null);
+    expect(summary.held.map(({ valueE8 }) => valueE8)).toEqual([100n, null]);
+    expect(summary.totalE8).toBe(100n);
+    expect(summary.unvalued).toBe(1);
+  });
+
+  test("rounds a value down to the eighth decimal", () => {
+    const value = (balance: bigint, token: TokenRef, price: bigint) =>
+      summarizeBalances(toTokenBalances([token], [ok(balance)]), () => price).held[0]?.valueE8;
+    expect(value(1n, NVDA, 12_982_480_034n)).toBe(129n);
+    expect(value(1n, { ...NVDA, decimals: 18 }, 99_999_999n)).toBe(0n);
+    expect(value(2n * 10n ** 18n, { ...NVDA, decimals: 18 }, 250_000_000n)).toBe(500_000_000n);
   });
 
   test("a balance that could not be read stays visible and has no value", () => {
