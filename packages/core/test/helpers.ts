@@ -1,4 +1,4 @@
-import type { Address } from "../src/index.ts";
+import type { Address, ReferencePrice, StalenessStatus } from "../src/index.ts";
 
 /** Deterministic 32-bit generator (mulberry32), so that randomized tests reproduce exactly. */
 export function createRandom(seed: number): (bound: number) => number {
@@ -42,4 +42,16 @@ export function baseSpec(count: number): Record<string, unknown> {
     pricing: { source: "chainlink-aggregator-v3", feeds: range(count).map((i) => address(0xfeed00 + i)) },
     rebalance: { trigger: "drift", driftThresholdBps: 500, minIntervalSeconds: 604_800 },
   };
+}
+
+/** A reference price entry, `live` unless stated. */
+export function price(token: Address, priceE8: bigint, status: StalenessStatus = "live"): ReferencePrice {
+  return { token, priceE8, status };
+}
+
+/** Serializes a calculation result for comparison with a published vector: every bigint as a decimal string. */
+export function toVectorJson(value: unknown): unknown {
+  return JSON.parse(
+    JSON.stringify(value, (_key, item: unknown) => (typeof item === "bigint" ? item.toString() : item)),
+  );
 }
