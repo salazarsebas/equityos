@@ -188,8 +188,15 @@ describe("planRebalance over random portfolios", () => {
     expect(count(({ input }) => input.mode === "buy_only")).toBeGreaterThan(800);
     expect(skips("below_minimum")).toBeGreaterThan(500);
     expect(skips("zero_quantity")).toBeGreaterThan(500);
-    expect(skips("above_target_weight")).toBeGreaterThan(200);
-    expect(skips("not_needed")).toBeGreaterThan(100);
+    expect(skips("above_target_weight")).toBeGreaterThan(100);
+    expect(count(({ plan }) => plan.candidate === "capped")).toBeGreaterThan(500);
+    expect(
+      count(({ plan }) => plan.candidate === "uncapped" && plan.otherCandidateMaxAbsDriftBps !== null),
+    ).toBeGreaterThan(20);
+    expect(count(({ plan }) => plan.legs.length === 0)).toBeGreaterThan(300);
+    expect(count(({ plan }) => plan.warnings.some(({ code }) => code === "uninvested_quote"))).toBeGreaterThan(300);
+    expect(count(({ plan }) => plan.warnings.some(({ code }) => code === "nothing_to_do"))).toBeGreaterThan(50);
+    expect(skips("not_needed")).toBeGreaterThan(50);
     expect(count(({ plan }) => plan.legs.some(({ exit }) => exit))).toBeGreaterThan(400);
     expect(count(({ plan }) => legsOf(plan, "sell").length > 0)).toBeGreaterThan(1_000);
     expect(count(({ plan }) => legsOf(plan, "buy").length > 0)).toBeGreaterThan(1_500);
@@ -330,11 +337,11 @@ describe("planRebalance over random portfolios", () => {
     }
   });
 
-  test("when a buy is skipped, no bought constituent ends above its target weight", () => {
+  test("when the capped candidate is chosen, no bought constituent ends above its target weight", () => {
     let checked = 0;
     for (const item of cases) {
       const { plan } = item;
-      if (!plan.skipped.some(({ side }) => side === "buy")) continue;
+      if (plan.candidate !== "capped") continue;
       const invested = plan.projected.investedValueUsdE8;
       const slack = roundingValue(item);
       for (const { token } of legsOf(plan, "buy")) {
@@ -373,6 +380,8 @@ describe("planRebalance over random portfolios", () => {
   test("a sale never only adds to the quote balance: sells raise what the buys spend, and no more", () => {
     for (const item of cases) {
       const { plan } = item;
+      // The sells are sized for the uncapped buys. A capped candidate spends less, which the drift decides on.
+      if (plan.candidate === "capped") continue;
       const sells = legsOf(plan, "sell").filter(({ exit }) => !exit);
       const exitProceeds = sum(plan.legs.filter(({ exit }) => exit).map(({ quoteAmount }) => quoteAmount));
       const spent = sum(legsOf(plan, "buy").map(({ quoteAmount }) => quoteAmount));
@@ -383,6 +392,47 @@ describe("planRebalance over random portfolios", () => {
       expect(sum(sells.map(({ quoteAmount }) => quoteAmount))).toBeLessThanOrEqual(
         (needed > 0n ? needed : 0n) + allowance,
       );
+    }
+  });
+
+  test("the plan returned is never further from target than the other candidate, and there are two only after a skipped buy", () => {
+    for (const { plan } of cases) {
+      const other = plan.otherCandidateMaxAbsDriftBps;
+      const skippedBuy = plan.skipped.some(({ side, reason }) => side === "buy" && reason !== "above_target_weight");
+      if (!skippedBuy) {
+        expect(plan.candidate).toBe("uncapped");
+        expect(other).toBeNull();
+        expect(plan.skipped.some(({ reason }) => reason === "above_target_weight")).toBe(false);
+        continue;
+      }
+      const projected = plan.projected.maxAbsDriftBps;
+      if (projected === null || other === null) {
+        // Nothing is invested after the plan: no drift to compare, and the candidate that buys nothing is kept.
+        expect(plan.projected.investedValueUsdE8).toBe(0n);
+        continue;
+      }
+      expect(projected).toBeLessThanOrEqual(other);
+      // The uncapped candidate is only chosen when it is strictly closer to target, or trades strictly less.
+      if (plan.candidate === "uncapped") {
+        expect(plan.skipped.some(({ reason }) => reason === "above_target_weight")).toBe(false);
+      }
+    }
+  });
+
+  test("what is left on top of the reserve is reported exactly, and a plan without a leg always says why", () => {
+    for (const { plan } of cases) {
+      const spent = sum(legsOf(plan, "buy").map(({ quoteAmount }) => quoteAmount));
+      const uninvested = plan.buyBudgetQuote - spent;
+      const reported = plan.warnings.filter(({ code }) => code === "uninvested_quote");
+      if (uninvested * 100n > plan.minLegValueUsdE8) {
+        expect<unknown>(reported).toEqual([
+          { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: uninvested },
+        ]);
+      } else {
+        expect(reported).toEqual([]);
+      }
+      const idle = plan.warnings.some(({ code }) => code === "nothing_to_do");
+      expect(idle).toBe(plan.legs.length === 0 && reported.length === 0);
     }
   });
 
