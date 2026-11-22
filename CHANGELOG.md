@@ -37,6 +37,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   document at `/api/v1/openapi.json`.
 - Assets page listing the tokenized stock universe with reference prices and their staleness.
 - Architecture, API and security documentation for the above.
+- Index Studio at `/studio`: an editor that builds a valid `equityos.index/1` spec with a live preview of the
+  composition, the canonical JSON and the spec hash, a draft kept in the browser, an export of the canonical
+  bytes, and a reviewed, simulated and verified `createIndex` publication where the registry is deployed.
+- Reusable transaction state machine and contract error decoding in `apps/web/src/lib/tx`.
+- Browser test of the publish flow against a local Anvil node, run by the `integration` CI job.
 
 ### Changed
 

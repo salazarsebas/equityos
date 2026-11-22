@@ -28,7 +28,11 @@ What exists today:
   public API v1 for assets. See [docs/api/README.md](docs/api/README.md).
 - `@equityos/sdk`: a package skeleton that exports its version and nothing else.
 
-Not built yet: publishing and browsing indexes in the app, portfolio replication, rebalance execution.
+The Index Studio drafts, validates and exports an index, and publishes it where the registry is deployed, which
+today is a local chain only. See [docs/product/index-studio.md](docs/product/index-studio.md).
+
+Not built yet: browsing indexes in the app, new versions of a published index, portfolio replication, rebalance
+execution.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 

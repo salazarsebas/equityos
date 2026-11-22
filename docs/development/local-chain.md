@@ -96,6 +96,11 @@ Anvil on port 8565 (override with `ANVIL_PORT`), runs the deployment script and 
 back through the registry reader, asserting hashes, identifiers, verification reports and events. It does not
 use a node you started yourself. CI runs it in the `integration` job.
 
+It then runs the browser test of the publish flow (`apps/web/e2e-chain`), which starts another Anvil on port
+8576 (override with `E2E_ANVIL_PORT`), deploys the contracts, starts the app in development mode on port 3110 and
+publishes an index from the [Studio](../product/index-studio.md). It needs a Playwright browser:
+`bunx playwright install chromium` in `apps/web`. To run it alone: `bun run --filter @equityos/web test:e2e:chain`.
+
 ## After changing a contract interface
 
 ```sh

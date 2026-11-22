@@ -5,7 +5,9 @@ is implemented in `apps/web`: pure logic in `src/lib/wallet`, components and hoo
 page in `src/app/wallet`.
 
 This layer connects and reads. It does not send a transaction, request a signature or ask for an approval:
-no code path in the app calls `sendTransaction`, `writeContract`, `sendCalls` or `signMessage`.
+no code path in it calls `sendTransaction`, `writeContract`, `sendCalls` or `signMessage`. The one transaction
+the app can send, publishing an index, is built on top of it and described in
+[Publishing from the Studio](../security/studio-publishing.md).
 
 ## What the app never does
 
