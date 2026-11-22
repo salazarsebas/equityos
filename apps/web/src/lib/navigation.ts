@@ -8,4 +8,5 @@ export type NavItem = {
 export const primaryNavigation: readonly NavItem[] = [
   { label: "Overview", href: "/" },
   { label: "Assets", href: "/assets" },
+  { label: "Wallet", href: "/wallet" },
 ];
