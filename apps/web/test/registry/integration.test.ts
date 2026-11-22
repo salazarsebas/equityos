@@ -99,27 +99,33 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
   );
 
   test(
-    "the seed publishes three indexes and four versions, once",
+    "the seed publishes five indexes and six versions and deprecates one index, once",
     async () => {
       seeded = await seedLocal(rpcUrl);
-      expect(seeded.map(({ published }) => published)).toEqual([[1], [1], [1, 2]]);
+      expect(seeded.map(({ published }) => published)).toEqual([[1], [1], [1], [1], [1, 2]]);
+      expect(seeded.map(({ deprecated }) => deprecated)).toEqual([false, true, false, false, false]);
       expect(seeded.map(({ specHashes }) => specHashes)).toEqual(
         expected.map(({ versions }) => versions.map(({ specHash }) => specHash)),
       );
       const again = await seedLocal(rpcUrl);
-      expect(again.map(({ published }) => published)).toEqual([[], [], []]);
+      expect(again.map(({ published }) => published)).toEqual([[], [], [], [], []]);
       expect(again.map(({ indexId }) => indexId)).toEqual(seeded.map(({ indexId }) => indexId));
     },
     TIMEOUT_MS,
   );
 
-  test("the reader returns every seeded index, verified, under its canonical identifier", async () => {
+  test("the reader returns every seeded index under its canonical identifier, verified unless mismatched", async () => {
     const [creator] = await wallet.getAddresses();
     clock.advance(HEADS_CACHE.ttlSeconds);
     const page = await reader.listIndexes();
     if (page.status !== "ok") throw new Error(page.status);
-    expect(page.total).toBe(3);
-    for (const [position, index] of page.indexes.entries()) {
+    expect(page.total).toBe(5);
+    const [mismatched, ...conformant] = page.indexes;
+    expect(mismatched?.identifier).toBe(seeded[0]?.indexId ?? "");
+    expect(mismatched?.latest).toMatchObject({ conformant: false, spec: null, composition: "static" });
+    expect(mismatched?.latest.verification.checks.at(-1)).toMatchObject({ status: "fail", code: "weight_mismatch" });
+    for (const index of conformant) {
+      const { position } = index;
       const seed = expected[position];
       const version = seed?.versions.at(-1);
       const indexId = seeded[position]?.indexId;
@@ -131,8 +137,8 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
         indexId,
         creator: creator?.toLowerCase(),
         latestVersion: seed.versions.length,
-        deprecatedAt: null,
       });
+      expect(index.head.deprecatedAt !== null).toBe(seed.deprecated);
       expect(index.latest).toMatchObject({
         chainId: LOCAL_CHAIN_ID,
         version: seed.versions.length,
@@ -155,13 +161,13 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
     }
   });
 
-  test("both versions of the third index are readable and verified", async () => {
-    const indexId = seeded[2]?.indexId ?? "0x";
+  test("both versions of the last index are readable and verified", async () => {
+    const indexId = seeded[4]?.indexId ?? "0x";
     const versions = await reader.listVersions(indexId);
     if (versions.status !== "ok") throw new Error(versions.status);
     expect(versions.total).toBe(2);
     expect(versions.versions.map(({ version, specHash, conformant }) => ({ version, specHash, conformant }))).toEqual(
-      (expected[2]?.versions ?? []).map(({ specHash }, i) => ({ version: i + 1, specHash, conformant: true })),
+      (expected[4]?.versions ?? []).map(({ specHash }, i) => ({ version: i + 1, specHash, conformant: true })),
     );
     expect(versions.versions.map(({ spec }) => spec?.weighting.type)).toEqual(["equal", "fixed"]);
     expect(await reader.getVersion(indexId, 3)).toEqual({ status: "version_not_found" });
@@ -173,7 +179,7 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
       const [creator] = await wallet.getAddresses();
       if (creator === undefined) throw new Error("no unlocked account");
       const first = seeded[0]?.indexId ?? "0x";
-      const third = seeded[2]?.indexId ?? "0x";
+      const last = seeded[4]?.indexId ?? "0x";
       const account = { account: creator, abi: indexRegistryAbi, address: registry } as const;
       const salt = stringToHex("integration.not-a-spec", { size: 32 });
       await send(
@@ -190,15 +196,15 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
           abi: rebalanceLogAbi,
           address: rebalanceLog,
           functionName: "recordRebalance",
-          args: [third, 2],
+          args: [last, 2],
         }),
       );
 
       clock.advance(HEADS_CACHE.ttlSeconds);
       const page = await reader.listIndexes();
       if (page.status !== "ok") throw new Error(page.status);
-      expect(page.total).toBe(4);
-      const unverifiable = page.indexes[3];
+      expect(page.total).toBe(6);
+      const unverifiable = page.indexes[5];
       expect(unverifiable?.identifier).toBe(unverifiable?.head.indexId ?? "");
       expect(unverifiable?.latest).toMatchObject({ conformant: false, spec: null, composition: "rule_based" });
       expect(unverifiable?.latest.verification.checks.map(({ status }) => status)).toEqual([
@@ -218,6 +224,11 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
         "version_published",
         "index_created",
         "version_published",
+        "index_deprecated",
+        "index_created",
+        "version_published",
+        "index_created",
+        "version_published",
         "index_created",
         "version_published",
         "version_published",
@@ -226,11 +237,11 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
         "index_deprecated",
         "rebalance_recorded",
       ]);
-      expect(scan.events.at(-1)).toMatchObject({ account: creator.toLowerCase(), indexId: third, version: 2 });
+      expect(scan.events.at(-1)).toMatchObject({ account: creator.toLowerCase(), indexId: last, version: 2 });
       const block = await client.getBlock({ blockNumber: scan.events.at(-1)?.blockNumber ?? 0n });
       expect(scan.events.at(-1)?.blockTimestamp).toBe(block.timestamp);
       expect(distinctCreators(scan.events)).toEqual([creator.toLowerCase() as Hex]);
-      expect(countPerDay(scan.events, "index_created").reduce((sum, { count }) => sum + count, 0)).toBe(4);
+      expect(countPerDay(scan.events, "index_created").reduce((sum, { count }) => sum + count, 0)).toBe(6);
     },
     TIMEOUT_MS,
   );

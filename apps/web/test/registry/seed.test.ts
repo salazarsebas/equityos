@@ -49,29 +49,43 @@ describe("buildSeedIndexes", () => {
   const seeds = buildSeedIndexes(31_337);
   const versions = seeds.flatMap((seed) => seed.versions);
 
-  test("is one equal-weight index, one fixed-weight index with bounds, and one index with two versions", () => {
+  test("is an index that fails verification, a deprecated one, and three conformant ones", () => {
     expect(seeds.map((seed) => seed.versions.map(({ spec }) => spec.weighting.type))).toEqual([
+      ["equal"],
+      ["equal"],
       ["equal"],
       ["fixed"],
       ["equal", "fixed"],
     ]);
-    expect(seeds[1]?.versions[0]?.spec.constraints).toEqual({ maxWeightBps: 5_000, minWeightBps: 1_000 });
-    expect(new Set(seeds.map(({ salt }) => salt)).size).toBe(3);
+    expect(seeds.map(({ deprecated }) => deprecated)).toEqual([false, true, false, false, false]);
+    expect(seeds[1]?.versions[0]?.tokens).toHaveLength(1);
+    expect(seeds[3]?.versions[0]?.spec.constraints).toEqual({ maxWeightBps: 5_000, minWeightBps: 1_000 });
+    expect(new Set(seeds.map(({ salt }) => salt)).size).toBe(5);
     for (const { salt } of seeds) expect(salt).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  test("every version is conformant with the composition the seed publishes", () => {
-    for (const version of versions) {
-      const constituents = version.tokens.map((token, i) => ({ token, weightBps: version.weightsBps[i] ?? 0 }));
-      const report = verifyVersion({
-        specBytes: version.specBytes,
-        specHash: version.specHash,
-        constituents,
-        chainId: 31_337,
-      });
-      expect(report.checks.map(({ status }) => status)).toEqual(["pass", "pass", "pass", "pass", "pass"]);
-      expect(version.weightsBps.reduce((sum, weight) => sum + weight, 0)).toBe(10_000);
+  test("every version is conformant with the composition the seed publishes, except the mismatched example", () => {
+    for (const [position, seed] of seeds.entries()) {
+      for (const version of seed.versions) {
+        const constituents = version.tokens.map((token, i) => ({ token, weightBps: version.weightsBps[i] ?? 0 }));
+        const report = verifyVersion({
+          specBytes: version.specBytes,
+          specHash: version.specHash,
+          constituents,
+          chainId: 31_337,
+        });
+        expect(report.checks.map(({ status }) => status)).toEqual([
+          "pass",
+          "pass",
+          "pass",
+          "pass",
+          position === 0 ? "fail" : "pass",
+        ]);
+        // The registry rejects a static composition whose weights do not sum to 10,000 bps.
+        expect(version.weightsBps.reduce((sum, weight) => sum + weight, 0)).toBe(10_000);
+      }
     }
+    expect(seeds[0]?.versions[0]?.weightsBps).toEqual([6_000, 4_000]);
   });
 
   test("every constituent is a feed-covered token with its own feed proxy", () => {

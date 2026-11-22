@@ -5,7 +5,7 @@
  *
  * Transactions are signed by Anvil for its first unlocked development account: no private key is read,
  * stored or created. The script sends nothing unless the endpoint reports chain id 31337. It can be run
- * again: an index or a version that is already published is skipped.
+ * again: an index, a version or a deprecation that is already there is skipped.
  */
 import { indexRegistryAbi } from "@equityos/contracts-abi";
 import {
@@ -47,6 +47,7 @@ export interface SeededIndex {
   readonly specHashes: readonly Hex[];
   /** Versions this run published. The others were already there. */
   readonly published: readonly number[];
+  readonly deprecated: boolean;
 }
 
 /**
@@ -79,16 +80,15 @@ export async function seedLocal(rpcUrl: string): Promise<SeededIndex[]> {
       functionName: "exists",
       args: [indexId],
     });
-    const latestVersion = exists
-      ? (
-          await client.readContract({
-            address: registry,
-            abi: indexRegistryAbi,
-            functionName: "getIndex",
-            args: [indexId],
-          })
-        ).latestVersion
-      : 0;
+    const head = exists
+      ? await client.readContract({
+          address: registry,
+          abi: indexRegistryAbi,
+          functionName: "getIndex",
+          args: [indexId],
+        })
+      : { latestVersion: 0, deprecatedAt: 0n };
+    const { latestVersion } = head;
     const published: number[] = [];
     for (const [i, version] of seed.versions.entries()) {
       const number = i + 1;
@@ -114,6 +114,17 @@ export async function seedLocal(rpcUrl: string): Promise<SeededIndex[]> {
       if (receipt.status !== "success") throw new Error(`transaction ${hash} reverted`);
       published.push(number);
     }
+    if (seed.deprecated && head.deprecatedAt === 0n) {
+      const hash = await wallet.writeContract({
+        account: creator,
+        address: registry,
+        abi: indexRegistryAbi,
+        functionName: "deprecate",
+        args: [indexId],
+      });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error(`transaction ${hash} reverted`);
+    }
     seeded.push({ indexId, published });
   }
 
@@ -125,13 +136,14 @@ export async function seedLocal(rpcUrl: string): Promise<SeededIndex[]> {
     if (index.status !== "ok" || versions.status !== "ok") {
       throw new Error(`index ${indexId} could not be read back: ${index.status}, ${versions.status}`);
     }
-    const { latest, identifier } = index.index;
+    const { latest, identifier, head } = index.index;
     results.push({
       indexId,
       identifier,
       name: latest.conformant ? latest.spec.name : "(not conformant)",
       specHashes: versions.versions.map(({ specHash }) => specHash),
       published,
+      deprecated: head.deprecatedAt !== null,
     });
   }
   return results;
@@ -143,7 +155,7 @@ if (import.meta.main) {
     for (const index of await seedLocal(rpcUrl)) {
       console.log(index.name);
       console.log(`  index id:    ${index.indexId}`);
-      console.log(`  identifier:  ${index.identifier}`);
+      console.log(`  identifier:  ${index.identifier}${index.deprecated ? " (deprecated)" : ""}`);
       index.specHashes.forEach((hash, i) => {
         const note = index.published.includes(i + 1) ? "published" : "already published";
         console.log(`  version ${i + 1}:   ${hash} (${note})`);
