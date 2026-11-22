@@ -17,11 +17,6 @@ function toAddress(value: string): Address {
   return value;
 }
 
-function toStatus(value: string): StalenessStatus {
-  if (value === "live" || value === "delayed" || value === "last_close" || value === "unavailable") return value;
-  throw new Error(`${value} is not a staleness class`);
-}
-
 /** Reads a vector input: amounts are decimal strings, and an absent optional property stays absent. */
 function parseInput(raw: VectorInput): RebalancePlanInput {
   if (raw.mode !== "rebalance" && raw.mode !== "buy_only") throw new Error(`${raw.mode} is not a mode`);
@@ -33,10 +28,11 @@ function parseInput(raw: VectorInput): RebalancePlanInput {
       balance: BigInt(balance),
       decimals,
     })),
+    // The status is passed as published: two vectors carry a status that is absent or not a known class.
     prices: raw.prices.map(({ token, priceE8, status }) => ({
       token: toAddress(token),
       priceE8: BigInt(priceE8),
-      status: toStatus(status),
+      status: status as StalenessStatus,
     })),
     quoteBalance: BigInt(raw.quoteBalance),
     ...(raw.depositUsdE8 === undefined ? {} : { depositUsdE8: BigInt(raw.depositUsdE8) }),
@@ -50,29 +46,47 @@ function parseInput(raw: VectorInput): RebalancePlanInput {
 describe("published vectors: rebalance plans", () => {
   const { vectors } = planVectors;
 
-  test("they are for this calculation, at least 20, with unique names", () => {
+  test("they are for this calculation, at least 30, with unique names", () => {
     expect<string>(planVectors.calc).toBe(CALC_ID);
-    expect(vectors.length).toBeGreaterThanOrEqual(20);
+    expect(vectors.length).toBeGreaterThanOrEqual(30);
     expect(new Set(vectors.map(({ name }) => name)).size).toBe(vectors.length);
   });
 
-  test("they cover both modes, blocked plans, skipped legs, an exit, the defaults and 64 constituents", () => {
+  test("they cover both modes, every blocker, warning and skip reason, an exit, the defaults and 64 constituents", () => {
+    const ready = vectors.flatMap(({ expected }) => (expected.status === "ready" ? [expected] : []));
+    const blocked = vectors.flatMap(({ expected }) => (expected.status === "blocked" ? [expected] : []));
+    expect(ready.length + blocked.length).toBe(vectors.length);
     expect(vectors.some(({ input }) => input.mode === "buy_only")).toBe(true);
-    expect(vectors.filter(({ expected }) => expected.plan === null).length).toBeGreaterThanOrEqual(5);
-    expect(vectors.some(({ expected }) => expected.warnings.length > 0 && expected.plan !== null)).toBe(true);
-    expect(vectors.some(({ expected }) => (expected.plan?.skipped.length ?? 0) > 0)).toBe(true);
-    expect(vectors.some(({ expected }) => expected.plan?.legs.some(({ exit }) => exit))).toBe(true);
+    const blockers = new Set(blocked.flatMap((result) => (result.blockers ?? []).map(({ code }) => code)));
+    expect([...blockers].sort()).toEqual([
+      "below_minimum_portfolio_value",
+      "decimals_mismatch",
+      "market_closed",
+      "missing_price",
+      "price_unavailable",
+      "zero_deployable_value",
+      "zero_price",
+    ]);
+    const warnings = new Set(ready.flatMap((result) => result.warnings.map(({ code }) => code)));
+    expect([...warnings].sort()).toEqual(["market_closed", "price_delayed", "projected_drift_increase"]);
+    const reasons = new Set(ready.flatMap((result) => (result.skipped ?? []).map(({ reason }) => reason)));
+    expect([...reasons].sort()).toEqual(["above_target_weight", "below_minimum", "not_needed", "zero_quantity"]);
+    expect(ready.some((result) => result.legs?.some(({ exit }) => exit))).toBe(true);
     expect(vectors.some(({ input }) => input.reserveBps === undefined)).toBe(true);
     expect(vectors.some(({ input }) => input.constituents.length === 64)).toBe(true);
+    expect(vectors.some(({ input }) => input.prices.some((price) => !("status" in price)))).toBe(true);
   });
 
   for (const vector of vectors) {
-    test(`${vector.name}: blockers, warnings, valuation and plan`, () => {
+    test(`${vector.name}: the exact result`, () => {
       expect<unknown>(toVectorJson(planRebalance(parseInput(vector.input)))).toEqual(vector.expected);
     });
   }
 
-  test("a plan exists exactly when there is no blocker", () => {
-    for (const { expected } of vectors) expect(expected.plan === null).toBe(expected.blockers.length > 0);
+  test("a blocked result has blockers and no legs", () => {
+    for (const { expected } of vectors) {
+      expect("legs" in expected && expected.legs !== undefined).toBe(expected.status === "ready");
+      expect("blockers" in expected && expected.blockers !== undefined).toBe(expected.status === "blocked");
+    }
   });
 });
