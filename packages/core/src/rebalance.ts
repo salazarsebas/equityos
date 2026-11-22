@@ -641,7 +641,8 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
   // second one, whose buys are capped against the values the sells leave.
   const candidate = (name: RebalancePlan["candidate"], buys: RebalanceLeg[], skips: SkippedLeg[]) => {
     const projection = project(positions, [...sells, ...buys]);
-    return { name, buys, skips, projection, driftBps: projection.maxAbsDriftBps ?? TOTAL_WEIGHT_BPS + 1 };
+    const spentQuote = sum(buys.map(({ quoteAmount }) => quoteAmount));
+    return { name, buys, skips, projection, spentQuote, driftBps: projection.maxAbsDriftBps ?? TOTAL_WEIGHT_BPS + 1 };
   };
   let chosen = candidate("uncapped", uncapped.legs, uncapped.skipped);
   let otherCandidateMaxAbsDriftBps: number | null = null;
@@ -649,13 +650,17 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
     const afterSells = new Map(project(positions, sells).positions.map(({ token, valueUsdE8 }) => [token, valueUsdE8]));
     const capped = sizeBuys(positions, uncapped.kept, minLegValueUsdE8, afterSells);
     const other = candidate("capped", capped.legs, [...uncapped.skipped, ...capped.skipped]);
-    // The lower projected maximum drift wins. On a tie the candidate that trades less does, and that is the
-    // capped one: a cap only ever lowers a buy, so the capped candidate never trades more than the other.
-    const cappedWins = other.driftBps <= chosen.driftBps;
+    // The lower projected maximum drift wins. On a tie, a call that carries a deposit takes the candidate
+    // that leaves less of it uninvested, and any other call the candidate that trades less. A cap only ever
+    // lowers a buy, so the capped candidate never spends more: it is the one that trades less, and with a
+    // deposit it wins only when it spends as much as the other.
+    const tie = other.driftBps === chosen.driftBps;
+    const cappedWins =
+      other.driftBps < chosen.driftBps || (tie && (depositUsdE8 === 0n || other.spentQuote >= chosen.spentQuote));
     otherCandidateMaxAbsDriftBps = (cappedWins ? chosen : other).projection.maxAbsDriftBps;
     if (cappedWins) chosen = other;
   }
-  const spentQuote = sum(chosen.buys.map(({ quoteAmount }) => quoteAmount));
+  const { spentQuote } = chosen;
   const buyBudgetQuote = mulDivDown(availableQuote + proceedsQuote, keptBps, BPS);
   const legs = inExecutionOrder([...sells, ...chosen.buys]);
 

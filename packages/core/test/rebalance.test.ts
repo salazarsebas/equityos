@@ -1184,28 +1184,67 @@ describe("planRebalance: two candidates after a skipped buy", () => {
     expect(plan.warnings).toEqual([]);
   });
 
-  test("on a tie in drift the candidate that trades less is returned, and the idle amount is reported", () => {
-    // 5,000 USD of A against 9999/1 and a deposit of 5,000 USD: the buy of B (0.4975 USD) is skipped. Buying
-    // 4,974 USD of A leaves the drift at 1 bps, and so does buying nothing.
-    const plan = planOf({
-      mode: "rebalance",
-      constituents: [
-        { token: A, weightBps: 9_999, decimals: 8 },
-        { token: B, weightBps: 1, decimals: 8 },
-      ],
-      holdings: [{ token: A, balance: 5_000n * USD_E8, decimals: 8 }],
-      prices: [price(A, USD_E8), price(B, USD_E8)],
-      quoteBalance: 0n,
-      depositUsdE8: 5_000n * USD_E8,
-    });
-    expect(plan.legs).toEqual([]);
+  /** 5,000 USD of A against 9999/1 and 5,000 more to invest: the buy of B (0.4975 USD) is skipped. */
+  const tied = (funds: { quoteBalance: bigint; depositUsdE8: bigint }): RebalancePlanInput => ({
+    mode: "rebalance",
+    constituents: [
+      { token: A, weightBps: 9_999, decimals: 8 },
+      { token: B, weightBps: 1, decimals: 8 },
+    ],
+    holdings: [{ token: A, balance: 5_000n * USD_E8, decimals: 8 }],
+    prices: [price(A, USD_E8), price(B, USD_E8)],
+    ...funds,
+  });
+
+  test("on a tie in drift a deposit is invested: the candidate that leaves less uninvested is returned", () => {
+    // Buying 4,974.005 USD of A leaves the drift at 1 bps, and so does buying nothing. The call carries a
+    // deposit, so the candidate that invests it is returned. 0.995 USDC stay on top of the reserve, which is
+    // not above the minimum leg value.
+    const plan = planOf(tied({ quoteBalance: 0n, depositUsdE8: 5_000n * USD_E8 }));
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["buy", A, 4_974_005_000n],
+    ]);
     expect(plan.currentMaxAbsDriftBps).toBe(1);
+    expect(plan.projected.maxAbsDriftBps).toBe(1);
+    expect(plan.candidate).toBe("uncapped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(1);
+    expect(plan.projected.quoteBalance).toBe(25_995_000n);
+    expect(plan.warnings).toEqual([]);
+  });
+
+  test("on a tie in drift without a deposit the candidate that trades less is returned", () => {
+    // The same 5,000 USDC as a quote balance, with no deposit in the call: nothing is traded for no gain in
+    // drift, and the idle amount is reported.
+    const plan = planOf(tied({ quoteBalance: 5_000_000_000n, depositUsdE8: 0n }));
+    expect(plan.legs).toEqual([]);
     expect(plan.projected.maxAbsDriftBps).toBe(1);
     expect(plan.candidate).toBe("capped");
     expect(plan.otherCandidateMaxAbsDriftBps).toBe(1);
     expect(plan.warnings).toEqual([
       { code: "uninvested_quote", severity: "warning", token: null, uninvestedQuote: 4_975_000_000n },
     ]);
+  });
+
+  test("on a full tie, with or without a deposit, the capped candidate is returned", () => {
+    // 60.00/39.50/0.50 USD against 50/49/1 and 1 USD more: the buy of C is skipped and the cap does not bind,
+    // so both candidates are the same plan.
+    const wallet: PortfolioInput = {
+      ...dollars([5_000, 4_900, 100], [60n, 0n, 0n]),
+      holdings: [
+        { token: A, balance: 60_000_000n, decimals: 6 },
+        { token: B, balance: 39_500_000n, decimals: 6 },
+        { token: C, balance: 500_000n, decimals: 6 },
+      ],
+    };
+    const deposit = planOf(exact(wallet, { minLegValueUsdE8: USD_E8, depositUsdE8: USD_E8 }));
+    const balance = planOf(exact({ ...wallet, quoteBalance: 1_000_000n }, { minLegValueUsdE8: USD_E8 }));
+    for (const plan of [deposit, balance]) {
+      expect(plan.candidate).toBe("capped");
+      expect(plan.otherCandidateMaxAbsDriftBps).toBe(plan.projected.maxAbsDriftBps);
+      expect(plan.skipped.map(({ reason }) => reason)).toEqual(["below_minimum"]);
+    }
+    expect(deposit.legs).toEqual(balance.legs);
+    expect(deposit.legs.length).toBe(2);
   });
 });
 
