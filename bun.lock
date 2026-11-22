@@ -15,6 +15,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@base-org/account": "2.6.0",
+        "@equityos/contracts-abi": "workspace:*",
         "@equityos/core": "workspace:*",
         "@tanstack/react-query": "5.108.2",
         "@wagmi/core": "3.6.9",
@@ -35,6 +36,10 @@
         "ajv": "8.20.0",
         "tailwindcss": "4.3.5",
       },
+    },
+    "packages/contracts-abi": {
+      "name": "@equityos/contracts-abi",
+      "version": "0.0.0",
     },
     "packages/core": {
       "name": "@equityos/core",
@@ -84,6 +89,8 @@
     "@coinbase/cdp-sdk": ["@coinbase/cdp-sdk@1.62.0", "", { "dependencies": { "@solana-program/system": "^0.16.0", "@solana-program/token": "^0.16.0", "@solana/kit": "^8.6.0", "abitype": "1.0.6", "axios": "^1.18.0", "axios-retry": "^4.5.0", "bs58": "^6.0.0", "jose": "^6.2.0", "md5": "^2.3.0", "uncrypto": "^0.1.3", "viem": "^2.47.0", "zod": "^3.25.76" }, "peerDependencies": { "@x402/core": "^2.29.0", "@x402/evm": "^2.29.0", "@x402/extensions": "^2.29.0", "@x402/svm": "^2.29.0" }, "optionalPeers": ["@x402/core", "@x402/evm", "@x402/extensions", "@x402/svm"] }, "sha512-i25CM7YkheI4bIUUfdEl1ZFl8OhPtlr6HsOULSSPrOOetEEIo6KC81vr3RmrhejwYLzC9GSbVbfxy2pxgjPIXQ=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
+
+    "@equityos/contracts-abi": ["@equityos/contracts-abi@workspace:packages/contracts-abi"],
 
     "@equityos/core": ["@equityos/core@workspace:packages/core"],
 

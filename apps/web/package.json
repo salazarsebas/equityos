@@ -9,10 +9,13 @@
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "bun test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "seed:local": "bun --conditions=react-server scripts/seed-local.ts",
+    "test:integration": "INTEGRATION_TESTS=1 bun test test/registry/integration.test.ts"
   },
   "dependencies": {
     "@base-org/account": "2.6.0",
+    "@equityos/contracts-abi": "workspace:*",
     "@equityos/core": "workspace:*",
     "@tanstack/react-query": "5.108.2",
     "@wagmi/core": "3.6.9",

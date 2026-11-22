@@ -1,0 +1,24 @@
+{
+  "name": "@equityos/contracts-abi",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed ABIs and deployment addresses of the EquityOS contracts",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test",
+    "generate": "bun scripts/generate.ts"
+  }
+}

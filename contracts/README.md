@@ -61,6 +61,20 @@ FOUNDRY_PROFILE=ci forge test
 | `test/deploy-local.sh`               | The deployment script broadcasting to a local Anvil node                    |
 | `test/Setup.t.sol`                   | Guards the toolchain configuration                                          |
 
+### TypeScript ABI
+
+`packages/contracts-abi` holds the ABI of both contracts as typed TypeScript modules, generated from the build
+artifacts, and the deployment addresses. After a change to an interface, from the repository root:
+
+```sh
+bun run contracts:build
+bun run --filter @equityos/contracts-abi generate
+```
+
+`bun run test:integration` fails while the committed modules differ from the artifacts, and a test in the package
+compares its addresses with the `EXPECTED_*` constants of `script/Deploy.s.sol`. The full local workflow is in
+[docs/development/local-chain.md](../docs/development/local-chain.md).
+
 ### Gas snapshots
 
 `test/IndexRegistry.gas.t.sol` writes its measurements to `snapshots/IndexRegistry.json`, which is committed.
