@@ -34,9 +34,16 @@ Basis points, counts and seconds are safe integers. No step uses floating point.
 | `prices`       | `token`, `priceE8`, `status` for reference prices, in any order              |
 | `quoteBalance` | Quote asset counted toward the replication, in quote base units              |
 
-`constituents` come from `computeConstituents` plus the decimals recorded for each token in the asset list.
-`holdings` carry the decimals the token reports. `status` is the staleness class of the market data layer:
-`live`, `delayed`, `last_close` or `unavailable`.
+`constituents` come from `computeConstituents` plus the decimals recorded for each token in the asset list. An
+index has at most 64 constituents. `holdings` carry the decimals the token reports. `status` is the staleness
+class of the market data layer: `live`, `delayed`, `last_close` or `unavailable`.
+
+Prices come from outside the calculation, so `status` is read against an allow-list. Only `live`, `delayed` and
+`last_close` carry a value. A price whose status is `unavailable`, absent or anything else is reported as
+`unavailable`, and its `priceE8` is never read, whatever it holds.
+
+The optional input `blockOnLastClose` (default `false`) decides how a closed market is reported. See
+[A closed market](#a-closed-market).
 
 The quote asset is USDC. **Stated assumption:** one whole unit of the quote asset is valued at exactly 1 USD,
 so one quote base unit is worth exactly 100 units of USD scaled by 1e8. The assumption is carried in every
@@ -45,24 +52,24 @@ calculation.
 
 ## Definitions
 
-| Term              | Definition                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------- |
-| Position value    | `floor(balance * priceE8 / 10^decimals)` of one constituent                         |
-| Invested value    | Sum of the position values of the constituents                                      |
-| Quote value       | `quoteBalance * 100`, exact                                                         |
-| Deployable value  | Invested value plus quote value. In a plan, also the deposit and the tokens to exit |
-| Current weight    | Share of a constituent in the invested value, in bps. The weights sum to 10,000     |
-| Uninvested share  | `floor(quoteValue * 10000 / deployableValue)`: cash to deploy, in bps               |
-| Outside the index | A token the wallet holds that is not a constituent. Reported, never counted         |
-| Target weight     | `weightBps` of the constituent in the published version                             |
-| Drift             | `currentWeightBps - targetWeightBps`, signed: positive above target                 |
-| Maximum drift     | Largest absolute drift of a constituent                                             |
-| Turnover          | Half the sum of the absolute drifts                                                 |
-| Target value      | `floor(deployableValue * targetWeightBps / 10000)` of one constituent               |
-| Delta             | Target value minus position value: positive to buy, negative to sell                |
-| Leg               | One swap between a token and the quote asset                                        |
-| Reserve           | Share of the available funds that buys leave unspent, `reserveBps`                  |
-| Minimum leg value | Reference value below which a leg is not proposed, `minLegValueUsdE8`               |
+| Term              | Definition                                                                      |
+| ----------------- | ------------------------------------------------------------------------------- |
+| Position value    | `floor(balance * priceE8 / 10^decimals)` of one constituent                     |
+| Invested value    | Sum of the position values of the constituents                                  |
+| Quote value       | `quoteBalance * 100`, exact                                                     |
+| Deployable value  | Invested value plus quote value. In a plan, also the deposit and the exits sold |
+| Current weight    | Share of a constituent in the invested value, in bps. The weights sum to 10,000 |
+| Uninvested share  | `floor(quoteValue * 10000 / deployableValue)`: cash to deploy, in bps           |
+| Outside the index | A token the wallet holds that is not a constituent. Reported, never counted     |
+| Target weight     | `weightBps` of the constituent in the published version                         |
+| Drift             | `currentWeightBps - targetWeightBps`, signed: positive above target             |
+| Maximum drift     | Largest absolute drift of a constituent                                         |
+| Turnover          | Half the sum of the absolute drifts                                             |
+| Target value      | `floor(deployableValue * targetWeightBps / 10000)` of one constituent           |
+| Delta             | Target value minus position value: positive to buy, negative to sell            |
+| Leg               | One swap between a token and the quote asset                                    |
+| Reserve           | Share of the available funds that buys leave unspent, `reserveBps`              |
+| Minimum leg value | Reference value below which a leg is not proposed, `minLegValueUsdE8`           |
 
 ## Valuation
 
@@ -99,10 +106,10 @@ When `V` is zero no weight is defined: every `weightBps` is `null`. Zero is not 
 ### Missing data
 
 A constituent needs a usable price even when its balance is zero, because a plan has to size a buy with it. A
-price is usable when its status is `live`, `delayed` or `last_close` and it is above zero. When a blocker
-concerns any constituent (see [Blockers and warnings](#blockers-and-warnings)), that position has no value, and
-the invested value, the deployable value and every weight are `null`. The values of the other positions are
-still returned.
+price is usable when its status is `live`, `delayed` or `last_close` and it is above zero. A constituent without
+a usable price, or whose holding reports other decimals than the constituent, has no value, and then the
+invested value, the deployable value and every weight are `null`. The values of the other positions are still
+returned.
 
 A token outside the index is valued when it has a usable price and has a `null` value otherwise. It produces no
 finding and takes no part in any total.
@@ -129,11 +136,15 @@ this order and the first that applies is the result:
 
 | Order | Condition                                        | Result                                                  |
 | ----- | ------------------------------------------------ | ------------------------------------------------------- |
-| 1     | The balance of every constituent is zero         | Due: `first_replication`                                |
-| 2     | Drift is `null`                                  | Not due: `drift_unavailable`                            |
+| 1     | The invested value is `null`                     | Not due: `valuation_blocked`, with the blockers         |
+| 2     | The invested value is zero                       | Due: `first_replication`                                |
 | 3     | `maxAbsDriftBps < driftThresholdBps`             | Not due: `below_threshold`, with both numbers           |
 | 4     | `lastRebalanceAt + minIntervalSeconds - now > 0` | Not due: `min_interval_not_elapsed`, `secondsRemaining` |
 | 5     | Otherwise                                        | Due: `drift_threshold_reached`                          |
+
+A data problem comes first: a wallet that holds nothing is not called a first replication while a constituent
+has no usable price. A first replication is decided by value, not by balances, so a wallet holding base units
+too small to have a value is a first replication and is never left without an answer.
 
 A rebalance is due once exactly `minIntervalSeconds` have elapsed. A last rebalance recorded after `now` has
 not elapsed. Without a last rebalance, check 4 is skipped.
@@ -150,9 +161,14 @@ computed at any time, and adding quote asset to a replication is not a rebalance
 | `mode`             | none        | `rebalance` sells and buys. `buy_only` never sells                |
 | `depositUsdE8`     | `0`         | Quote asset added before execution and not part of `quoteBalance` |
 | `exitTokens`       | none        | Tokens that left the index in the target version                  |
-| `reserveBps`       | `50`        | Share of the available funds that buys leave unspent, 0 to 10000  |
+| `reserveBps`       | `50`        | Share of the funds that buys leave unspent, 0 to 2000             |
 | `minLegValueUsdE8` | `100000000` | Reference value below which a leg is skipped (1.00 USD)           |
-| `blockOnLastClose` | `false`     | Turns the warning of a `last_close` price into a blocker          |
+
+The result is one of two shapes, told apart by `status`:
+
+- `status: "blocked"` has `blockers`, `warnings` and `valuation`. It has no `legs` property at all, so code
+  that reads legs without checking the status does not compile and does not find any.
+- `status: "ready"` has `warnings`, `valuation`, the targets, `legs`, `skipped` and the projection.
 
 Every leg goes through the quote asset. A sell is exact in token quantity: the plan states the quantity to sell
 and the proceeds at the reference price. A buy is exact in quote amount: the plan states the amount of quote
@@ -162,27 +178,35 @@ later step has to round them.
 ### Steps
 
 1. **Available quote**: `quoteBalance + floor(depositUsdE8 / 100)` quote base units.
-2. **Tokens to exit** (`rebalance` mode): every token of `exitTokens` that the wallet holds with a balance above
-   zero. Its value is `floor(balance * priceE8 / 10^decimals)`.
-3. **Deployable value**: invested value, plus `availableQuote * 100`, plus the values of the tokens to exit.
+2. **Tokens to exit** (`rebalance` mode): every token of `exitTokens` that the wallet holds sells its whole
+   balance. The leg value is `floor(balance * priceE8 / 10^decimals)` and its proceeds are `floor(value / 100)`.
+   An exit that fails the minimum (step 8) is skipped and takes no further part.
+3. **Deployable value**: invested value, plus `availableQuote * 100`, plus the values of the exits that are
+   sold.
 4. **Target value** of each constituent: `floor(deployable * targetWeightBps / 10000)`.
-5. **Sells** (`rebalance` mode), in ascending token order. A constituent above its target sells
-   `floor((value - target) * 10^decimals / priceE8)` base units. A token to exit sells its whole balance. The
-   leg value is `floor(quantity * priceE8 / 10^decimals)` and its proceeds are `floor(value / 100)` quote base
-   units.
-6. **Buy budget**: `floor((availableQuote + proceeds of the proposed sells) * (10000 - reserveBps) / 10000)`.
-7. **Buys**, in ascending token order. A constituent below its target wants `floor((target - value) / 100)`
-   quote base units. When the sum wanted exceeds the budget, each buy is `floor(wanted * budget / sumWanted)`;
-   otherwise it is the amount wanted. The leg value is `quoteAmount * 100` and the token quantity is
-   `floor(value * 10^decimals / priceE8)`.
-8. **Minimum**: a leg whose value is below `minLegValueUsdE8` is skipped as `below_minimum`. A remaining leg
-   whose token quantity or quote amount is zero is skipped as `zero_quantity`. A leg worth exactly the minimum
-   is proposed.
+5. **Full sells** (`rebalance` mode). A constituent above its target would sell
+   `floor((value - target) * 10^decimals / priceE8)` base units, with value and proceeds as in step 2. A sell
+   that fails the minimum is skipped.
+6. **Buys.** The full budget is `floor((availableQuote + all proceeds) * (10000 - reserveBps) / 10000)`. A
+   constituent below its target wants `floor((target - value) / 100)` quote base units. When the sum wanted
+   exceeds the budget, the share of each buy is `floor(wanted * budget / sumWanted)`; otherwise it is the
+   amount wanted. A buy of share `q` buys `floor(q * 100 * 10^decimals / priceE8)` base units and spends what
+   that quantity costs: `ceil(ceil(quantity * priceE8 / 10^decimals) / 100)` quote base units, never more than
+   `q`. A buy that fails the minimum is skipped, and then the remaining buys are capped as described in
+   [A skipped buy](#a-skipped-buy).
+7. **Sells are scaled to the buys.** With `spent` the sum the buys spend, the sells have to raise
+   `needed = ceil(spent * 10000 / (10000 - reserveBps)) - availableQuote - exit proceeds`. When `needed` is
+   zero or less, no constituent is sold (`not_needed`). When it is below the proceeds of the full sells, each
+   sell is scaled: see [Sells follow the buys](#sells-follow-the-buys). Tokens to exit are always sold in full.
+8. **Minimum**: a leg whose token quantity or quote amount is zero is skipped as `zero_quantity`. A remaining
+   leg whose value is below `minLegValueUsdE8` is skipped as `below_minimum`. A leg worth exactly the minimum is
+   proposed.
 9. **Projection**: every proposed leg applied at its reference price. Balances, values, weights and drift of the
    constituents are computed as in a valuation, and the quote asset left is
    `availableQuote + proceeds - amounts spent`.
 
-`legs` is the execution order: every sell, then every buy. Sells come first because they fund the buys.
+`legs` is the execution order: every sell in ascending token order, then every buy in ascending token order.
+Sells come first because they fund the buys. `skipped` is in the same order.
 
 ### Rounding rules
 
@@ -199,48 +223,123 @@ Every rounding leaves value unspent. None spends value that is not there.
 | Sell value and proceeds | Down                         | Proceeds that may not arrive are not counted as funds for buys |
 | Buy budget              | Down                         | The reserve is never smaller than asked                        |
 | Buy amount wanted       | Down                         | A buy never takes a constituent above its target value         |
-| Scaled buy amount       | Down                         | The buys never sum to more than the budget                     |
+| Share of a scaled buy   | Down                         | The buys never sum to more than the budget                     |
+| Cap of a buy            | Down                         | A capped buy never ends above its target weight                |
 | Buy token quantity      | Down                         | The plan never expects more tokens than the amount spent buys  |
+| Buy amount spent        | Up, from the quantity        | The amount covers the quantity bought, and no more             |
+| Proceeds needed         | Up                           | The buys stay within the budget after the reserve              |
+| Scaled sell quantity    | Up, at most the full sell    | The sells raise at least what the buys spend                   |
+| Minimum portfolio value | Up                           | The stated value is enough                                     |
+
+The amount a buy spends is the one place where an amount handed to a leg is rounded up, and it is rounded up
+from a quantity that was first rounded down from the share of the buy, so it never exceeds that share. Without
+it a buy of a coarse token would spend its whole share for the base units it can actually buy: 1,999 USDC for
+one unit of a whole-unit token at 1,250.00 USD. The leg spends 1,250 USDC and 749 USDC stay in the wallet.
 
 ### Reserve
 
-The buys can spend at most the buy budget: the quote available plus the proceeds of the proposed sells, less
+The buys can spend at most the buy budget: the quote available plus the proceeds of the sells, less
 `reserveBps` of that sum. The reserve stays in the quote asset and appears in the projected quote balance.
 
 The default is 50 bps. The reference feeds publish a new value when the price deviates by 0.5%, so a reference
 price can trail the market by up to 50 bps while still being current, and a buy sized on it can cost that much
 more by the time it executes. The reserve is a buffer for that movement. It is not an estimate of slippage,
-fees or gas. A caller that executes in a closed market or in thin liquidity passes a larger value.
+fees or gas.
+
+The maximum is 2000 bps (20%); a larger value is an input error. A caller that expects prices to move by more
+than a fifth between plan and execution has no usable reference, and the answer to that is a blocker, not a
+larger buffer. A reserve near 100% would turn a plan into sales that buy nothing.
 
 When the budget is smaller than what the buys want, every buy is scaled by the same ratio, so each constituent
 below target closes the same fraction of its shortfall. The alternative of filling the constituent with the
 widest shortfall first concentrates the plan in fewer, larger legs and makes the result depend on which
-constituent happens to be widest; the proportional rule has no ordering in it.
+constituent happens to be widest; the pro rata rule has no ordering in it.
 
 ### Minimum leg value
 
 Every leg is one swap with a cost that does not shrink with its size: a network fee, a signature, the minimum
 price increment of a pool. Below some size a leg costs a material share of what it moves. A leg whose reference
-value is below `minLegValueUsdE8` is therefore not proposed. It is listed in `skipped` with its value and the
-reason, and it stays visible.
+value is below `minLegValueUsdE8` is therefore not proposed. It is listed in `skipped` with the value it was
+sized for and the reason, and it stays visible.
 
 The default is 1.00 USD. A caller that knows the real cost of a swap passes its own value, and `0` disables the
 rule.
 
-- What a skipped sell would have raised is not in the buy budget.
-- What a skipped buy would have spent stays in the quote asset. It is not redistributed to the other buys.
-- The drift that remains is reported: `projected.positions[].driftBps` and `projected.maxAbsDriftBps`.
+### A skipped buy
 
-A small deposit into an index with many constituents can be skipped entirely: 20 USD into 64 equal-weighted
-constituents is 64 buys of about 0.31 USD, all below 1.00 USD. The plan then has no leg and 64 skipped entries.
+What a skipped buy would have spent is not given to the other buys. Giving it to them, or simply letting them
+go ahead, would push a wallet off target: with targets of 90/10, holdings of 9.00 and 1.00 USD and a deposit of
+10 USD, the buy of the smaller constituent is 0.995 USD and is skipped; buying only the larger one would move
+the wallet from 9000/1000 to 9472/528.
+
+So when at least one buy is skipped, the remaining buys are capped: **no bought constituent may end above its
+target weight of the projected invested value**. With `N` the sum of the values of the constituents that are
+not capped (as they would be after the full sells and the uncapped buys) and `W` the sum of the weights of the
+capped ones, a capped constituent of weight `w` may hold `floor(w * N / (10000 - W))`. A constituent is capped
+when its planned value exceeds that share. Capping lowers the total, so the check repeats until no constituent
+exceeds its share, at most once per constituent. A cap can leave a buy under the minimum; it is then skipped
+with reason `above_target_weight` and the caps are computed again, at most once per buy.
+
+What the capped and skipped buys do not spend stays in the quote asset and is reported as
+`projected.quoteBalance`. In the example nothing is bought and the 10 USD stay uninvested, with both buys in
+`skipped`. The cap applies only after a skip: when every buy goes through, the pro rata shares already keep the
+proportions.
+
+One consequence is stated here because it can surprise: a constituent that cannot be bought holds back the buys
+of constituents that are already at or above their target weight. They stay where they are until the amount
+is large enough for every buy.
+
+### A first replication
+
+When the invested value is zero, the cap makes the plan all or nothing: if one constituent cannot be bought,
+every other buy is capped at zero. A plan that buys nothing, or that sells the tokens to exit and buys nothing,
+is not a replication of the index. It is reported as the blocker `below_minimum_portfolio_value` instead of a
+ready plan with no legs, so that the reason is explicit and no sale is proposed on its own.
+
+The blocker carries `minimumDeployableValueUsdE8`, a deployable value from which every constituent gets a buy
+leg with the same reserve and minimum:
+
+```
+minimum = max over constituents of
+          ceil((minLegValueUsdE8 + unit + rounding) * 10000 * 10000 / (weightBps * (10000 - reserveBps)))
+unit     = ceil(priceE8 / 10^decimals)        value of one base unit of the token
+rounding = 100 * (8 + number of tokens to exit)
+```
+
+A constituent of weight `w` receives about `value * w * (1 - reserve)`. That has to reach the minimum leg value
+plus what rounding can take away: one base unit of the token and a few quote base units. The value is
+sufficient, not the exact minimum: a property test plans every blocked first replication again with this value
+in quote asset and checks that every constituent is bought. For 64 equal-weighted constituents, no reserve and
+the default minimum it is 64.11 USD, rounded up to a cent.
+
+It is a blocker and not a warning because a warning would come with a ready plan, and the only ready plans
+available here are an empty one or one that only sells.
+
+### Sells follow the buys
+
+A sale whose proceeds no buy spends only moves value into the quote asset. That shrinks the invested value and
+raises the weight of everything that was not sold, so it can increase drift. Sells are therefore sized last:
+
+- `needed` is the proceeds the buys require, including their reserve (step 7).
+- If no proceeds are needed, no constituent is sold. Each full sell is listed in `skipped` as `not_needed`.
+- If less than the full proceeds is needed, each sell of quantity `q` out of full proceeds `P` over `k` sells
+  becomes `min(q, max(ceil(q * (needed + k - 1) / P), smallest))`, where `smallest` is
+  `ceil(max(minLegValueUsdE8, 100) * 10^decimals / priceE8)`, the smallest quantity that passes the minimum.
+
+Rounding a scaled sell down to quote base units loses less than one unit, so `k` sells together lose at most
+`k - 1`; aiming `k - 1` units higher makes them raise at least `needed`. A scaled sell is never above the full
+sell, so no constituent is sold below its target value, and never below the minimum, so it remains a leg worth
+proposing. Raising a sell to the minimum can leave up to one minimum leg value per sell in the quote asset.
+
+`buyBudgetQuote` in the result is computed from the sells that are proposed, and the buys never exceed it.
 
 ### Buy only
 
 In `buy_only` mode the plan has no sell. The targets are computed from the deployable value, the constituents
-below target share the quote available as in step 7, and the constituents above target are left as they are.
+below target share the quote available as in step 6, and the constituents above target are left as they are.
 It moves toward the target with the fewest legs. It does not reach the target when a constituent is above its
-target value, and the projection states the drift that remains. `exitTokens`
-is ignored in this mode: the tokens are not sold and their value is not deployable.
+target value, and the projection states the drift that remains. `exitTokens` is ignored in this mode: the
+tokens are not sold and their value is not deployable.
 
 ### Tokens to exit
 
@@ -250,80 +349,133 @@ constituent, the caller passes the tokens of the previous version that are no lo
 proceeds fund buys. A token to exit that the wallet holds needs a usable price; one the wallet does not hold
 needs none.
 
+An exit below the minimum leg value is skipped. It stays in the wallet, so its value is not part of the
+deployable value and does not raise any target.
+
 Any other token outside the index is never sold and never counted. Listing a constituent of the target version
 as a token to exit is an input error.
 
 ### Projection
 
 `projected` is the wallet after every proposed leg at reference prices: balance, value, weight and drift of
-each constituent, the invested value, the quote asset left and the maximum drift. `currentMaxAbsDriftBps` is
-the maximum drift before. When the projected invested value is zero, the projected weights and drifts are
-`null`.
+each constituent, the invested value, the quote asset left uninvested and the maximum drift.
+`currentMaxAbsDriftBps` is the maximum drift before, or `null` when nothing is invested.
 
 ## Blockers and warnings
 
-Data-quality problems are returned as data. `planRebalance` returns `blockers`, `warnings`, the valuation and
-the plan; the plan is `null` exactly when there is a blocker. `valuePortfolio` returns the same findings in
-`issues`, each with its severity.
+Data-quality problems are returned as data. `valuePortfolio` returns them in `issues`, each with its severity.
+`planRebalance` returns the same findings split into `blockers` and `warnings`, and a result with any blocker
+has status `blocked`.
 
-| Code                       | Severity | Condition                                                                |
-| -------------------------- | -------- | ------------------------------------------------------------------------ |
-| `missing_price`            | Blocker  | No price for a constituent, or for a held token to exit                  |
-| `price_unavailable`        | Blocker  | The price has status `unavailable`                                       |
-| `zero_price`               | Blocker  | The price is zero                                                        |
-| `decimals_mismatch`        | Blocker  | A holding reports other decimals than the constituent it is matched with |
-| `zero_deployable_value`    | Blocker  | The deployable value of the plan is zero: there is nothing to deploy     |
-| `market_closed`            | Warning  | The price has status `last_close`. A blocker with `blockOnLastClose`     |
-| `price_delayed`            | Warning  | The price has status `delayed`                                           |
-| `projected_drift_increase` | Warning  | The projected maximum drift is above the current one                     |
+| Code                            | Severity | Condition                                                            |
+| ------------------------------- | -------- | -------------------------------------------------------------------- |
+| `missing_price`                 | Blocker  | No price for a constituent, or for a held token to exit              |
+| `price_unavailable`             | Blocker  | The status is `unavailable`, absent or not a known class             |
+| `zero_price`                    | Blocker  | The price is zero                                                    |
+| `decimals_mismatch`             | Blocker  | A holding reports other decimals than its constituent                |
+| `zero_deployable_value`         | Blocker  | The deployable value of the plan is zero: there is nothing to deploy |
+| `below_minimum_portfolio_value` | Blocker  | A first replication cannot buy every constituent                     |
+| `market_closed`                 | Warning  | The status is `last_close`. A blocker with `blockOnLastClose`        |
+| `price_delayed`                 | Warning  | The status is `delayed`                                              |
+| `projected_drift_increase`      | Warning  | The projected maximum drift is above the current one                 |
 
-Each finding names its token, or `null` when it concerns the whole portfolio. `market_closed` means the market
-is closed and execution prices will differ from the reference price.
+Each finding names its token, or `null` when it concerns the whole portfolio.
+`below_minimum_portfolio_value` carries `minimumDeployableValueUsdE8`. `projected_drift_increase` carries
+`currentMaxAbsDriftBps` and `projectedMaxAbsDriftBps`; a first replication has no current drift, so its
+projected drift is compared against zero and `currentMaxAbsDriftBps` is `null`.
 
-Inputs that no correct caller produces throw a `CalculationInputError` with a code: `invalid_address`,
-`duplicate_token`, `negative_amount`, `invalid_decimals`, `invalid_weights`, `invalid_bps`, `invalid_time`,
-`exit_token_is_constituent`.
+### A closed market
+
+**By default a `last_close` price is a warning, and a plan is computed with it.** With a `last_close` price the
+market is closed: the reference price is the value the feed held when trading stopped, onchain markets keep
+trading, and execution prices will differ by an amount this calculation cannot bound. The calculation reports
+that and does not decide: whether to act on a plan built on a closed market is a decision of the layer above,
+which knows the executable quotes.
+
+A caller that does not want such a plan passes `blockOnLastClose: true`. The finding `market_closed` then has
+severity `blocker` everywhere it is reported, in `valuePortfolio` and in `planRebalance` alike, and the plan
+has status `blocked` with no legs. The position is still valued, because the last close is a published value:
+drift and eligibility remain available while the market is closed.
+
+A caller that leaves the default has to handle the `market_closed` warning. A ready plan that carries it is
+sized on prices that are hours or days old.
+
+### Input errors
+
+Inputs that no correct caller produces throw a `CalculationInputError` with a code:
+
+| Code                        | Condition                                                              |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `invalid_address`           | A token that is not `0x` and 40 lowercase hexadecimal digits           |
+| `duplicate_token`           | A token repeated in a list                                             |
+| `negative_amount`           | A negative balance, usable price, deposit or minimum                   |
+| `invalid_amount`            | A balance, usable price, deposit or minimum that is not a `bigint`     |
+| `invalid_decimals`          | Decimals that are not an integer from 0 to 36                          |
+| `invalid_weights`           | No constituent, a weight outside 1 to 10000, or a sum other than 10000 |
+| `too_many_constituents`     | More than 64 constituents                                              |
+| `invalid_bps`               | A threshold outside 1 to 10000, or a reserve outside 0 to 2000         |
+| `invalid_time`              | A time or interval that is not a non-negative integer of seconds       |
+| `invalid_mode`              | A mode other than `rebalance` or `buy_only`                            |
+| `exit_token_is_constituent` | A token to exit that is a constituent of the target version            |
+
+A number passed where a `bigint` is required is rejected with `invalid_amount` before any arithmetic. The amount
+of a price that is not usable is not validated, because it is never read: such a price is a blocker.
 
 ## Guarantees
 
 These hold for every input that produces a plan. They are checked by property tests over 4,000 seeded random
-portfolios. `unit(t)` is the value of one base unit of token `t` rounded up, `ceil(priceE8 / 10^decimals)`.
+portfolios: first replications, wallets on target and arbitrary wallets, in both modes.
 
 - **Funds**: the quote amounts of the buys sum to at most the buy budget, which is at most the quote available
   plus the proceeds of the sells. The projected quote balance is never negative and is at least the reserve.
-- **Balances**: a sell never exceeds the balance held.
+- **Balances**: a sell never exceeds the balance held, and a token to exit is sold in full or not at all.
 - **No empty leg**: every leg has a token quantity and a quote amount above zero and a value of at least the
-  minimum.
+  minimum. A buy spends exactly what its quantity costs, rounded up to a quote base unit.
 - **Conservation**: the projected total (invested value plus quote value) is never above the total before
-  (invested value, quote available and tokens sold to exit). It is below it by at most 100 per sell plus
-  `unit(t)` per buy, in USD scaled by 1e8.
+  (invested value, quote available and tokens sold to exit). It is below it by at most 100 per leg, in USD
+  scaled by 1e8: one quote base unit.
 - **Direction**: the projected value of every constituent lies between its current value and its target value,
-  both included. No leg moves a constituent away from its target or past it.
+  both included. No leg moves a constituent away from its target value or past it.
 - **Weights**: current and projected weights each sum to exactly 10,000 when the invested value is above zero.
 - **Order**: the output does not depend on the order of constituents, holdings, prices or tokens to exit.
 - **Buy only**: a `buy_only` plan has no sell.
+- **Skipped buys**: when a buy is skipped, no bought constituent ends above its target weight, up to the
+  rounding `E` below.
+- **Sells follow buys**: the constituents sold raise at most what the buys need, plus per sell one base unit of
+  its token, the minimum leg value and three quote base units. When no buy is proposed no constituent is sold.
+- **First replication**: a first replication either buys every constituent or is blocked, and the stated
+  minimum deployable value is enough.
 
-### Maximum drift
+### Bounds on drift
 
-In `rebalance` mode with `reserveBps` 0 and `minLegValueUsdE8` 0, every projected drift is within
+`unit(t)` is the value of one base unit of token `t`, `ceil(priceE8 / 10^decimals)`. With `n` constituents and
+`exits` tokens to exit,
 
 ```
-boundBps = ceil(10000 * (n + 1) * E / projectedInvestedValue) + 1
-E        = sum of unit(t) over the constituents + 100 * (n + exits + 2) + 1
+E = sum of unit(t) over the constituents + 100 * (n + exits + 2) + 1
+G = ceil(10000 * (n + 1) * 2 * E / projectedInvestedValue)
 ```
 
-where `n` is the number of constituents and `exits` the number of tokens to exit. `E` is the largest distance
-of a projected value from its exact target: one base unit of every token, one quote base unit per rounding
-step, and one value unit for the rounded target. The last `+ 1` is the rounding of a weight to whole basis
-points. For a portfolio that is large against the granularity of its tokens the bound is 2 bps, and the
-projected maximum drift never exceeds the larger of the current maximum drift and the bound.
+`E` is the largest distance, in USD scaled by 1e8, that rounding to base units can put between a projected
+value and the value the rules aim at. `G` is that distance as a share of the projected invested value, in bps.
+For a portfolio that is large against the granularity of its tokens `G` is 1.
 
-With a reserve, a minimum leg value or `buy_only`, the plan is partial, and a partial plan does not always
-lower the maximum drift. Drift is measured against the invested value, and a plan changes that value: a sell
-whose proceeds are held back shrinks it, which raises the weight of every constituent that was not sold. The
-plan does not hide this. It reports the maximum drift before and after, and adds the warning
-`projected_drift_increase` whenever the projected one is higher. The guarantee that holds without exception is
-the one on values above: every constituent ends at least as close to its target value as it started.
+- **A wallet on target stays on target.** When the current maximum drift is 0 bps, the projected maximum drift
+  is at most `n + 4 + G` bps, in both modes and with any reserve and minimum. A drift of 0 bps means every
+  weight is within 1 bps of its target; a plan can add at most that deviation once per constituent, plus the
+  rounding of weights. In the seeded cases with `G` at most 1 the projected maximum drift of such a wallet is 0.
+- **A full rebalance reaches the target.** In `rebalance` mode with `reserveBps` 0 and `minLegValueUsdE8` 0,
+  when no buy is skipped, every projected drift is within `G + 1` bps, which is 2 bps for a portfolio that is
+  large against the granularity of its tokens, and the projected maximum drift never exceeds the larger of the
+  current one and that bound.
+
+A plan that is partial, because of the reserve, the minimum leg value, a cap or `buy_only`, does not always
+lower the maximum drift of a wallet that is off target. In `buy_only` mode the constituents above target cannot
+be sold, and the pro rata buys can leave a large constituent further under its target than any constituent was
+before. The plan does not hide this. It reports the maximum drift before and after, and adds the warning
+`projected_drift_increase` with both numbers whenever the projected one is higher. The guarantee that holds
+without exception is the one on values above: every constituent ends at least as close to its target value as
+it started.
 
 ## What the plan does not know
 
@@ -339,9 +491,7 @@ the one on values above: every constituent ends at least as close to its target 
 - **Execution.** The plan assumes every leg settles in order. It does not model a leg that fails or settles at
   another amount: a later layer computes a new plan from the balances that result.
 - **The quote asset price.** It is assumed to be exactly 1 USD.
-- **Market hours.** It only sees the staleness class of each price. With a `last_close` price the market is
-  closed and executable prices differ from the reference by an amount the plan cannot bound; that is the
-  `market_closed` warning and the reason for `blockOnLastClose`.
+- **Market hours.** It only sees the staleness class of each price. See [A closed market](#a-closed-market).
 
 ## Worked example
 
@@ -365,14 +515,19 @@ remainder `50000000000`. One basis point is missing and goes to the larger remai
 **Targets.** The deployable value is `150000000000`. A: `floor(150000000000 * 6000 / 10000) = 90000000000`.
 B: `60000000000`. Deltas: A `-10000000000`, B `+10000000000`.
 
-**Sell.** A is 100.00 USD above target: `floor(10000000000 * 10^8 / 125000000000) = 8000000` base units
+**Full sell.** A is 100.00 USD above target: `floor(10000000000 * 10^8 / 125000000000) = 8000000` base units
 (0.08 A), worth `10000000000`, proceeds `100000000` quote base units (100 USDC).
 
 **Budget.** `floor(100000000 * 9950 / 10000) = 99500000` (99.50 USDC).
 
-**Buy.** B wants `floor(10000000000 / 100) = 100000000`, more than the budget, so it is scaled:
-`floor(100000000 * 99500000 / 100000000) = 99500000`. Its value is `9950000000` and it buys
-`floor(9950000000 * 10^18 / 50000000) = 199000000000000000000` base units (199 B).
+**Buy.** B wants `floor(10000000000 / 100) = 100000000`, more than the budget, so its share is
+`floor(100000000 * 99500000 / 100000000) = 99500000`. That buys
+`floor(9950000000 * 10^18 / 50000000) = 199000000000000000000` base units (199 B), which cost
+`ceil(199 * 10^18 * 50000000 / 10^18) = 9950000000`, so the leg spends `99500000`. Nothing is skipped, so
+nothing is capped.
+
+**Sells follow the buys.** The buy needs `ceil(99500000 * 10000 / 9950) = 100000000` of proceeds, which is the
+full sell.
 
 | #   | Side | Token | `tokenQuantity`         | `quoteAmount` | `valueUsdE8`  | `priceE8`      |
 | --- | ---- | ----- | ----------------------- | ------------- | ------------- | -------------- |
@@ -393,14 +548,19 @@ The invested value is `149950000000` and `500000` quote base units (0.50 USDC, t
 | `calc`               | `equityos.calc/1`                                                                   |
 | `vectors[].name`     | Unique name                                                                         |
 | `vectors[].input`    | The input of `planRebalance`. An optional property that is absent takes its default |
-| `vectors[].expected` | The exact result: `blockers`, `warnings`, `valuation`, `plan`                       |
+| `vectors[].expected` | The exact result, with `status` `ready` or `blocked`                                |
 
 Every balance, price, value and quote amount is a decimal string, because these integers can exceed 2^53. Basis
-points, decimals and booleans are JSON numbers and booleans. A value that is not defined is `null`.
+points, decimals and booleans are JSON numbers and booleans. A value that is not defined is `null`. Two vectors
+carry a price whose `status` is absent or not a known class.
 
-The vectors cover both modes, the defaults, each blocker and warning, skipped legs, a token to exit, tokens of
+The vectors cover both modes, the defaults, every blocker, warning and skip reason, a token to exit, tokens of
 0, 6, 8 and 18 decimals, prices from 0.07 USD to 4,321.00 USD, an index of one constituent and one of 64, and
-portfolios from 5 USD to 10 million USD.
+portfolios from 9 USD to 10 million USD.
+
+The expected output of every vector was produced by `@equityos/core` and checked against an independent
+implementation of this page written in another language, which is not part of the repository: blockers,
+warnings, targets, legs, skipped legs and projection agree on all of them.
 
 ## Tests
 
