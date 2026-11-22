@@ -2,7 +2,10 @@ import { type Address, createPublicClient, encodeAbiParameters, encodeFunctionDa
 import { b20AssetAbi, multicall3Abi } from "../../src/server/market/abis";
 import { createMarketData, type MarketData } from "../../src/server/market/index";
 import { MULTICALL3_ADDRESS } from "../../src/server/market/onchain";
+import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
+import { loadRegistryReplay } from "../../src/server/registry/replay";
 import { fixtureFetch, fixtureTransport, onchainFixture } from "../market/support";
+import { type FakeChain, testConfig } from "../registry/support";
 
 /** Saturday 2026-11-21 19:10:55 UTC: the time of the recorded block. The market is closed. */
 export const RECORDED_AT = onchainFixture.blockTimestamp;
@@ -61,6 +64,28 @@ export function supplyOf(token: Address, supply: bigint) {
 
 export function get(path: string, headers: Record<string, string> = {}): Request {
   return new Request(`https://equityos.test${path}`, { headers });
+}
+
+/** A reader of the recorded registry in `test/fixtures/<directory>`: the local chain after the seed. */
+export function recordedRegistry(directory = "registry"): RegistryReader {
+  const { config, client } = loadRegistryReplay(new URL(`../fixtures/${directory}`, import.meta.url).pathname);
+  return createRegistryReader({ config, client });
+}
+
+/** A reader of an in-memory chain the test controls. */
+export function fakeRegistry(chain: FakeChain): RegistryReader {
+  return createRegistryReader({ config: testConfig(), client: chain.client(), now: () => 1_000 });
+}
+
+export function identifierContext(identifier: string): { params: Promise<{ identifier: string }> } {
+  return { params: Promise.resolve({ identifier }) };
+}
+
+export function versionContext(
+  identifier: string,
+  version: string,
+): { params: Promise<{ identifier: string; version: string }> } {
+  return { params: Promise.resolve({ identifier, version }) };
 }
 
 export function addressContext(address: string): { params: Promise<{ address: string }> } {

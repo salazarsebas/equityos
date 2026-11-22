@@ -11,6 +11,7 @@ export interface Schema {
   readonly const?: string | number | boolean;
   readonly pattern?: string;
   readonly minimum?: number;
+  readonly maximum?: number;
   readonly items?: Schema;
   readonly properties?: Readonly<Record<string, Schema>>;
   readonly required?: readonly string[];
@@ -81,6 +82,14 @@ function oneOf(values: readonly string[], description: string): Schema {
 }
 
 const count: Schema = { type: "integer", minimum: 0 };
+const bps: Schema = { type: "integer", minimum: 0, maximum: 10_000 };
+const versionNumber: Schema = { type: "integer", minimum: 1, description: "Version number, from 1." };
+
+/** A closed object of the published spec, where a property is present only when the author wrote it. */
+function specObject(properties: Record<string, Schema>, optional: readonly string[] = []): Schema {
+  const required = Object.keys(properties).filter((name) => !optional.includes(name));
+  return { type: "object", properties, required, additionalProperties: false };
+}
 
 const HEADERS = {
   [API_VERSION_HEADER]: { $ref: `#/components/headers/${API_VERSION_HEADER}` },
@@ -96,6 +105,16 @@ function success(description: string, data: Schema, meta: Schema): ResponseObjec
 }
 
 const invalidRequest = json("A parameter is unknown, repeated or malformed.", ref("Error"));
+const registryNotDeployed =
+  "The request is valid and the state of the service does not allow an answer. registry_not_deployed: the index registry has no code on the configured chain, which is a normal state and not an empty registry.";
+const identifierParameter: Parameter = {
+  name: "identifier",
+  in: "path",
+  required: true,
+  description:
+    "The canonical identifier of the index (its slug, a hyphen and a prefix of its index id), or its 32-byte index id in any letter case.",
+  schema: { type: "string" },
+};
 const failures = {
   "500": json("The server is not configured to read its data sources, or failed unexpectedly.", ref("Error")),
   "502": json("A data source answered with a payload that does not have the expected shape.", ref("Error")),
@@ -132,11 +151,25 @@ const snapshotMetaProperties = {
   datasets: ref("Datasets"),
 } as const satisfies Record<string, Schema>;
 
+const indexProperties = {
+  indexId: ref("Bytes32"),
+  identifier: text(
+    "Canonical identifier: slug and index id prefix, or the index id while the latest version is not conformant.",
+  ),
+  position: { ...count, description: "Position in creation order. It never changes." },
+  creator: ref("Address"),
+  createdAt: ref("Timestamp"),
+  latestVersion: versionNumber,
+  deprecated: { type: "boolean", description: "Whether the creator deprecated the index. It is one-way." },
+  deprecatedAt: nullable(ref("Timestamp")),
+  latest: ref("VersionSummary"),
+} as const satisfies Record<string, Schema>;
+
 const schemas: Record<string, Schema> = {
   Address: {
     type: "string",
     pattern: "^0x[0-9a-f]{40}$",
-    description: "A 20-byte address on Base mainnet, lowercase.",
+    description: "A 20-byte address, lowercase.",
   },
   Timestamp: {
     type: "string",
@@ -237,9 +270,200 @@ const schemas: Record<string, Schema> = {
     eligibility: ref("Eligibility"),
     referencePrice: ref("ReferencePrice"),
   }),
+  Bytes32: {
+    type: "string",
+    pattern: "^0x[0-9a-f]{64}$",
+    description: "32 bytes as lowercase hexadecimal: an index id or a spec hash.",
+  },
+  RegistryRef: object(
+    {
+      chainId: { type: "integer", description: "EIP-155 id of the chain the registry is read from." },
+      address: ref("Address"),
+      mode: oneOf(["live", "replay"], "replay means a recording of a development chain is served, for testing."),
+    },
+    "The index registry a response was read from.",
+  ),
+  RegistryMeta: object({ asOf: ref("Timestamp"), registry: ref("RegistryRef") }),
+  IndexListMeta: object({
+    asOf: ref("Timestamp"),
+    registry: ref("RegistryRef"),
+    total: { ...count, description: "Number of indexes in the registry." },
+    offset: { ...count, description: "Position of the first index of the page." },
+    limit: { ...count, description: "Maximum number of indexes in a page." },
+    count: { ...count, description: "Number of indexes in data." },
+    nextOffset: nullable({ ...count, description: "Offset of the next page. Null on the last page." }),
+  }),
+  CompositionMeta: object({ ...snapshotMetaProperties, registry: ref("RegistryRef") }),
+  VerificationSummary: object({
+    conformant: { type: "boolean", description: "True only if checks C1 to C5 all pass." },
+    failedCheck: nullable(
+      object({ id: ref("CheckId"), code: text("Stable code of the failure.") }, "The check that failed."),
+    ),
+  }),
+  CheckId: oneOf(["C1", "C2", "C3", "C4", "C5"], "A conformance check of the methodology spec."),
+  VersionSummary: object(
+    {
+      version: versionNumber,
+      name: nullable(text("Name from the spec. Null unless the version is conformant.")),
+      slug: nullable(text("Slug from the spec. Null unless the version is conformant.")),
+      weighting: nullable(oneOf(["equal", "fixed"], "Weighting of the spec. Null unless the version is conformant.")),
+      composition: ref("Composition"),
+      constituentCount: { ...count, description: "Number of constituents the registry stores for the version." },
+      specHash: ref("Bytes32"),
+      publishedAt: ref("Timestamp"),
+      publishedBlock: ref("UintString"),
+      verification: ref("VerificationSummary"),
+    },
+    "A version as listed. Nothing is taken from a spec that fails verification.",
+  ),
+  Composition: oneOf(
+    ["rule_based", "dynamic_weights", "static"],
+    "How much of the version the registry mirrors in contract state. static: tokens and weights.",
+  ),
+  IndexSummary: object(indexProperties),
+  Index: object({
+    ...indexProperties,
+    versions: {
+      type: "array",
+      description: "The most recent versions, newest first, at most 50. latestVersion says how many exist.",
+      items: object({
+        version: versionNumber,
+        publishedAt: ref("Timestamp"),
+        publishedBlock: ref("UintString"),
+        specHash: ref("Bytes32"),
+        conformant: { type: "boolean" },
+      }),
+    },
+  }),
+  Constituent: object({
+    token: ref("Address"),
+    weightBps: { ...bps, description: "Stored weight in basis points." },
+  }),
+  Check: object({
+    id: ref("CheckId"),
+    title: text("What the check establishes."),
+    status: oneOf(["pass", "fail", "skipped"], "skipped means an earlier check failed. It is never a success."),
+    code: text("Stable code of the outcome. ok for a pass."),
+    reason: text("Why the check has this status. Not stable."),
+  }),
+  IndexSpec: {
+    ...specObject(
+      {
+        schema: { type: "string", const: "equityos.index/1" },
+        calc: { type: "string", const: "equityos.calc/1" },
+        chainId: { type: "integer", minimum: 1 },
+        name: { type: "string" },
+        slug: { type: "string" },
+        description: { type: "string" },
+        universe: specObject({
+          type: { type: "string", const: "static" },
+          tokens: { type: "array", items: ref("Address") },
+        }),
+        weighting: specObject(
+          { type: { type: "string", enum: ["equal", "fixed"] }, weightsBps: { type: "array", items: bps } },
+          ["weightsBps"],
+        ),
+        constraints: specObject({ maxWeightBps: bps, minWeightBps: bps }, ["maxWeightBps", "minWeightBps"]),
+        pricing: specObject({
+          source: { type: "string", const: "chainlink-aggregator-v3" },
+          feeds: { type: "array", items: ref("Address") },
+        }),
+        rebalance: specObject({
+          trigger: { type: "string", const: "drift" },
+          driftThresholdBps: bps,
+          minIntervalSeconds: count,
+        }),
+        parent: specObject({
+          chainId: { type: "integer", minimum: 1 },
+          registry: ref("Address"),
+          indexId: ref("Bytes32"),
+          version: versionNumber,
+          specHash: ref("Bytes32"),
+        }),
+      },
+      ["constraints", "parent"],
+    ),
+    description:
+      "The published methodology spec equityos.index/1, as its author wrote it. Optional properties are absent, not null.",
+  },
+  IndexVersion: object({
+    indexId: ref("Bytes32"),
+    identifier: text("Canonical identifier of the index."),
+    version: versionNumber,
+    latestVersion: versionNumber,
+    isLatest: { type: "boolean" },
+    creator: ref("Address"),
+    chainId: { type: "integer" },
+    registry: ref("Address"),
+    specHash: { ...ref("Bytes32"), description: "keccak256 of the spec bytes, computed by the registry." },
+    publishedAt: ref("Timestamp"),
+    publishedBlock: ref("UintString"),
+    composition: ref("Composition"),
+    specSize: { ...count, description: "Length of the stored spec in bytes." },
+    specBytes: { type: "string", pattern: "^0x([0-9a-f]{2})*$", description: "The stored spec, byte for byte." },
+    specText: nullable(text("The stored spec as text. Null when the bytes are not well-formed UTF-8.")),
+    spec: nullable({ ...ref("IndexSpec"), description: "The parsed spec. Null unless the version is conformant." }),
+    constituents: {
+      type: "array",
+      items: ref("Constituent"),
+      description: "The constituents the registry stores, in its order. Verified against the spec by check C5.",
+    },
+    verification: object({
+      conformant: { type: "boolean" },
+      checks: { type: "array", items: ref("Check"), description: "C1 to C5, in order." },
+      specErrors: {
+        type: "array",
+        description: "Every schema violation found by C4.",
+        items: object({ path: text("JSON Pointer of the value."), code: text("Stable code."), message: text("Text.") }),
+      },
+    }),
+  }),
+  IndexComposition: object({
+    indexId: ref("Bytes32"),
+    identifier: text("Canonical identifier of the index."),
+    version: versionNumber,
+    isLatest: { type: "boolean" },
+    constituents: {
+      type: "array",
+      items: object({
+        token: ref("Address"),
+        symbol: nullable(text("Display symbol. Null when the asset list does not hold the token.")),
+        name: nullable(text("Display name. Null when the asset list does not hold the token.")),
+        targetWeightBps: { ...bps, description: "Target weight as published, in basis points." },
+        eligibility: {
+          ...ref("Eligibility"),
+          description: "Index eligibility of the token now. It can change after a version is published.",
+        },
+        transfersPaused: nullable({ type: "boolean", description: "Whether the issuer paused transfers now." }),
+        referencePrice: ref("ReferencePrice"),
+      }),
+    },
+  }),
+  RegistryStatus: object(
+    {
+      chainId: { type: "integer" },
+      address: ref("Address"),
+      mode: oneOf(["live", "replay"], "replay means a recording of a development chain is served, for testing."),
+      deployed: nullable({ type: "boolean", description: "Whether the registry has code. Null when unknown." }),
+      notDeployedReason: nullable(
+        oneOf(
+          ["not_configured", "no_code"],
+          "not_configured: no deployment is recorded for the chain. no_code: the address holds no code.",
+        ),
+      ),
+      indexCount: nullable({ ...count, description: "Number of indexes. Null unless the registry is deployed." }),
+      error: nullable(
+        object({
+          code: oneOf(API_ERROR_CODES, "Why the registry could not be read."),
+          details: ref("ErrorDetails"),
+        }),
+      ),
+    },
+    "The index registry on the configured chain. A registry that is not deployed is a normal state.",
+  ),
   Status: object({
     apiVersion: text("Version of the API contract."),
-    chainId: { type: "integer", const: 8453 },
+    chainId: { type: "integer", const: 8453, description: "Chain the market data is read from: Base mainnet." },
     marketPhase: ref("MarketPhase"),
     executionAvailable: {
       type: "boolean",
@@ -263,6 +487,7 @@ const schemas: Record<string, Schema> = {
         }),
       ),
     }),
+    registry: ref("RegistryStatus"),
   }),
   ErrorDetails: nullable({
     type: "object",
@@ -293,6 +518,7 @@ export const openApiDocument: OpenApiDocument = {
   servers: [{ url: "/api/v1", description: "This deployment" }],
   tags: [
     { name: "Assets", description: "Tokenized stocks listed on Base mainnet." },
+    { name: "Indexes", description: "Published index methodologies, their versions and their verification." },
     { name: "Meta", description: "The API itself." },
   ],
   paths: {
@@ -342,16 +568,119 @@ export const openApiDocument: OpenApiDocument = {
         },
       },
     },
+    "/indexes": {
+      get: {
+        operationId: "listIndexes",
+        summary: "List the published indexes",
+        description:
+          "A page of indexes in creation order, each with a summary of its latest version. Pagination is by position: the registry is append-only and a position never changes, so an offset is a stable cursor. An index whose latest version fails verification is listed with its state and without a name.",
+        tags: ["Indexes"],
+        parameters: [
+          {
+            name: "offset",
+            in: "query",
+            required: false,
+            description: "Position of the first index to return. Defaults to 0.",
+            schema: { type: "integer", minimum: 0 },
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            description: "Maximum number of indexes to return, 1 to 50. Defaults to 20.",
+            schema: { type: "integer", minimum: 1, maximum: 50 },
+          },
+        ],
+        responses: {
+          "200": success("The indexes.", { type: "array", items: ref("IndexSummary") }, ref("IndexListMeta")),
+          "400": invalidRequest,
+          "409": json(registryNotDeployed, ref("Error")),
+          ...failures,
+        },
+      },
+    },
+    "/indexes/{identifier}": {
+      get: {
+        operationId: "getIndex",
+        summary: "Get one index",
+        description: "One index with its most recent versions, newest first.",
+        tags: ["Indexes"],
+        parameters: [identifierParameter],
+        responses: {
+          "200": success("The index.", ref("Index"), ref("RegistryMeta")),
+          "400": invalidRequest,
+          "404": json("The registry holds no index with this identifier.", ref("Error")),
+          "409": json(registryNotDeployed, ref("Error")),
+          ...failures,
+        },
+      },
+    },
+    "/indexes/{identifier}/versions/{version}": {
+      get: {
+        operationId: "getIndexVersion",
+        summary: "Get one version of an index",
+        description:
+          "Everything the registry stores for one version: the onchain facts, the spec bytes as hex and as text, the stored constituents and the report of checks C1 to C5. The parsed spec is present only when every check passes.",
+        tags: ["Indexes"],
+        parameters: [
+          identifierParameter,
+          {
+            name: "version",
+            in: "path",
+            required: true,
+            description: "Version number, from 1.",
+            schema: { type: "string", pattern: "^[1-9][0-9]{0,9}$" },
+          },
+        ],
+        responses: {
+          "200": success("The version.", ref("IndexVersion"), ref("RegistryMeta")),
+          "400": invalidRequest,
+          "404": json("No index has this identifier, or the index has no version with this number.", ref("Error")),
+          "409": json(registryNotDeployed, ref("Error")),
+          ...failures,
+        },
+      },
+    },
+    "/indexes/{identifier}/composition": {
+      get: {
+        operationId: "getIndexComposition",
+        summary: "Get the composition of an index",
+        description:
+          "The constituents of a verified version with their target weights, joined with the asset universe as it is now: symbol, name, reference price with its staleness class, and whether the token is still index-eligible. Eligibility is a current status and can differ from the day of publication. A reference price is not an executable price.",
+        tags: ["Indexes"],
+        parameters: [
+          identifierParameter,
+          {
+            name: "version",
+            in: "query",
+            required: false,
+            description: "Version number. Defaults to the latest version.",
+            schema: { type: "string", pattern: "^[1-9][0-9]{0,9}$" },
+          },
+        ],
+        responses: {
+          "200": success("The composition.", ref("IndexComposition"), ref("CompositionMeta")),
+          "400": invalidRequest,
+          "404": json("No index has this identifier, or the index has no version with this number.", ref("Error")),
+          "409": json(
+            `${registryNotDeployed} version_not_conformant: the version fails verification, so no composition is computed from it.`,
+            ref("Error"),
+          ),
+          ...failures,
+        },
+      },
+    },
     "/status": {
       get: {
         operationId: "getStatus",
         summary: "API and data status",
         description:
-          "Version, chain, market phase, execution availability and the age of each cached dataset. Answers 200 when a data source is down and reports the failure in marketData.error.",
+          "Version, chain, market phase, execution availability, the age of each cached dataset and whether the index registry is deployed on the configured chain. Answers 200 when a data source is down and reports the failure in marketData.error or registry.error.",
         tags: ["Meta"],
         responses: {
           "200": success("The status.", ref("Status"), object({ asOf: ref("Timestamp") })),
           "400": invalidRequest,
+          "500": failures["500"],
         },
       },
     },

@@ -3,10 +3,50 @@ import { readdirSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020";
 import { assetHandler, assetsHandler } from "../../src/server/api/assets";
 import { API_VERSION } from "../../src/server/api/http";
+import {
+  indexCompositionHandler,
+  indexesHandler,
+  indexHandler,
+  indexVersionHandler,
+} from "../../src/server/api/indexes";
 import { openApiDocument, type Schema } from "../../src/server/api/openapi";
 import { statusHandler } from "../../src/server/api/status";
+import { resolveRegistryConfig } from "../../src/server/registry/config";
+import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
-import { addressContext, fixtureService, get, RECORDED_AT, wrongChain } from "./support";
+import { buildSpec, FakeChain } from "../registry/support";
+import {
+  addressContext,
+  fakeRegistry,
+  fixtureService,
+  get,
+  identifierContext,
+  RECORDED_AT,
+  recordedRegistry,
+  versionContext,
+  wrongChain,
+} from "./support";
+
+const DIVERSIFIED = "diversified-equity-d622e2a5";
+const MISMATCHED = "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759";
+const UNKNOWN = `0x${"1".repeat(64)}`;
+
+function registryOptions(registry: RegistryReader = recordedRegistry(), service = fixtureService()) {
+  return { registry: () => registry, mode: () => "replay" as const, marketData: service.marketData };
+}
+
+/** Base mainnet, where the registry is not deployed. */
+function notDeployed() {
+  return registryOptions(createRegistryReader({ config: resolveRegistryConfig({}) }));
+}
+
+/** A registry whose endpoint fails every call. */
+function unreachable() {
+  const chain = new FakeChain();
+  chain.createIndex(buildSpec());
+  chain.fail = (method) => method === "eth_call";
+  return registryOptions(fakeRegistry(chain));
+}
 
 const API_ROOT = new URL("../../src/app/api/v1/", import.meta.url);
 
@@ -54,7 +94,7 @@ function collectRefs(value: unknown, refs: Set<string> = new Set()): Set<string>
 describe("OpenAPI document", () => {
   test("describes every route under src/app/api/v1 and nothing else", () => {
     expect(Object.keys(openApiDocument.paths).sort()).toEqual(routePaths().sort());
-    expect(routePaths().length).toBeGreaterThanOrEqual(4);
+    expect(routePaths().length).toBeGreaterThanOrEqual(8);
   });
 
   test("is OpenAPI 3.1 at the version the responses carry", () => {
@@ -140,7 +180,13 @@ describe("handler output validates against the document", () => {
 
   test("GET /status: available, unavailable and a bad parameter", async () => {
     const service = fixtureService();
-    const options = { marketData: service.marketData, mode: () => "live" as const, now: () => service.clock.now };
+    const options = {
+      marketData: service.marketData,
+      mode: () => "live" as const,
+      registry: () => recordedRegistry(),
+      registryMode: () => "replay" as const,
+      now: () => service.clock.now,
+    };
     const responses = [
       await statusHandler(options)(get("/api/v1/status", { "x-vercel-ip-country": "US" }), undefined),
       await statusHandler(options)(get("/api/v1/status?x=1"), undefined),
@@ -150,6 +196,75 @@ describe("handler output validates against the document", () => {
     responses.push(await statusHandler(options)(get("/api/v1/status"), undefined));
     expect(responses.map((response) => response.status)).toEqual([200, 400, 200]);
     for (const response of responses) await expectDocumented("/status", response);
+  });
+
+  test("GET /indexes: recorded list, a page, empty, bad parameter, not deployed and registry down", async () => {
+    const responses = [
+      await indexesHandler(registryOptions())(get("/api/v1/indexes"), undefined),
+      await indexesHandler(registryOptions())(get("/api/v1/indexes?offset=1&limit=2"), undefined),
+      await indexesHandler(registryOptions(recordedRegistry("registry-empty")))(get("/api/v1/indexes"), undefined),
+      await indexesHandler(registryOptions())(get("/api/v1/indexes?limit=0"), undefined),
+      await indexesHandler(notDeployed())(get("/api/v1/indexes"), undefined),
+      await indexesHandler(unreachable())(get("/api/v1/indexes"), undefined),
+    ];
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 409, 503]);
+    for (const response of responses) await expectDocumented("/indexes", response);
+  });
+
+  test("GET /indexes/{identifier}: conformant, not conformant, malformed, unknown and not deployed", async () => {
+    const handler = indexHandler(registryOptions());
+    const responses = [
+      await handler(get("/"), identifierContext(DIVERSIFIED)),
+      await handler(get("/"), identifierContext(MISMATCHED)),
+      await handler(get("/"), identifierContext("not an identifier")),
+      await handler(get("/"), identifierContext(UNKNOWN)),
+      await indexHandler(notDeployed())(get("/"), identifierContext(DIVERSIFIED)),
+    ];
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 400, 404, 409]);
+    for (const response of responses) await expectDocumented("/indexes/{identifier}", response);
+  });
+
+  test("GET /indexes/{identifier}/versions/{version}: every recorded version, and each error", async () => {
+    const handler = indexVersionHandler(registryOptions());
+    const chain = new FakeChain();
+    const notUtf8 = chain.createIndex({ specBytes: Uint8Array.of(0xff), constituents: [], composition: 0 });
+    const invalid = chain.createIndex({ ...buildSpec(), specBytes: new TextEncoder().encode('{"schema":"x"}') });
+    const responses = [
+      await handler(get("/"), versionContext(DIVERSIFIED, "1")),
+      await handler(get("/"), versionContext(DIVERSIFIED, "2")),
+      await handler(get("/"), versionContext("semiconductors-fixed-a3e409e2", "1")),
+      await handler(get("/"), versionContext(MISMATCHED, "1")),
+      await indexVersionHandler(registryOptions(fakeRegistry(chain)))(get("/"), versionContext(notUtf8, "1")),
+      await indexVersionHandler(registryOptions(fakeRegistry(chain)))(get("/"), versionContext(invalid, "1")),
+      await handler(get("/"), versionContext(DIVERSIFIED, "zero")),
+      await handler(get("/"), versionContext(DIVERSIFIED, "3")),
+      await indexVersionHandler(notDeployed())(get("/"), versionContext(DIVERSIFIED, "1")),
+    ];
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200, 200, 200, 400, 404, 409]);
+    for (const response of responses) await expectDocumented("/indexes/{identifier}/versions/{version}", response);
+  });
+
+  test("GET /indexes/{identifier}/composition: priced, unlisted, not conformant, unknown and sources down", async () => {
+    const handler = indexCompositionHandler(registryOptions());
+    const chain = new FakeChain();
+    const unlisted = chain.createIndex(buildSpec());
+    const down = fixtureService();
+    down.outage.rpc = true;
+    const responses = [
+      await handler(get("/"), identifierContext(DIVERSIFIED)),
+      await handler(get("/api/v1/x?version=1"), identifierContext(DIVERSIFIED)),
+      await indexCompositionHandler(registryOptions(fakeRegistry(chain)))(get("/"), identifierContext(unlisted)),
+      await handler(get("/api/v1/x?version=0"), identifierContext(DIVERSIFIED)),
+      await handler(get("/"), identifierContext(UNKNOWN)),
+      await handler(get("/"), identifierContext(MISMATCHED)),
+      await indexCompositionHandler(notDeployed())(get("/"), identifierContext(DIVERSIFIED)),
+      await indexCompositionHandler(registryOptions(recordedRegistry(), down))(
+        get("/"),
+        identifierContext(DIVERSIFIED),
+      ),
+    ];
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 404, 409, 409, 503]);
+    for (const response of responses) await expectDocumented("/indexes/{identifier}/composition", response);
   });
 
   test("a response with an undocumented field does not validate", () => {
