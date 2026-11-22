@@ -82,19 +82,28 @@ bun run --filter @equityos/core test
 
 ## Environment
 
-| Variable                    | Used by    | Purpose                                                                                |
-| --------------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SITE_URL`      | `apps/web` | Public origin for canonical URLs, `robots.txt` and the sitemap. Defaults to localhost. |
-| `BASE_RPC_URL`              | `apps/web` | Base mainnet JSON-RPC endpoint for server-side market data. Required in production.    |
-| `EQUITYOS_CHAIN_ID`         | `apps/web` | Chain the index registry is read from: 8453 (default), 84532 or 31337.                 |
-| `EQUITYOS_RPC_URL`          | `apps/web` | JSON-RPC endpoint of the registry chain when it is 84532 or 31337.                     |
-| `EQUITYOS_LOG_CHUNK_BLOCKS` | `apps/web` | Blocks per `eth_getLogs` request of the registry event scan. Defaults to 2000.         |
+| Variable                               | Used by    | Purpose                                                                                |
+| -------------------------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                 | `apps/web` | Public origin for canonical URLs, `robots.txt` and the sitemap. Defaults to localhost. |
+| `BASE_RPC_URL`                         | `apps/web` | Base mainnet JSON-RPC endpoint for server-side market data. Required in production.    |
+| `EQUITYOS_CHAIN_ID`                    | `apps/web` | Chain the index registry is read from: 8453 (default), 84532 or 31337.                 |
+| `EQUITYOS_RPC_URL`                     | `apps/web` | JSON-RPC endpoint of the registry chain when it is 84532 or 31337.                     |
+| `EQUITYOS_LOG_CHUNK_BLOCKS`            | `apps/web` | Blocks per `eth_getLogs` request of the registry event scan. Defaults to 2000.         |
+| `NEXT_PUBLIC_BASE_RPC_URL`             | `apps/web` | Base mainnet JSON-RPC endpoint the browser reads balances from. Set it in production.  |
+| `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`     | `apps/web` | Base Sepolia JSON-RPC endpoint for the browser. Set it in production.                  |
+| `NEXT_PUBLIC_ANVIL_RPC_URL`            | `apps/web` | Local Anvil endpoint, development builds only. Defaults to `http://127.0.0.1:8545`.    |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | `apps/web` | Enables the WalletConnect option of the connect dialog. Unset: the option is absent.   |
 
 `apps/web/.env.example` lists the variables. Outside production, an unset `BASE_RPC_URL` falls back to the public
 Base endpoint, which is rate limited. The market data layer is described in
 [Market data layer](../architecture/market-data.md), the registry variables in
 [Registry reader](../architecture/registry-reader.md), and running against a local node in
 [Local chain](local-chain.md).
+
+The `NEXT_PUBLIC_*` variables are compiled into the browser bundle when the app is built, so they are public and
+a change needs a new build. The two browser RPC endpoints fall back to the public Base endpoints, which are rate
+limited: that is acceptable for local development and not for a deployment. The wallet layer is described in
+[Wallet connection](../architecture/wallet.md).
 
 ## TypeScript configuration
 
