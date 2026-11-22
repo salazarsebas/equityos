@@ -111,8 +111,9 @@ The shell is in `apps/web/src/components/shell`: `Header`, `PrimaryNav`, `ThemeT
 `Grid`. The root layout adds a skip link before the header.
 
 The top bar ends with the account control from `apps/web/src/components/wallet`: "Connect wallet", or the
-shortened account in mono with a menu. Under 640 px the primary navigation moves to a second row of 40 px, because
-the wordmark, the navigation, the theme toggle and the account control do not fit in one.
+shortened account in mono with a menu. It has a fixed width of 176 px and is a neutral block of that size until
+its code has loaded, so the bar never shifts. Under 640 px the primary navigation moves to a second row of 40 px,
+because the wordmark, the navigation, the theme toggle and the account control do not fit in one.
 
 ### Usage rules
 
@@ -176,5 +177,6 @@ that adds its page: `apps/web/test/navigation.test.ts` fails when an entry point
 
 - `bun run test` runs the contrast, formatting and navigation tests.
 - `bun run test:e2e` runs the Playwright smoke test against the production build: every page renders with no
-  console errors, there is no horizontal overflow at 375 px, the theme toggle persists, fonts are served from
+  console errors, static pages are still prerendered, there is no horizontal overflow at 375 px, the theme
+  toggle persists, fonts are served from
   the app's origin, and tabs and the dialog respond to the keyboard. Run `bun run build` first.

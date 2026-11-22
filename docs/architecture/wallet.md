@@ -14,7 +14,7 @@ no code path in the app calls `sendTransaction`, `writeContract`, `sendCalls` or
   what will happen. Connecting requests the public address only.
 - It never requests an unlimited token approval. Flows that need an approval will request the exact amount.
 - It never treats the connection as authentication. The cookie that remembers a connection is a claim by the
-  browser: it decides what is rendered and nothing else.
+  browser: it decides what the browser renders and nothing else, and the server does not read it.
 - It never blocks reading. Every page works without a wallet, and any address can be looked up without one.
 
 ## Stack
@@ -67,38 +67,40 @@ text is never shown.
 `listWalletOptions` decides the list and its order. A wallet icon is rendered only when it is an image data URI,
 which is what EIP-6963 requires, so the dialog never requests a remote image.
 
-## Server rendering
+## Rendering and loading
 
-The configuration follows the wagmi SSR guide for the App Router: `ssr: true`, cookie storage, and the cookie
-turned into initial state on the server with `cookieToInitialState`.
+No server code reads the wallet connection. A page that is prerendered at build time stays prerendered: the root
+layout reads neither cookies nor headers.
 
-1. The root layout calls `readWalletState` (`src/server/wallet-state.ts`), which reads the wagmi cookie of the
-   request. `storedAccount` extracts the account from it, trusting nothing about its shape.
-2. `WalletBootProvider` carries that state to the client. It holds data only and imports no wallet library.
-3. The server renders a stand-in for each region that uses the wallet. In the top bar it is the same
-   `AccountButton` the real control renders, showing the stored account. A connected visitor therefore gets
-   their account in the first HTML: there is no disconnected state that corrects itself, and no hydration
-   mismatch, because the server and the first client render both draw the stand-in from the same cookie state.
-4. The regions themselves (`AccountControl`, `WalletView`) are loaded with `next/dynamic` and `ssr: false`. Each
-   wraps itself in `WalletRuntime`, which creates the one wagmi configuration and query cache of the page on
-   first use and calls `hydrate` with the cookie state. `hydrate` puts the state in place synchronously, so the
-   first render of the region shows the same account as the stand-in, and then verifies it against the wallet.
-5. A click on the stand-in before the control has loaded is remembered and replayed, and keyboard focus is handed
-   over, so the stand-in is never a dead control.
+1. The regions that use the wallet (`AccountControl` in the top bar, `WalletView` on the wallet page) are loaded
+   with `next/dynamic` and `ssr: false`. The server renders a neutral placeholder of the same size in their
+   place. In the top bar the slot has a fixed width (`ACCOUNT_SLOT`) that the button fills whatever it shows, so
+   nothing next to it moves when the control appears.
+2. Each region wraps itself in `WalletRuntime`, which creates the one wagmi configuration and query cache of the
+   page on first use. The configuration follows the wagmi SSR guide: `ssr: true`, so wagmi does not read storage
+   on its own, and cookie storage.
+3. The runtime reads the cookie in the browser, turns it into initial state with `cookieToInitialState` and
+   passes it to `hydrate` before any region renders. A cookie is used because it can be read synchronously: the
+   first render of the control already shows the stored account, so a connected visitor sees the placeholder
+   and then their account, never a disconnected control that corrects itself. `hydrate` then verifies the
+   connection against the wallet.
+4. The cookie is read before the configuration is created, because creating it writes its empty initial state
+   to the same cookie.
 
 Consequences worth knowing:
 
-- Reading the cookie in the root layout makes every page render on request. No page is prerendered at build time.
-- Wallet code is not in the first load of any page. It is fetched after the page is interactive. This is also
-  why the regions are browser-only: the server bundle of `@base-org/account` does not build in this app.
+- Wallet code is not in the first load of any page. It is fetched after the page is interactive. The regions
+  are also browser-only out of necessity: the server bundle of `@base-org/account` does not build in this app.
+- There is no hydration mismatch to manage: the server and the first client render both draw the placeholder.
 - A visitor with no stored connection triggers no reconnection, so no wallet SDK is loaded for them until they
   open the dialog and choose that wallet. For a visitor with a stored connection, wagmi asks every configured
   connector whether it has a session, which loads the SDKs in the background.
 - The cookies are `equityos.wallet.store` and `equityos.wallet.recentConnectorId`. They hold the connector, the
-  accounts and the chain: public data.
+  accounts and the chain: public data. `storedAccount` reads the account from that state trusting nothing about
+  its shape. The server never reads them and nothing treats them as authentication.
 
 A new region that needs the wallet follows the same pattern: a client component loaded with `ssr: false` that
-renders `WalletRuntime` around its content, and a stand-in drawn from `useWalletBoot`.
+renders `WalletRuntime` around its content, with a placeholder of its size.
 
 ## Capability detection
 
@@ -143,9 +145,12 @@ has a `null` balance, which is rendered as missing and never as zero.
 USDC on Base mainnet is `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, the address Circle publishes in its list of
 USDC contract addresses. Its `symbol()` and `decimals()` answer `USDC` and `6`.
 
-`summarizeBalances` values each balance at its reference price with `mulDivDown`, in USD scaled by 1e8, and
-splits held from zero balances. No reference feed is mapped for USDC, so it is listed as a quantity without a
-value, and the total says how many balances it leaves out. A value is an indication, not an executable price.
+`summarizeBalances` values each balance with `positionValueUsdE8` from `@equityos/core`, rounded down, in USD
+scaled by 1e8, and splits held from zero balances. USDC is valued at exactly 1.00 USD per unit
+(`USDC_ASSUMED_PRICE_E8`). That is an assumption of parity, not a reference feed price, and the table says so on
+the row, in the total and in its caption. Every other token is valued at its reference price, and one without a
+usable price has no value and is counted as left out of the total. A value is an indication, not an executable
+price.
 
 ## Execution availability
 
@@ -173,5 +178,9 @@ The asset list and the reference prices come from the server's market data layer
 - `apps/web/test/wallet`: unit tests of all pure logic and of the account button markup.
 - `apps/web/e2e/wallet.e2e.ts`: Playwright against the production build. `e2e/wallet-support.ts` injects an
   EIP-1193 provider announced through EIP-6963 and answers the browser's JSON-RPC requests, so the tests reach no
-  network. They cover the dialog, the full connect flow, the wrong network state, a declined switch, the stored
-  connection in the first HTML after a reload, disconnecting, the wallet page and the 375 px layout.
+  network. They cover the dialog, the full connect flow, the wrong network state, a declined switch, a reload
+  while connected (the control never shows a disconnected state and the top bar does not move), disconnecting,
+  the wallet page and the 375 px layout.
+- `apps/web/e2e/smoke.e2e.ts` checks the rendering mode of each page from its response headers: `/` and
+  `/dev/components` must be prerendered, `/assets` and `/wallet` rendered on request. It fails if a change makes
+  a static page dynamic.
