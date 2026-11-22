@@ -4,5 +4,5 @@
     "types": ["bun"],
     "incremental": false
   },
-  "include": ["test/**/*.ts"]
+  "include": ["test/**/*.ts", "scripts/**/*.ts"]
 }
