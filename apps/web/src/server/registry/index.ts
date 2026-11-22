@@ -19,11 +19,15 @@ export {
   createRegistryCaches,
   createRegistryReader,
   getRegistryReader,
+  getRegistryReplay,
   HEADS_CACHE,
   type RegistryCaches,
   type RegistryReader,
+  type RegistryMode,
   type RegistryReaderOptions,
+  registryMode,
 } from "./reader";
+export { loadRegistryReplay, REGISTRY_REPLAY_VARIABLE, type RegistryReplay } from "./replay";
 export {
   type Composition,
   DEFAULT_PAGE_SIZE,

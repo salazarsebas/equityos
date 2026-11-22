@@ -1,0 +1,12 @@
+{
+  "source": "IndexRegistry 0x4BD4D49A9C88f75FB97674488E23A7Fa59F9506c on a local Anvil node (chain 31337), after \"bun run contracts:deploy:local\", before any index is published. Example data, not a live network.",
+  "chainId": 31337,
+  "blockNumber": "2",
+  "blockTimestamp": 1794837604,
+  "calls": [
+    {
+      "callData": "0x19a0bc4a",
+      "returnData": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

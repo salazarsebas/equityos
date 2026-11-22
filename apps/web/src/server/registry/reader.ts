@@ -16,6 +16,7 @@ import { type RegistryConfig, resolveRegistryConfig, resolveRegistryRpcUrl } fro
 import { RegistryConfigurationError, RegistryUpstreamError } from "./errors";
 import { createEventScanner, type EventScan, type EventScanner } from "./events";
 import { createIndexDirectory, formatIdentifier, parseIdentifier } from "./identifier";
+import { loadRegistryReplay, REGISTRY_REPLAY_VARIABLE, type RegistryReplay } from "./replay";
 import {
   DEFAULT_PAGE_SIZE,
   type IndexHead,
@@ -80,6 +81,9 @@ export interface RegistryReaderOptions {
  * @throws {RegistryConfigurationError} if the RPC endpoint is not configured or is not the configured chain.
  */
 export interface RegistryReader {
+  /** The chain this reader reads, and the lowercase address the registry has on it. */
+  readonly chainId: number;
+  readonly registry: Address;
   /** A page of indexes in creation order, each with its latest version. */
   listIndexes(page?: PageRequest): Promise<RegistryRead<IndexPage>>;
   /** Resolves a URL identifier: an index id, or `<slug>-<prefix>` (see `identifier.ts`). */
@@ -94,6 +98,10 @@ export interface RegistryReader {
   listVersions(indexId: Hex, page?: PageRequest): Promise<RegistryLookup<VersionPage, "index_not_found">>;
   /** The registry and rebalance events found so far. See `EventScanner.scan`. */
   getEvents(): Promise<RegistryRead<EventScan>>;
+}
+
+function lowercaseAddress(address: Address): Address {
+  return `0x${address.slice(2).toLowerCase()}`;
 }
 
 function systemClock(): number {
@@ -120,7 +128,7 @@ export function createRegistryReader(options: RegistryReaderOptions = {}): Regis
   const { chainId, deployment } = config;
   const registry: Address = deployment.registry;
   /** Prefix of every cache key: versions are immutable per `(chainId, registry, indexId, version)`. */
-  const scope = `${chainId}:${registry.toLowerCase()}`;
+  const scope = `${chainId}:${lowercaseAddress(registry)}`;
 
   let target: ChainTarget | undefined;
   function chain(): ChainTarget {
@@ -243,6 +251,8 @@ export function createRegistryReader(options: RegistryReaderOptions = {}): Regis
   let scanner: EventScanner | undefined;
 
   return {
+    chainId,
+    registry: lowercaseAddress(registry),
     async listIndexes(page = {}) {
       const deployed = await deployBlockOrAbsent();
       if (typeof deployed !== "bigint") return deployed;
@@ -310,14 +320,47 @@ export function createRegistryReader(options: RegistryReaderOptions = {}): Regis
   };
 }
 
+/**
+ * - `live`: the chain selected by `EQUITYOS_CHAIN_ID` is read as it is now.
+ * - `replay`: a recording of the registry of a local chain at one past block is served. For browser tests.
+ */
+export type RegistryMode = "live" | "replay";
+
+function replayDirectory(env: NodeJS.ProcessEnv): string | null {
+  const directory = env[REGISTRY_REPLAY_VARIABLE]?.trim() ?? "";
+  return directory === "" ? null : directory;
+}
+
+/**
+ * Where the process-wide reader reads from. A caller that shows registry data to a person or returns it from
+ * an API must state when the mode is `replay`: a replayed registry is a past state of a development chain.
+ */
+export function registryMode(env: NodeJS.ProcessEnv = process.env): RegistryMode {
+  return replayDirectory(env) === null ? "live" : "replay";
+}
+
+let replay: RegistryReplay | undefined;
+
+/** The recording the process-wide reader replays, or `null` in `live` mode. */
+export function getRegistryReplay(): RegistryReplay | null {
+  const directory = replayDirectory(process.env);
+  if (directory === null) return null;
+  replay ??= loadRegistryReplay(directory);
+  return replay;
+}
+
 let shared: RegistryReader | undefined;
 
 /**
- * The process-wide reader of the chain selected by `EQUITYOS_CHAIN_ID`.
+ * The process-wide reader: of the chain selected by `EQUITYOS_CHAIN_ID`, unless `REGISTRY_REPLAY_DIR` names a
+ * recording to replay.
  *
- * @throws {RegistryConfigurationError} if the environment does not describe a usable chain.
+ * @throws {RegistryConfigurationError} if the environment does not describe a usable chain or recording.
  */
 export function getRegistryReader(): RegistryReader {
-  shared ??= createRegistryReader();
+  if (shared === undefined) {
+    const recording = getRegistryReplay();
+    shared = createRegistryReader(recording === null ? {} : { config: recording.config, client: recording.client });
+  }
   return shared;
 }
