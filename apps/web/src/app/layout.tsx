@@ -3,8 +3,10 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { Footer } from "@/components/shell/footer";
 import { Header } from "@/components/shell/header";
+import { WalletBootProvider } from "@/components/wallet/boot";
 import { site } from "@/lib/site";
 import { themeInitScript } from "@/lib/theme";
+import { readWalletState } from "@/server/wallet-state";
 import "./globals.css";
 
 // next/font downloads the files at build time and serves them from this origin: no request to a font CDN.
@@ -54,7 +56,10 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  // Reading the cookie makes every page render on request: it is what lets a connected visitor get their
+  // account in the first HTML instead of a disconnected state that corrects itself.
+  const wallet = await readWalletState();
   return (
     // The theme script sets data-theme on <html> before hydration, so the attribute differs from the server markup.
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
@@ -69,11 +74,13 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         >
           Skip to main content
         </a>
-        <Header />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <Footer />
+        <WalletBootProvider state={wallet.state} account={wallet.account}>
+          <Header />
+          <main id="main" className="flex-1">
+            {children}
+          </main>
+          <Footer />
+        </WalletBootProvider>
       </body>
     </html>
   );

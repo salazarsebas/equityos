@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { cx } from "./cx";
 
 type Variant = "primary" | "secondary" | "ghost" | "destructive";
@@ -25,6 +25,7 @@ const sizes: Record<Size, string> = {
 };
 
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "disabled"> & {
+  ref?: Ref<HTMLButtonElement>;
   variant?: Variant;
   size?: Size;
   disabled?: boolean;
