@@ -204,3 +204,11 @@ export function shortenAddress(address: string): string {
   if (!ADDRESS.test(address)) throw new TypeError(`not a 20-byte hex address: ${address}`);
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
+
+const HASH = /^0x[0-9a-fA-F]{64}$/;
+
+/** Shortens a 32-byte hash or id to its first 8 hexadecimal digits: `0x90d5104e`. */
+export function shortenHash(hash: string): string {
+  if (!HASH.test(hash)) throw new TypeError(`not a 32-byte hex value: ${hash}`);
+  return hash.slice(0, 10);
+}

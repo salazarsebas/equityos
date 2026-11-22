@@ -38,21 +38,26 @@ at the same addresses as on any other chain. A second run sends nothing.
 bun run seed:local
 ```
 
-`apps/web/scripts/seed-local.ts` publishes three indexes built with `@equityos/core` and prints the index id,
-the canonical identifier and the spec hash of each version:
+`apps/web/scripts/seed-local.ts` publishes five indexes built with `@equityos/core`, in this order, and prints
+the index id, the canonical identifier and the spec hash of each version:
 
-| Index                         | Weighting                                  | Versions |
-| ----------------------------- | ------------------------------------------ | -------- |
-| Large Technology Equal Weight | Equal, five constituents                   | 1        |
-| Semiconductors Fixed Weight   | Fixed, with a minimum and a maximum weight | 1        |
-| Diversified Equity            | Equal in version 1, fixed in version 2     | 2        |
+| Index                         | What it shows                                                      | Versions |
+| ----------------------------- | ------------------------------------------------------------------ | -------- |
+| Mismatched Weights Example    | Published with other weights than its spec implies: fails check C5 | 1        |
+| Single Asset Example          | One constituent at full weight. Deprecated after publication       | 1        |
+| Large Technology Equal Weight | Equal, five constituents                                           | 1        |
+| Semiconductors Fixed Weight   | Fixed, with a minimum and a maximum weight                         | 1        |
+| Diversified Equity            | Equal in version 1, fixed in version 2                             | 2        |
+
+The first two exist so that the states an index page must handle can be seen locally: a version that fails
+verification, whose name is never displayed, and a deprecated index.
 
 Properties of the seed:
 
 - It sends transactions only when the endpoint reports chain id 31337. On any other chain it stops before
   touching an account.
 - Anvil signs for its first unlocked account. No private key is read, stored or created.
-- It can be run again. An index or a version that is already published is skipped.
+- It can be run again. An index, a version or a deprecation that is already there is skipped.
 - The constituents are the Base mainnet addresses of tokens that have a reference feed in the market data
   layer, and the feeds are their Base mainnet proxies. The registry stores addresses and calls no token, so
   they are publishable on a chain where those tokens do not exist.
@@ -79,7 +84,8 @@ Then:
 bun run dev
 ```
 
-The registry reader now reads the local node. `EQUITYOS_RPC_URL` is needed only when Anvil is not on
+The registry reader now reads the local node, and `/indexes` lists the seeded indexes with a notice that they are
+examples on a local chain. `EQUITYOS_RPC_URL` is needed only when Anvil is not on
 `http://127.0.0.1:8545`. Market data is still read from Base mainnet through `BASE_RPC_URL`: the seeded
 constituents are real Base mainnet tokens, so their reference prices apply.
 

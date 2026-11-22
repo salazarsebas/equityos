@@ -1,6 +1,6 @@
 import { marketPhaseAt } from "@equityos/core";
 import type { Metadata } from "next";
-import { oldestUpdate } from "@/app/assets/assets-table";
+import { oldestUpdate } from "@/components/market/reference-price";
 import { Container } from "@/components/shell/container";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";

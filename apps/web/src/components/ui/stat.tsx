@@ -30,14 +30,26 @@ export function Stat({ label, value, unit, tone }: StatProps) {
   );
 }
 
+const columnClasses = {
+  4: "grid-cols-2 lg:grid-cols-4",
+  6: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
+} as const;
+
+type StatGridProps = {
+  children: ReactNode;
+  /** Number of stats in one row on a wide screen. Defaults to 6. */
+  columns?: keyof typeof columnClasses;
+  className?: string;
+};
+
 /**
  * A row of stats that wraps on narrow screens. Every cell draws its top and left rule and the grid is shifted by
  * one pixel under a clipping frame, so rules appear only between cells however the row wraps.
  */
-export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
+export function StatGrid({ children, columns = 6, className }: StatGridProps) {
   return (
     <div className="overflow-hidden border-y">
-      <dl className={cx("-mt-px -ml-px grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6", className)}>{children}</dl>
+      <dl className={cx("-mt-px -ml-px grid", columnClasses[columns], className)}>{children}</dl>
     </div>
   );
 }
