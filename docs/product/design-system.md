@@ -110,6 +110,10 @@ All components live in `apps/web/src/components/ui`. They have no dependency bey
 The shell is in `apps/web/src/components/shell`: `Header`, `PrimaryNav`, `ThemeToggle`, `Footer`, `Container` and
 `Grid`. The root layout adds a skip link before the header.
 
+The top bar ends with the account control from `apps/web/src/components/wallet`: "Connect wallet", or the
+shortened account in mono with a menu. Under 640 px the primary navigation moves to a second row of 40 px, because
+the wordmark, the navigation, the theme toggle and the account control do not fit in one.
+
 ### Usage rules
 
 - **Button.** One primary button per screen. The label is a verb that states what will happen. Disabled and
