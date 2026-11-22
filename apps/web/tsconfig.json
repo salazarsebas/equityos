@@ -13,6 +13,7 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@equityos/contracts-abi": ["../../packages/contracts-abi/src/index.ts"],
       "@equityos/core": ["../../packages/core/src/index.ts"]
     }
   },
