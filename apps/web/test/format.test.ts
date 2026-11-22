@@ -12,6 +12,7 @@ import {
   formatUsd,
   formatUtcDate,
   formatUtcDateTime,
+  formatUtcMinute,
   MINUS,
   shortenAddress,
   toIsoInstant,
@@ -177,6 +178,7 @@ describe("timestamps", () => {
 
   test("formats absolute UTC values", () => {
     expect(formatUtcDateTime(instant)).toBe("2026-11-20 21:00 UTC");
+    expect(formatUtcMinute(instant)).toBe("2026-11-20 21:00");
     expect(formatUtcDate(instant)).toBe("2026-11-20");
     expect(toIsoInstant(instant)).toBe("2026-11-20T21:00:00.000Z");
     expect(formatUtcDateTime(0n)).toBe("1970-01-01 00:00 UTC");
