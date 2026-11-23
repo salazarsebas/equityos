@@ -90,7 +90,7 @@ export function createMarketClient(): MarketClient {
   });
 }
 
-interface Call {
+export interface Call {
   readonly target: Address;
   readonly callData: Hex;
 }
@@ -146,7 +146,7 @@ function feedCalls(proxy: Address): Call[] {
 }
 
 /** Return data of each call, or `null` for a call that reverted. */
-type CallResults = readonly (Hex | null)[];
+export type CallResults = readonly (Hex | null)[];
 
 /**
  * Runs the calls through Multicall3 at one block, in requests of `CALLS_PER_REQUEST`. A call that reverts
@@ -175,7 +175,7 @@ async function aggregate(client: MarketClient, calls: readonly Call[], blockNumb
 }
 
 /** Decodes one result, or returns `null` when the call reverted or its return data does not decode. */
-function decode<T>(data: Hex | null | undefined, decoder: (data: Hex) => T): T | null {
+export function decode<T>(data: Hex | null | undefined, decoder: (data: Hex) => T): T | null {
   if (data === null || data === undefined) return null;
   try {
     return decoder(data);
@@ -246,34 +246,32 @@ function decodeFeed(results: CallResults, offset: number): FeedRead {
   return { status: "ok", decimals, description, round };
 }
 
+/** The answers of a set of calls, all made at the latest block of an endpoint verified to be Base mainnet. */
+export interface BlockRead {
+  readonly blockNumber: bigint;
+  /** Timestamp of the block, Unix seconds. */
+  readonly blockTimestamp: number;
+  /** Return data of each call, in the order given, or `null` for a call that reverted. */
+  readonly results: CallResults;
+}
+
 /**
- * Reads the state of every token and of the reference feed of each token that has one, at a single block.
- * Read-only: `eth_getBlockByNumber` and `eth_call` are the only RPC methods used.
+ * Runs `calls` through Multicall3 at the latest block, together with a chain id check. Read-only:
+ * `eth_getBlockByNumber` and `eth_call` are the only RPC methods used.
  *
- * @param tokens lowercase token addresses
- * @throws {UpstreamError} if the RPC endpoint fails. A reverting call is not a failure of the read: it is
- *   reported on the token or feed it belongs to.
+ * @throws {UpstreamError} if the RPC endpoint fails. A reverting call is not a failure of the read.
  * @throws {MissingConfigurationError} if the endpoint is not Base mainnet.
  */
-export async function readOnchain(client: MarketClient, tokens: readonly Address[]): Promise<OnchainSnapshot> {
-  const feedTokens = tokens.filter((token) => REFERENCE_FEEDS.has(token));
-  const calls: Call[] = [CHAIN_ID_CALL];
-  for (const token of tokens) calls.push(...tokenCalls(token));
-  for (const token of feedTokens) {
-    const feed = REFERENCE_FEEDS.get(token);
-    if (feed !== undefined) calls.push(...feedCalls(feed.proxy));
-  }
-
+export async function readAtLatestBlock(client: MarketClient, calls: readonly Call[]): Promise<BlockRead> {
   let block: { number: bigint; timestamp: bigint };
   let results: CallResults;
   try {
     block = await client.getBlock({ blockTag: "latest" });
-    results = await aggregate(client, calls, block.number);
+    results = await aggregate(client, [CHAIN_ID_CALL, ...calls], block.number);
   } catch (cause) {
     if (cause instanceof UpstreamError) throw cause;
     throw new UpstreamError("base_rpc", "read failed", { cause });
   }
-
   const chainId = decode(results[0], (data) =>
     decodeFunctionResult({ abi: multicall3Abi, functionName: "getChainId", data }),
   );
@@ -282,15 +280,34 @@ export async function readOnchain(client: MarketClient, tokens: readonly Address
   }
   const blockTimestamp = toSafeNumber(block.timestamp);
   if (blockTimestamp === null) throw new UpstreamError("base_rpc", "block timestamp is out of range");
+  return { blockNumber: block.number, blockTimestamp, results: results.slice(1) };
+}
 
+/**
+ * Reads the state of every token and of the reference feed of each token that has one, at a single block.
+ *
+ * @param tokens lowercase token addresses
+ * @throws {UpstreamError} if the RPC endpoint fails. A reverting call is not a failure of the read: it is
+ *   reported on the token or feed it belongs to.
+ * @throws {MissingConfigurationError} if the endpoint is not Base mainnet.
+ */
+export async function readOnchain(client: MarketClient, tokens: readonly Address[]): Promise<OnchainSnapshot> {
+  const feedTokens = tokens.filter((token) => REFERENCE_FEEDS.has(token));
+  const calls: Call[] = [];
+  for (const token of tokens) calls.push(...tokenCalls(token));
+  for (const token of feedTokens) {
+    const feed = REFERENCE_FEEDS.get(token);
+    if (feed !== undefined) calls.push(...feedCalls(feed.proxy));
+  }
+  const { blockNumber, blockTimestamp, results } = await readAtLatestBlock(client, calls);
   const tokenReads = new Map<Address, TokenRead>();
   tokens.forEach((token, index) => {
-    tokenReads.set(token, decodeToken(results, 1 + index * CALLS_PER_TOKEN, blockTimestamp));
+    tokenReads.set(token, decodeToken(results, index * CALLS_PER_TOKEN, blockTimestamp));
   });
-  const feedOffset = 1 + tokens.length * CALLS_PER_TOKEN;
+  const feedOffset = tokens.length * CALLS_PER_TOKEN;
   const feedReads = new Map<Address, FeedRead>();
   feedTokens.forEach((token, index) => {
     feedReads.set(token, decodeFeed(results, feedOffset + index * CALLS_PER_FEED));
   });
-  return { blockNumber: block.number, blockTimestamp, tokens: tokenReads, feeds: feedReads };
+  return { blockNumber, blockTimestamp, tokens: tokenReads, feeds: feedReads };
 }
