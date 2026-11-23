@@ -1,6 +1,5 @@
 "use client";
 
-import { indexRegistryAbi } from "@equityos/contracts-abi";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { Chain, Hex } from "viem";
 import { useConfig, useConnection, useSwitchChain } from "wagmi";
@@ -23,24 +22,35 @@ import {
   TableRowHeader,
 } from "@/components/ui/table";
 import { formatCount, formatPercent } from "@/lib/format";
-import type { StudioAsset } from "@/lib/studio/assets";
-import type { ValidDraft } from "@/lib/studio/evaluate";
 import { publishFailureText } from "@/lib/studio/messages";
 import { methodologyText } from "@/lib/studio/methodology-text";
-import { type ChecklistItem, canPublish, publishChecklist, type RegistryPresence } from "@/lib/studio/preflight";
-import { buildPublishPlan, type NetworkPolicy, type PublishResult, verifyPublication } from "@/lib/studio/publish";
+import { type ChecklistItem, publishChecklist, type RegistryPresence } from "@/lib/studio/preflight";
+import {
+  buildPublishPlan,
+  type NetworkPolicy,
+  type PublishPlan,
+  type PublishResult,
+  verifyPublication,
+} from "@/lib/studio/publish";
+import {
+  type Acknowledgement,
+  acknowledgementEnds,
+  buildPublishRequest,
+  type PublishWriteRequest,
+  publishPlanKey,
+} from "@/lib/studio/request";
+import type { ReviewSnapshot } from "@/lib/studio/snapshot";
 import { isTxInFlight, type TxState } from "@/lib/tx/machine";
 import { useTransaction } from "@/lib/tx/use-transaction";
 import { registryChain, usePreflight } from "./chain";
 import { CanonicalJson, exportSpec } from "./preview";
 
 type ReviewProps = {
-  valid: ValidDraft;
-  salt: Hex;
+  /** What is reviewed and sent, taken when the review opened. Nothing else of the draft is read here. */
+  snapshot: ReviewSnapshot;
   chain: Chain;
   policy: NetworkPolicy;
   presence: RegistryPresence;
-  assets: readonly StudioAsset[];
   onBack: () => void;
   /** Replaces the salt of the draft with a new random one, on an explicit click. */
   onNewSalt: () => void;
@@ -107,6 +117,21 @@ function TxLink({ chain, hash }: { chain: Chain; hash: Hex }) {
   );
 }
 
+/** A reason in the contract's own words, shown apart and labelled as unverified text. */
+function ReportedReason({ text }: { text: string | null }) {
+  if (text === null) return null;
+  return (
+    <span className="mt-2 block">
+      <span className="block text-sm text-secondary">
+        Reason reported by the wallet or node, not checked by this site:
+      </span>
+      <span className="mt-1 block rounded-sm bg-surface px-2 py-1 font-mono text-xs [overflow-wrap:anywhere] text-primary">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 /** Where the transaction is, in words. The result of a publication is stated here and nowhere else. */
 function TransactionStatus({
   state,
@@ -140,6 +165,7 @@ function TransactionStatus({
       return (
         <Callout tone="negative" role="alert" title={text.title}>
           <span className="[overflow-wrap:anywhere]">{text.body}</span>
+          <ReportedReason text={text.reported} />
           {text.offersNewSalt ? (
             <span className="mt-2 block">
               <Button onClick={onNewSalt}>Use a new salt</Button>
@@ -200,13 +226,15 @@ function TransactionStatus({
  * The publish step: everything `createIndex` will send, the preconditions with their real state, and the one
  * button that sends. The wallet is asked for a signature only from the click on that button.
  */
-export function Review({ valid, salt, chain, policy, presence, assets, onBack, onNewSalt, onNewDraft }: ReviewProps) {
+export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, onNewDraft }: ReviewProps) {
+  const { valid, assets } = snapshot;
+  const { salt } = snapshot.draft;
   const config = useConfig();
   const { address, chainId: walletChainId } = useConnection();
   const switchChain = useSwitchChain();
   const tx = useTransaction<PublishResult>();
   const [connecting, setConnecting] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [acknowledgement, setAcknowledgement] = useState<Acknowledgement>(null);
   const account = address ?? null;
   const registry = policy.status === "available" ? policy.deployment.registry : null;
 
@@ -238,7 +266,21 @@ export function Review({ valid, salt, chain, policy, presence, assets, onBack, o
     walletChainId: walletChainId ?? null,
     preflight: preflight.state,
   });
-  const ready = plan !== null && canPublish(checklist, policy, acknowledged) && !isTxInFlight(tx.state) && !settled;
+  // An attempt that ended without publishing withdraws the acknowledgement: the next attempt is a new decision.
+  const withdrawn = acknowledgementEnds(tx.state);
+  useEffect(() => {
+    if (withdrawn) setAcknowledgement(null);
+  }, [withdrawn]);
+  // An acknowledgement holds for the plan it was given for only, so it lapses when the plan changes.
+  const acknowledged = plan !== null && acknowledgement?.planKey === publishPlanKey(plan);
+  const decision = buildPublishRequest({
+    plan,
+    policy,
+    acknowledgement,
+    walletChainId: walletChainId ?? null,
+    checklist,
+    busy: isTxInFlight(tx.state) || settled,
+  });
   const simulation =
     typeof preflight.state === "object" && preflight.state?.status === "simulation_failed"
       ? preflight.state.failure
@@ -249,21 +291,12 @@ export function Review({ valid, salt, chain, policy, presence, assets, onBack, o
       : null;
   const unavailable = policy.status === "not_deployed" || presence === "no_code";
 
-  function publish() {
-    if (!ready || plan === null) return;
-    const sent = plan;
+  /** Sends exactly the request `buildPublishRequest` returned. It is reachable only when that decision is `ok`. */
+  function publish(request: PublishWriteRequest, sent: PublishPlan) {
     void tx.execute({
-      chainId: sent.chainId,
-      abi: indexRegistryAbi,
-      send: () =>
-        writeContract(config, {
-          chainId: sent.chainId,
-          account: sent.creator,
-          address: sent.registry,
-          abi: indexRegistryAbi,
-          functionName: sent.functionName,
-          args: sent.args,
-        }),
+      chainId: request.chainId,
+      abi: request.abi,
+      send: () => writeContract(config, { ...request }),
       verify: (receipt) => verifyPublication(sent, receipt, registryChain(config, sent.chainId, sent.registry)),
     });
   }
@@ -460,6 +493,7 @@ export function Review({ valid, salt, chain, policy, presence, assets, onBack, o
           {simulation !== null && tx.state.status !== "failed" ? (
             <Callout tone="negative" role="alert" title={publishFailureText(simulation).title}>
               <span className="[overflow-wrap:anywhere]">{publishFailureText(simulation).body}</span>
+              <ReportedReason text={publishFailureText(simulation).reported} />
               {publishFailureText(simulation).offersNewSalt ? (
                 <span className="mt-2 block">
                   <Button onClick={onNewSalt}>Use a new salt</Button>
@@ -490,7 +524,10 @@ export function Review({ valid, salt, chain, policy, presence, assets, onBack, o
               {policy.status === "available" && policy.requiresAcknowledgement ? (
                 <Checkbox
                   checked={acknowledged}
-                  onChange={(event) => setAcknowledged(event.target.checked)}
+                  disabled={plan === null}
+                  onChange={(event) =>
+                    setAcknowledgement(event.target.checked && plan !== null ? { planKey: publishPlanKey(plan) } : null)
+                  }
                   label={`I understand that this is a real transaction on ${chain.name} that costs gas and cannot be undone.`}
                 />
               ) : null}
@@ -512,12 +549,12 @@ export function Review({ valid, salt, chain, policy, presence, assets, onBack, o
                 <Button
                   variant="primary"
                   size="lg"
-                  disabled={!ready}
+                  disabled={!decision.ok}
                   loading={isTxInFlight(tx.state)}
                   loadingLabel={
                     tx.state.status === "awaiting_signature" ? "Waiting for the wallet" : "Publishing version 1"
                   }
-                  onClick={publish}
+                  onClick={decision.ok ? () => publish(decision.request, decision.plan) : undefined}
                 >
                   Publish version 1
                   {policy.status === "available" && policy.requiresAcknowledgement ? ` on ${chain.name}` : ""}

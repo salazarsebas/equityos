@@ -2,7 +2,8 @@
 
 import { indexRegistryAbi } from "@equityos/contracts-abi";
 import { useQuery } from "@tanstack/react-query";
-import type { Address, Hex } from "viem";
+import { type Address, encodeFunctionData, type Hex } from "viem";
+import { estimateL1Fee } from "viem/op-stack";
 import { type Config, useConfig } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import { classifyTxError } from "@/lib/tx/errors";
@@ -54,6 +55,12 @@ export function registryChain(config: Config, chainId: number, registry: Address
       return fees.maxFeePerGas;
     },
     balance: (account) => client.getBalance({ address: account }),
+    // One eth_call to the GasPriceOracle predeploy, on the chains that have one (Base and Base Sepolia).
+    async l1DataFee(plan) {
+      if (client.chain?.contracts?.gasPriceOracle === undefined) return null;
+      const data = encodeFunctionData({ abi: indexRegistryAbi, functionName: plan.functionName, args: plan.args });
+      return estimateL1Fee(client, { account: plan.creator, to: plan.registry, data });
+    },
     async version(indexId, version) {
       const args = [indexId, version] as const;
       const [index, info, spec, constituents] = await Promise.all([

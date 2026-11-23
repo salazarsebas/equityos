@@ -230,3 +230,45 @@ test("the editor and the review fit a 375 px screen", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Review and publish" })).toBeVisible();
   expect(await overflow()).toBeLessThanOrEqual(0);
 });
+
+test("a refetch of the asset list while reviewing changes neither the review nor what would be sent", async ({
+  page,
+  context,
+}) => {
+  await page.clock.install();
+  await open(page);
+  await buildDraft(page);
+  const shown = await text(json(page));
+  const shownHash = await text(hash(page));
+  await footerAction(page, "Review and publish").click();
+  await expect(page.getByRole("heading", { name: "Review and publish" })).toBeVisible();
+
+  // From now on the server lists the assets without MSFTc, one of the constituents under review.
+  let served = 0;
+  await page.route("**/api/v1/assets", async (route) => {
+    const response = await route.fetch();
+    const body: { data: { symbol: string }[] } = await response.json();
+    served += 1;
+    await route.fulfill({ response, json: { ...body, data: body.data.filter(({ symbol }) => symbol !== "MSFTc") } });
+  });
+  // The list is past its stale time, and the browser goes offline and back online, which refetches it.
+  await page.clock.fastForward(120_000);
+  await context.setOffline(true);
+  await context.setOffline(false);
+  await expect.poll(() => served).toBeGreaterThan(0);
+
+  await expect(page.getByRole("heading", { name: "Review and publish" })).toBeVisible();
+  expect(await text(json(page))).toBe(shown);
+  const sent = page.getByRole("region", { name: "tokens and weightsBps" });
+  await expect(sent.getByRole("row", { name: /MSFTc/ })).toBeVisible();
+  await expect(
+    page
+      .locator("dl > div")
+      .filter({ hasText: /^Spec hash/ })
+      .locator("dd"),
+  ).toHaveText(shownHash);
+
+  // Back in the editor the draft is checked against the list as it is now.
+  await page.getByRole("button", { name: "Back to the editor" }).click();
+  await expect(footerAction(page, "Fix 1 issue")).toBeVisible();
+});

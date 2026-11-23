@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /** Ports of this suite, apart from the ones of local development and of the other suites. */
 export const ANVIL_PORT = Number(process.env.E2E_ANVIL_PORT ?? 8576);
 export const ANVIL_RPC_URL = `http://127.0.0.1:${ANVIL_PORT}`;
-const port = 3110;
+const port = Number(process.env.E2E_PORT ?? 3110);
 
 /**
  * The publish flow against a real local chain: `e2e-chain/setup.ts` starts Anvil and runs the deployment

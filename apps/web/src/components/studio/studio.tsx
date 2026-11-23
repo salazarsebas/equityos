@@ -9,6 +9,7 @@ import { WalletRuntime } from "@/components/wallet/runtime";
 import { parseAssetsResponse } from "@/lib/studio/assets";
 import { type Draft, newDraft, randomSalt } from "@/lib/studio/draft";
 import { evaluateDraft } from "@/lib/studio/evaluate";
+import { type ReviewSnapshot, takeReviewSnapshot, withSalt } from "@/lib/studio/snapshot";
 import { networkPolicy } from "@/lib/studio/publish";
 import { type DraftStorage, discardDraft, loadDraft, saveDraft } from "@/lib/studio/storage";
 import { resolveNetworks } from "@/lib/wallet/chains";
@@ -37,7 +38,8 @@ function StudioBody() {
     return { draft: stored?.draft ?? newDraft(home.chain.id, randomSalt()), restored: stored !== null };
   });
   const [saved, setSaved] = useState<{ ok: boolean; at: number } | null>(null);
-  const [step, setStep] = useState<"edit" | "review">("edit");
+  /** Taken when the review opens. While it is set, the review shows it and nothing else of the draft. */
+  const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const top = useRef<HTMLDivElement>(null);
 
@@ -76,19 +78,36 @@ function StudioBody() {
   const chain = networks.find(({ id }) => id === draft.chainId) ?? home.chain;
   const policy = networkPolicy(chain.id);
   const presence = useRegistryPresence(chain.id, policy);
-  const valid = evaluation?.valid ?? null;
-  const reviewing = step === "review" && valid !== null;
+  // While reviewing, only the salt of the draft can change, so its chain is the chain of the snapshot.
+  const review = snapshot === null ? null : { snapshot, chain, policy };
 
-  function go(next: "edit" | "review") {
-    setStep(next);
+  function toTop() {
     top.current?.scrollIntoView({ block: "start" });
+  }
+
+  function openReview() {
+    if (listed === undefined && draft.tokens.length > 0) return;
+    setSnapshot(takeReviewSnapshot(draft, listed ?? []));
+    toTop();
+  }
+
+  function closeReview() {
+    setSnapshot(null);
+    toTop();
+  }
+
+  /** A new salt on an explicit click: stored with the draft, and applied to the snapshot under review. */
+  function newSalt() {
+    const salt = randomSalt();
+    update((current) => ({ ...current, salt }));
+    setSnapshot((current) => (current === null ? null : withSalt(current, salt)));
   }
 
   function startOver() {
     if (storage !== null) discardDraft(storage);
     setState({ draft: newDraft(chain.id, randomSalt()), restored: false });
     setDiscarding(false);
-    go("edit");
+    closeReview();
   }
 
   const issues = evaluation?.issues ?? [];
@@ -104,16 +123,14 @@ function StudioBody() {
 
   return (
     <div ref={top} className="scroll-mt-4">
-      {reviewing ? (
+      {review !== null ? (
         <Review
-          valid={valid}
-          salt={draft.salt}
-          chain={chain}
-          policy={policy}
+          snapshot={review.snapshot}
+          chain={review.chain}
+          policy={review.policy}
           presence={presence}
-          assets={listed ?? []}
-          onBack={() => go("edit")}
-          onNewSalt={() => update((current) => ({ ...current, salt: randomSalt() }))}
+          onBack={closeReview}
+          onNewSalt={newSalt}
           onNewDraft={startOver}
         />
       ) : (
@@ -160,7 +177,7 @@ function StudioBody() {
               <Button variant="ghost" onClick={() => setDiscarding(true)}>
                 Discard draft
               </Button>
-              <Button variant="primary" size="lg" disabled={blocker !== null} onClick={() => go("review")}>
+              <Button variant="primary" size="lg" disabled={blocker !== null} onClick={openReview}>
                 {blocker ?? "Review and publish"}
               </Button>
             </div>

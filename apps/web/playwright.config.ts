@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 3100;
+const port = Number(process.env.E2E_PORT ?? 3100);
 
 /**
  * Smoke tests against the production build. Run `bun run build` first. The server replays the recorded market

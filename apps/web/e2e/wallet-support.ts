@@ -77,6 +77,14 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
                 throw Object.assign(rpcError(body.error.code, body.error.message), { data: body.error.data });
               return body.result;
             }
+            // Test control, not a wallet method: changes the chain without telling the page, as a wallet whose
+            // network is changed in another tab or window may do before the page hears of it.
+            case "test_setChainSilently": {
+              const [target] = params as [number];
+              state.chainId = target;
+              save();
+              return null;
+            }
             case "wallet_revokePermissions":
               state.connected = false;
               save();
@@ -159,4 +167,24 @@ export async function mockBaseRpc(page: Page, balances: Readonly<Record<string, 
     await route.fulfill({ json: Array.isArray(body) ? body.map(respond) : respond(body) });
   });
   return methods;
+}
+
+/**
+ * Moves the test wallet to another chain without emitting `chainChanged`, so the page still believes the old
+ * chain. Only `installMockWallet` providers understand the call.
+ */
+export async function setChainSilently(page: Page, chainId: number): Promise<void> {
+  await page.evaluate(async (target) => {
+    const provider = await new Promise<{ request(args: { method: string; params: unknown[] }): Promise<unknown> }>(
+      (resolve) => {
+        window.addEventListener(
+          "eip6963:announceProvider",
+          (event) => resolve((event as CustomEvent<{ provider: never }>).detail.provider),
+          { once: true },
+        );
+        window.dispatchEvent(new Event("eip6963:requestProvider"));
+      },
+    );
+    await provider.request({ method: "test_setChainSilently", params: [target] });
+  }, chainId);
 }

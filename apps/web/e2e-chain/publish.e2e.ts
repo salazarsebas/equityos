@@ -2,7 +2,7 @@ import { DEPLOYMENTS, indexRegistryAbi, LOCAL_CHAIN_ID } from "@equityos/contrac
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createPublicClient, decodeFunctionData, type Hex, http, keccak256, stringToHex } from "viem";
 import { anvil } from "viem/chains";
-import { installMockWallet, TEST_ACCOUNT } from "../e2e/wallet-support";
+import { installMockWallet, setChainSilently, TEST_ACCOUNT } from "../e2e/wallet-support";
 import { ANVIL_RPC_URL } from "../playwright.chain.config";
 
 /**
@@ -70,7 +70,10 @@ test("an index is created, confirmed and verified, and what was sent is what was
   await connect(page);
   await expect(page.locator('[data-state="done"]')).toHaveCount(9);
   await expect(checklist(page).filter({ hasText: "Simulation" })).toContainText("createIndex succeeded");
-  await expect(checklist(page).filter({ hasText: "Gas and fee" })).toContainText(/[\d,]+ gas, at most 0\.\d+ ETH/);
+  await expect(checklist(page).filter({ hasText: "Gas and fee" })).toContainText(
+    /[\d,]+ gas, execution fee at most 0\.\d+ ETH, no L1 data fee on this chain/,
+  );
+  await expect(checklist(page).filter({ hasText: "ETH balance" })).toContainText("at least 2 times the estimated fee");
 
   const shown = {
     canonical: await text(page.getByRole("region", { name: "Canonical JSON" })),
@@ -180,4 +183,23 @@ test("a wallet on another network is asked to switch before anything can be publ
   await page.getByRole("button", { name: "Switch wallet to Anvil" }).click();
   await expect(page.locator('[data-state="done"]')).toHaveCount(9);
   await expect(publishButton(page)).toBeVisible();
+});
+
+test("a wallet that changed network after the review was shown is refused at the click, and nothing is sent", async ({
+  page,
+}) => {
+  await installMockWallet(page, { chainId: LOCAL_CHAIN_ID, signer: ANVIL_RPC_URL });
+  const [nonceBefore, countBefore] = await Promise.all([nonce(), indexCount()]);
+  await draft(page, "Switched Away", ["NVDAc", "TSLAc"]);
+  await review(page);
+  await expect(publishButton(page)).not.toHaveAttribute("aria-disabled", "true");
+
+  // The page still shows the wallet on Anvil, ready to publish, while the wallet is now on Base.
+  await setChainSilently(page, 8453);
+  await publishButton(page).click();
+  const alert = page.getByRole("alert").filter({ hasText: "another network" });
+  await expect(alert).toContainText("The wallet is on another network than this transaction is for. Nothing was sent.");
+  await expect(page.getByRole("heading", { name: /published and verified/ })).toHaveCount(0);
+  expect(await nonce()).toBe(nonceBefore);
+  expect(await indexCount()).toBe(countBefore);
 });
