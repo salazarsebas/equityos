@@ -19,21 +19,22 @@ narrower and still matters:
 | Step | What happens                                                                                   | Safeguard                                                                                                   |
 | ---- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | 1    | The draft is validated and canonicalized by `@equityos/core`                                   | No rule is reimplemented in the app. An invalid draft cannot reach the review                               |
-| 2    | One plan object is built: salt, index id, bytes, hash, tokens, weights, arguments              | The review displays the plan and the transaction is built from the same plan, so they cannot differ         |
-| 3    | The network is checked against the deployment map                                              | A chain without a recorded deployment is never offered a publish button                                     |
-| 4    | The code at the registry address is read                                                       | The address is the same on every chain, so the map alone proves nothing. No code, no button                 |
-| 5    | `computeIndexId(creator, salt)` is read with `eth_call` and compared with the local prediction | A contract at that address that derives another id is not the registry the app expects. Nothing is sent     |
-| 6    | The call is simulated from the creator                                                         | A call that would revert is never sent. The custom error is decoded with the registry ABI and explained     |
-| 7    | Gas, fee and balance are read                                                                  | The button stays disabled when the balance does not cover the upper bound of the fee                        |
-| 8    | On Base mainnet, the acknowledgement is ticked                                                 | A real transaction on mainnet needs one deliberate act more than a click                                    |
-| 9    | The user clicks "Publish version 1"                                                            | The only code path to `writeContract` starts in that click handler and re-checks that every item is done    |
-| 10   | The wallet asks, the user confirms                                                             | The app holds no key. A rejection is a state of its own, not an error                                       |
-| 11   | The receipt is awaited                                                                         | Only `status: success` moves on. A reverted, replaced or missing receipt is reported as such                |
-| 12   | The events of the receipt are compared with the plan                                           | One `IndexCreated` and one `VersionPublished` from the registry, with the index id, version 1 and the hash  |
-| 13   | The version is read back with `eth_call` and verified                                          | Creator, stored bytes and hash must equal the plan, and checks C1 to C5 of core must pass on the chain data |
-| 14   | Success is shown                                                                               | Only after step 13. A transaction hash alone is never presented as a publication                            |
+| 2    | The review opens on a snapshot of the draft, the asset list and the spec                       | A refetch of the asset list cannot change what is shown or sent, nor close the review                       |
+| 3    | One plan object is built: salt, index id, bytes, hash, tokens, weights, arguments              | The review displays the plan and the transaction is built from the same plan, so they cannot differ         |
+| 4    | The network is checked against the deployment map                                              | A chain without a recorded deployment is never offered a publish button                                     |
+| 5    | The code at the registry address is read                                                       | The address is the same on every chain, so the map alone proves nothing. No code, no button                 |
+| 6    | `computeIndexId(creator, salt)` is read with `eth_call` and compared with the local prediction | A contract at that address that derives another id is not the registry the app expects. Nothing is sent     |
+| 7    | The call is simulated from the creator                                                         | A call that would revert is never sent. The custom error is decoded with the registry ABI and explained     |
+| 8    | Gas, execution fee, L1 data fee and balance are read                                           | The button stays disabled unless the balance covers twice the estimated fee                                 |
+| 9    | On Base mainnet, the acknowledgement is ticked                                                 | Bound to the exact plan, and cleared by every attempt that ends without publishing                          |
+| 10   | The user clicks "Publish version 1"                                                            | `buildPublishRequest` returns the `writeContract` arguments, or the reason it refuses; the click needs both |
+| 11   | The wallet asks, the user confirms                                                             | The app holds no key. A rejection is a state of its own, not an error                                       |
+| 12   | The receipt is awaited                                                                         | Only `status: success` moves on. A reverted, replaced or missing receipt is reported as such                |
+| 13   | The events of the receipt are compared with the plan                                           | One `IndexCreated` and one `VersionPublished` from the registry, with the index id, version 1 and the hash  |
+| 14   | The version is read back with `eth_call` and verified                                          | Creator, stored bytes and hash must equal the plan, and checks C1 to C5 of core must pass on the chain data |
+| 15   | Success is shown                                                                               | Only after step 14. A transaction hash alone is never presented as a publication                            |
 
-Steps 3 to 7 are reads through the endpoint configured for the chain of the draft. They do not go through the
+Steps 4 to 8 are reads through the endpoint configured for the chain of the draft. They do not go through the
 wallet, and they run only when the review opens, when the plan changes or when the user asks.
 
 ## Properties
@@ -41,6 +42,15 @@ wallet, and they run only when the review opens, when the plan changes or when t
 - **Bytes sent are bytes shown.** `buildPublishPlan` derives the hex argument, the displayed text and the hash
   from one `Uint8Array`. A unit test decodes the calldata and compares it with the displayed text; the browser
   test reads the mined transaction from the node and compares its input with what the page showed.
+- **One decision, one request.** `buildPublishRequest` (`apps/web/src/lib/studio/request.ts`) is the only place
+  that decides whether a click may send. It refuses without a plan, where the registry is not deployed, for a
+  plan addressed to another registry, while a transaction is in flight or after one was mined, when the wallet
+  reports another chain than the plan, while any check is not done, and on mainnet without the acknowledgement
+  of that exact plan. Otherwise it returns the complete `writeContract` arguments, `chainId` included. The
+  component passes them through unchanged, and the click handler exists only when the decision allows it.
+- **The chain is checked again at the moment of sending.** With `chainId` in the request, wagmi asks the wallet
+  for its chain before sending and refuses on a mismatch. A wallet that changed network after the review was
+  drawn is refused, the page says why, and nothing is sent. The browser test does exactly this.
 - **No transaction without a click.** `writeContract` is called from one place, the click handler of a button
   whose label says what is sent. Connecting, switching network, simulating and estimating never send. The
   browser test asserts that the account nonce does not change before the click, nor after a rejection.
@@ -51,7 +61,9 @@ wallet, and they run only when the review opens, when the plan changes or when t
 - **No trust in the receipt alone.** Events are accepted only from the registry address. Events of any other
   contract in the same transaction are ignored.
 - **No raw error text.** Errors of wallets and nodes are classified by code and by decoded revert data. Their
-  message text is never rendered.
+  message text is never rendered. A plain revert reason is the one exception: it is text the contract chose,
+  so it is shown only as quoted text, apart from the app's sentences, labelled as reported by the wallet or
+  node, stripped of control and direction characters and capped at 200 characters.
 - **Mainnet is gated twice.** By the deployment map, which today records no deployment on Base, and by the
   acknowledgement.
 
@@ -73,7 +85,8 @@ wallet, and they run only when the review opens, when the plan changes or when t
   is not affected.
 - **Reorganizations.** Success is shown after one confirmation. A version that is reorganized out is no longer
   in the registry; the index page of an explorer is the place to confirm later.
-- **The L1 data fee on Base.** The balance check covers the execution fee only.
+- **Fee movements.** The fee is an estimate made before signing. The margin of twice the estimate covers
+  ordinary movement, not a fee spike; the wallet shows the final fee before signing.
 - **Content.** The Studio only publishes valid specs, but the registry accepts any bytes from any client. See
   [Index registry security](index-registry.md).
 

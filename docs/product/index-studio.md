@@ -109,13 +109,27 @@ established.
 | Registry       | A deployment in the map, and code at the address read with `eth_getCode`            |
 | Index id       | `computeIndexId(creator, salt)` by `eth_call` equals the id computed in the browser |
 | Simulation     | `simulateContract` of `createIndex` from the creator succeeds                       |
-| Gas and fee    | `estimateContractGas` times the current maximum fee per gas, as an upper bound      |
-| ETH balance    | The balance of the creator is at least that fee                                     |
+| Gas and fee    | `estimateContractGas` times the current maximum fee per gas, plus the L1 data fee   |
+| ETH balance    | The balance of the creator is at least twice that fee                               |
 
 The checks run when the review opens, when the plan changes and when "Check again" is pressed. They never run on
 a timer and they send nothing. A simulation that reverts shows the custom error of the registry decoded from its
-ABI, with its arguments. The fee is the execution fee on the chain of the draft: on Base the L1 data fee is
-charged in addition and is not part of the estimate.
+ABI, with its arguments. A plain revert reason, which is text the contract chose, is shown apart, in monospace,
+labelled as reported by the wallet or node, with control and direction characters removed and at most 200
+characters.
+
+The fee is the upper bound of the execution fee plus, on Base and Base Sepolia, the L1 data fee read with one
+`eth_call` to the `GasPriceOracle` predeploy (`getL1Fee` of the serialized transaction). A local node charges no
+L1 data fee and the line says so. Fees move between the estimate and inclusion, so the balance must cover twice
+the estimate before the check passes.
+
+## The review is a snapshot
+
+Opening the review takes a snapshot of the draft, of the asset list it was validated against and of the
+resulting spec. The review displays the snapshot and the transaction is built from it. A refetch of the asset
+list, which happens when the browser comes back online, does not reach the review: it can neither close it nor
+change a byte of what is shown or sent. The salt is the only part that can change while reviewing, on the click
+on "Use a new salt". Back in the editor, the draft is validated against the list as it is then.
 
 ## What the user is shown before signing
 
@@ -129,7 +143,9 @@ The review is a full step of the page, not a dialog. It shows exactly what `crea
 - that version 1 is permanent, and that publishing a methodology is not managing anyone's assets.
 
 On Base mainnet one more line has to be ticked: that this is a real transaction that costs gas and cannot be
-undone.
+undone. The acknowledgement holds for the exact plan it was given for (chain, registry, creator, salt and spec
+hash), so a new salt or another account clears it, and every attempt that ends without publishing (declined,
+refused, reverted, replaced or not found) clears it too.
 
 ## After signing
 
