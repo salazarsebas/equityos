@@ -19,6 +19,8 @@ coverage/
 
 # Next.js
 .next/
+# Written by `next dev` on every start
+apps/web/AGENTS.md
 out/
 next-env.d.ts
 
