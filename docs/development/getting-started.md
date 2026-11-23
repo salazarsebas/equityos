@@ -62,7 +62,8 @@ bun run test:e2e
 ```
 
 `test:e2e` is a Playwright smoke test that runs against the production build. Install its browser once with
-`bunx playwright install chromium` from `apps/web`.
+`bunx playwright install chromium` from `apps/web`. It starts three servers on ports 3100 to 3102, each on
+recorded data: set `E2E_PORT` to use three other consecutive ports.
 
 ```sh
 bun run contracts:fmt:check

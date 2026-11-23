@@ -18,11 +18,16 @@ export default function HomePage() {
               Status: early development
             </h2>
             <p className="mt-3 max-w-measure text-md text-secondary">
-              The asset universe is available: the tokenized stocks listed on Base, with their onchain state, reference
-              prices and index eligibility, on a page and through a public read API. Indexes are not available yet: no
-              index can be created, published or replicated.
+              Two things can be read today, on pages and through a public read API. The asset universe: the tokenized
+              stocks listed on Base, with their onchain state, reference prices and index eligibility. And published
+              indexes: each one can be browsed and its methodology verified against what the registry stores onchain. On
+              a network where the index registry is not deployed, the explorer says so instead of showing an empty list.
+              No index can be created, published or replicated from this site yet.
             </p>
             <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-md">
+              <li>
+                <Link href="/indexes">Indexes</Link>
+              </li>
               <li>
                 <Link href="/assets">Assets</Link>
               </li>

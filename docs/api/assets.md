@@ -275,6 +275,7 @@ names sources by identifier and never returns an endpoint URL.
 | `marketData.available`       | Whether the market data could be loaded                                 |
 | `marketData.datasets`        | The two datasets as in the asset `meta`, or `null` when unavailable     |
 | `marketData.error`           | `{ code, details }` of the failure, or `null`                           |
+| `registry`                   | The index registry on the configured chain. See [Indexes](./indexes.md) |
 
 The execution fields are explained under
 [Execution availability and the jurisdiction gate](./README.md#execution-availability-and-the-jurisdiction-gate).
@@ -321,6 +322,9 @@ curl -H "x-vercel-ip-country: US" "http://localhost:3000/api/v1/status"
   "meta": { "asOf": "2026-11-21T23:30:42Z" }
 }
 ```
+
+The response was recorded with version 1.0.0 of the API. Since 1.1.0 `data` also carries `registry`, shown in
+[Indexes](./indexes.md#the-registry-may-not-be-deployed).
 
 The same request with `x-vercel-ip-country: DE` answered `"executionUnavailableReason": "not_released"`.
 
