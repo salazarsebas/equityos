@@ -6,7 +6,9 @@ import { walletErrorSignature } from "@/lib/wallet/errors";
  *
  * - `user_rejected`: the user declined in the wallet.
  * - `contract_error`: the contract reverted with a custom error of its ABI, decoded by name and arguments.
- * - `revert`: the contract reverted with a plain reason, a panic, or data no error of the ABI matches.
+ * - `revert`: the contract reverted with a plain reason, a panic, or data no error of the ABI matches. A plain
+ *   reason is text chosen by whoever wrote the contract, relayed by the wallet or the node: it is kept only
+ *   after `reportedReason` has made it safe to display, and is never part of a sentence of the app.
  * - `insufficient_funds`: the account cannot pay for the transaction.
  * - `wallet_busy`: the wallet already has a request waiting for the user.
  * - `chain_mismatch`: the wallet is on another chain than the one the transaction is for.
@@ -56,11 +58,34 @@ function messagesOf(error: unknown): string {
   return parts.join("\n");
 }
 
+/** Longest reported reason kept, in characters, ellipsis included. */
+export const MAX_REPORTED_REASON = 200;
+
+/**
+ * Makes a reason reported by a contract, a wallet or a node safe to display as quoted text: control, format
+ * (bidirectional overrides included), private use and unassigned characters are removed, runs of whitespace
+ * become one space, and the result is capped at `MAX_REPORTED_REASON` characters with an ellipsis. `null` when
+ * nothing printable is left.
+ */
+export function reportedReason(text: string): string | null {
+  const printable = text
+    .replace(/[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Cs}\p{Zl}\p{Zp}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (printable === "") return null;
+  const characters = Array.from(printable);
+  return characters.length <= MAX_REPORTED_REASON
+    ? printable
+    : `${characters.slice(0, MAX_REPORTED_REASON - 1).join("")}\u2026`;
+}
+
 /** Decodes revert data with the ABI. `Error(string)` and `Panic(uint256)` are understood without being in it. */
 export function decodeRevertData(abi: Abi, data: Hex): TxFailure {
   try {
     const { errorName, args } = decodeErrorResult({ abi, data });
-    if (errorName === "Error") return { kind: "revert", reason: typeof args?.[0] === "string" ? args[0] : null };
+    if (errorName === "Error") {
+      return { kind: "revert", reason: typeof args?.[0] === "string" ? reportedReason(args[0]) : null };
+    }
     if (errorName === "Panic") return { kind: "revert", reason: `panic ${String(args?.[0])}` };
     return { kind: "contract_error", name: errorName, args: args ?? [] };
   } catch {
@@ -96,9 +121,7 @@ export function txFailureMessage(failure: TxFailure): string {
     case "contract_error":
       return `The contract would reject this call with ${failure.name}. Nothing was sent.`;
     case "revert":
-      return failure.reason === null
-        ? "The contract would reject this call. Nothing was sent."
-        : `The contract would reject this call: ${failure.reason}. Nothing was sent.`;
+      return "The contract would reject this call. Nothing was sent.";
     case "insufficient_funds":
       return "The account does not hold enough ETH to pay for this transaction. Nothing was sent.";
     case "wallet_busy":

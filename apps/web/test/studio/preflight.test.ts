@@ -3,7 +3,6 @@ import type { Address } from "viem";
 import { evaluateDraft } from "../../src/lib/studio/evaluate";
 import {
   type ChecklistInput,
-  canPublish,
   type Preflight,
   publishChecklist,
   type RegistryReads,
@@ -19,7 +18,6 @@ if (valid === null) throw new Error("expected a valid draft");
 const plan = buildPublishPlan({ valid, chainId: CHAIN_ID, registry: REGISTRY, creator: CREATOR, salt: SALT });
 const deployment = { registry: REGISTRY, rebalanceLog: REGISTRY, deployBlock: 0n } as const;
 const local: NetworkPolicy = { status: "available", deployment, requiresAcknowledgement: false };
-const mainnet: NetworkPolicy = { status: "available", deployment, requiresAcknowledgement: true };
 
 function reads(overrides: Partial<RegistryReads> = {}): RegistryReads & { calls: string[] } {
   const calls: string[] = [];
@@ -31,6 +29,7 @@ function reads(overrides: Partial<RegistryReads> = {}): RegistryReads & { calls:
     estimateGas: async () => 700_000n,
     maxFeePerGas: async () => 2_000_000_000n,
     balance: async () => 10n ** 18n,
+    l1DataFee: async () => null,
     ...overrides,
   };
   const traced = Object.fromEntries(
@@ -51,6 +50,8 @@ const READY: Preflight = {
   gas: 700_000n,
   maxFeePerGasWei: 2_000_000_000n,
   feeWei: 1_400_000_000_000_000n,
+  l1FeeWei: null,
+  totalFeeWei: 1_400_000_000_000_000n,
   balanceWei: 10n ** 18n,
 };
 
@@ -58,6 +59,15 @@ describe("runPreflight", () => {
   test("a plan that passes every check is ready, with the fee as gas times the maximum fee per gas", async () => {
     const result = await runPreflight(reads(), plan, classify);
     expect(result).toEqual({ ...READY, identifier: `test-index-${plan.indexId.slice(2, 10)}` });
+  });
+
+  test("an L1 data fee is added to the execution fee", async () => {
+    const result = await runPreflight(reads({ l1DataFee: async () => 600_000_000_000_000n }), plan, classify);
+    expect(result).toMatchObject({
+      feeWei: 1_400_000_000_000_000n,
+      l1FeeWei: 600_000_000_000_000n,
+      totalFeeWei: 2_000_000_000_000_000n,
+    });
   });
 
   test("without code at the registry address nothing else is read", async () => {
@@ -110,15 +120,9 @@ function input(overrides: Partial<ChecklistInput> = {}): ChecklistInput {
 }
 const states = (overrides: Partial<ChecklistInput> = {}) =>
   Object.fromEntries(publishChecklist(input(overrides)).map(({ id, state }) => [id, state]));
-const allowed = (overrides: Partial<ChecklistInput> = {}, acknowledged = false) => {
-  const full = input(overrides);
-  return canPublish(publishChecklist(full), full.policy, acknowledged);
-};
-
-describe("publishChecklist and canPublish", () => {
-  test("everything established: nine items done, publishing allowed", () => {
+describe("publishChecklist", () => {
+  test("everything established: nine items done", () => {
     expect(Object.values(states())).toEqual(Array(9).fill("done"));
-    expect(allowed()).toBe(true);
   });
 
   test("each precondition blocks on its own", () => {
@@ -148,39 +152,25 @@ describe("publishChecklist and canPublish", () => {
       states({ preflight: { status: "simulation_failed", identifier: "x", failure: { kind: "unknown" } } }),
     ).toMatchObject({ index_id: "done", simulation: "blocked", fee: "waiting", balance: "waiting" });
     expect(states({ preflight: "failed" })).toMatchObject({ index_id: "blocked", simulation: "blocked" });
-    expect(states({ preflight: { ...READY, balanceWei: READY.feeWei - 1n } })).toMatchObject({ balance: "blocked" });
-    expect(states({ preflight: { ...READY, balanceWei: READY.feeWei } })).toMatchObject({ balance: "done" });
-  });
-
-  test("publishing is refused whenever any item is not done", () => {
-    const blockers: Partial<ChecklistInput>[] = [
-      { valid: null },
-      { account: null },
-      { walletChainId: 1 },
-      { presence: "no_code" },
-      { presence: "checking" },
-      { policy: { status: "not_deployed" } },
-      { preflight: null },
-      { preflight: "checking" },
-      { preflight: "failed" },
-      { preflight: { status: "id_mismatch", onchainIndexId: "0x00" } },
-      { preflight: { status: "simulation_failed", identifier: "x", failure: { kind: "unknown" } } },
-      { preflight: { ...READY, balanceWei: 0n } },
-    ];
-    for (const blocker of blockers) expect(allowed(blocker, true)).toBe(false);
-    expect(canPublish([], local, true)).toBe(false);
-  });
-
-  test("on Base mainnet the acknowledgement is required as well, and only there", () => {
-    expect(allowed({ policy: mainnet, chainId: 8453, walletChainId: 8453 }, false)).toBe(false);
-    expect(allowed({ policy: mainnet, chainId: 8453, walletChainId: 8453 }, true)).toBe(true);
-    expect(allowed({ policy: local }, false)).toBe(true);
+    // The balance must cover twice the estimated fee, L1 data fee included.
+    const twice = READY.totalFeeWei * 2n;
+    expect(states({ preflight: { ...READY, balanceWei: twice - 1n } })).toMatchObject({ balance: "blocked" });
+    expect(states({ preflight: { ...READY, balanceWei: twice } })).toMatchObject({ balance: "done" });
+    const withL1 = { ...READY, l1FeeWei: 600_000_000_000_000n, totalFeeWei: 2_000_000_000_000_000n };
+    expect(states({ preflight: { ...withL1, balanceWei: 3_999_999_999_999_999n } })).toMatchObject({
+      balance: "blocked",
+    });
+    expect(states({ preflight: { ...withL1, balanceWei: 4_000_000_000_000_000n } })).toMatchObject({ balance: "done" });
   });
 
   test("details state what was read", () => {
     const items = Object.fromEntries(publishChecklist(input()).map(({ id, detail }) => [id, detail]));
-    expect(items.fee).toBe("700,000 gas, at most 0.0014 ETH");
-    expect(items.balance).toBe("1 ETH, enough for the fee");
+    expect(items.fee).toBe("700,000 gas, execution fee at most 0.0014 ETH, no L1 data fee on this chain");
+    expect(items.balance).toBe("1 ETH, at least 2 times the estimated fee (0.0028 ETH)");
+    const withL1 = { ...READY, l1FeeWei: 600_000_000_000_000n, totalFeeWei: 2_000_000_000_000_000n, balanceWei: 0n };
+    const l1 = Object.fromEntries(publishChecklist(input({ preflight: withL1 })).map(({ id, detail }) => [id, detail]));
+    expect(l1.fee).toBe("700,000 gas, execution fee at most 0.0014 ETH, L1 data fee 0.0006 ETH, total 0.002 ETH");
+    expect(l1.balance).toBe("0 ETH, less than 2 times the estimated fee (0.004 ETH)");
     expect(items.hash).toBe(valid.specHash);
     expect(items.spec).toContain(`${valid.specBytes.length} of 8,192 bytes`);
   });

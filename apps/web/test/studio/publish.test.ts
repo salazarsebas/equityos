@@ -53,6 +53,8 @@ function log(address: Address, topics: Hex[], data: Hex): Log {
 
 interface Emitted {
   indexId?: Hex;
+  /** Index id of the VersionPublished event alone. */
+  publishedIndexId?: Hex;
   creator?: Address;
   salt?: Hex;
   version?: number;
@@ -74,7 +76,11 @@ function receiptLogs(p: PublishPlan, changed: Emitted = {}): Log[] {
     encodeEventTopics({
       abi: indexRegistryAbi,
       eventName: "VersionPublished",
-      args: { indexId, version: changed.version ?? 1, specHash: changed.specHash ?? p.specHash },
+      args: {
+        indexId: changed.publishedIndexId ?? indexId,
+        version: changed.version ?? 1,
+        specHash: changed.specHash ?? p.specHash,
+      },
     }) as Hex[],
     encodeAbiParameters(
       [{ type: "address" }, { type: "uint8" }, { type: "uint32" }, { type: "uint16" }],
@@ -146,6 +152,8 @@ describe("checkPublishReceipt", () => {
 
   test("rejects another index id, version, spec hash, creator or salt", () => {
     expect(checkPublishReceipt(p, receiptLogs(p, { indexId: other })).ok).toBe(false);
+    // IndexCreated is right, VersionPublished is for another index.
+    expect(checkPublishReceipt(p, receiptLogs(p, { publishedIndexId: other })).ok).toBe(false);
     expect(checkPublishReceipt(p, receiptLogs(p, { version: 2 })).ok).toBe(false);
     expect(checkPublishReceipt(p, receiptLogs(p, { specHash: other })).ok).toBe(false);
     expect(checkPublishReceipt(p, receiptLogs(p, { creator: OTHER })).ok).toBe(false);
@@ -173,6 +181,26 @@ describe("verifyPublishedVersion", () => {
     const result = verifyPublishedVersion(p, stored(p));
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.result.checks.map(({ status }) => status)).toEqual(Array(5).fill("pass"));
+  });
+
+  test("each differing value is reported for itself", () => {
+    const other = plan({ name: "Another Index" });
+    // Other valid spec bytes, stored with their own correct hash: a conformant version, but not the one sent.
+    const otherVersion = stored(p, { spec: other.specHex, specHash: other.specHash, constituents: other.constituents });
+    expect(verifyPublishedVersion(other, stored(other)).ok).toBe(true);
+    expect(verifyPublishedVersion(p, otherVersion)).toEqual({
+      ok: false,
+      reason: "The spec bytes stored by the registry are not the bytes that were shown and sent.",
+    });
+    // The bytes that were sent, but another recorded hash.
+    expect(verifyPublishedVersion(p, stored(p, { specHash: other.specHash }))).toEqual({
+      ok: false,
+      reason: `The registry holds spec hash ${other.specHash}, not ${p.specHash}.`,
+    });
+    expect(verifyPublishedVersion(p, stored(p, { creator: OTHER }))).toEqual({
+      ok: false,
+      reason: `The registry records ${OTHER} as the creator, not ${CREATOR}.`,
+    });
   });
 
   test("fails on another creator, other bytes, another hash or another composition", () => {
