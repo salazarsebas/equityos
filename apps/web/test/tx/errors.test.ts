@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { indexRegistryAbi } from "@equityos/contracts-abi";
 import { encodeErrorResult, parseAbi } from "viem";
-import { classifyTxError, decodeRevertData, findRevertData, txFailureMessage } from "../../src/lib/tx/errors";
+import {
+  classifyTxError,
+  decodeRevertData,
+  findRevertData,
+  MAX_REPORTED_REASON,
+  reportedReason,
+  txFailureMessage,
+} from "../../src/lib/tx/errors";
 
 const INDEX_ID = `0x${"ab".repeat(32)}` as const;
 const CALLER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -83,7 +90,8 @@ describe("classifyTxError", () => {
 });
 
 describe("txFailureMessage", () => {
-  test("never repeats raw error text and always says nothing was sent", () => {
+  test("never repeats raw error text or a reported reason, and always says nothing was sent", () => {
+    expect(txFailureMessage({ kind: "revert", reason: "attacker text" })).not.toContain("attacker text");
     for (const failure of [
       { kind: "user_rejected" },
       { kind: "contract_error", name: "EmptySpec", args: [] },
@@ -95,6 +103,42 @@ describe("txFailureMessage", () => {
       { kind: "unknown" },
     ] as const) {
       expect(txFailureMessage(failure)).toEndWith("Nothing was sent.");
+    }
+  });
+});
+
+describe("reportedReason", () => {
+  test("keeps printable text as it is", () => {
+    expect(reportedReason("weights do not sum")).toBe("weights do not sum");
+    expect(reportedReason("Índice café")).toBe("Índice café");
+  });
+
+  test("strips control, format and bidirectional characters and collapses whitespace", () => {
+    expect(reportedReason("a\u0000b\u0007c")).toBe("a b c");
+    expect(reportedReason("pay ‮usd‬ now")).toBe("pay usd now");
+    expect(reportedReason("line\nbreak\t\ttab")).toBe("line break tab");
+    expect(reportedReason("zero​width")).toBe("zero width");
+    expect(reportedReason("\u0000‮ \n")).toBeNull();
+  });
+
+  test("caps the text at 200 characters with an ellipsis", () => {
+    const long = reportedReason("x".repeat(5_000));
+    expect(long).toHaveLength(MAX_REPORTED_REASON);
+    expect(long?.endsWith("…")).toBe(true);
+    expect(reportedReason("y".repeat(200))).toBe("y".repeat(200));
+    // Counted in characters, so a surrogate pair is never cut in half.
+    const emoji = reportedReason("\u{1F600}".repeat(300)) ?? "";
+    expect(Array.from(emoji)).toHaveLength(MAX_REPORTED_REASON);
+  });
+
+  test("a decoded Error(string) carries only the safe text", () => {
+    const abi = parseAbi(["error Error(string)"]);
+    const data = encodeErrorResult({ abi, errorName: "Error", args: [`bad‮${"z".repeat(400)}`] });
+    const failure = decodeRevertData(indexRegistryAbi, data);
+    expect(failure.kind).toBe("revert");
+    if (failure.kind === "revert") {
+      expect(failure.reason?.startsWith("bad z")).toBe(true);
+      expect(Array.from(failure.reason ?? "")).toHaveLength(MAX_REPORTED_REASON);
     }
   });
 });

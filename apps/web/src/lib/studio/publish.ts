@@ -159,8 +159,9 @@ export interface OnchainVersion {
 }
 
 /**
- * Establishes that the registry holds what was published: the same creator, the same bytes, and a version that
- * passes the conformance checks C1 to C5 of `@equityos/core` on the values the chain returned.
+ * Establishes that the registry holds what was published: the same creator, the same bytes, the same hash, and
+ * a version that passes the conformance checks C1 to C5 of `@equityos/core` on the values the chain returned.
+ * Each comparison has its own reason, so a failure says which value differs.
  */
 export function verifyPublishedVersion(plan: PublishPlan, onchain: OnchainVersion): Verification<VerificationReport> {
   if (!same(onchain.creator, plan.creator)) {
@@ -168,6 +169,9 @@ export function verifyPublishedVersion(plan: PublishPlan, onchain: OnchainVersio
   }
   if (!same(onchain.spec, plan.specHex)) {
     return { ok: false, reason: "The spec bytes stored by the registry are not the bytes that were shown and sent." };
+  }
+  if (!same(onchain.specHash, plan.specHash)) {
+    return { ok: false, reason: `The registry holds spec hash ${onchain.specHash}, not ${plan.specHash}.` };
   }
   const report = verifyVersion({
     specBytes: hexToBytes(onchain.spec),
@@ -181,9 +185,6 @@ export function verifyPublishedVersion(plan: PublishPlan, onchain: OnchainVersio
       ok: false,
       reason: `Check ${failed?.id ?? "C1"} did not pass on the published version: ${failed?.reason}.`,
     };
-  }
-  if (!same(onchain.specHash, plan.specHash)) {
-    return { ok: false, reason: `The registry holds spec hash ${onchain.specHash}, not ${plan.specHash}.` };
   }
   return { ok: true, result: report };
 }

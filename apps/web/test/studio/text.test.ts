@@ -60,7 +60,13 @@ describe("publishFailureText", () => {
       title: "The registry would reject this call with SpecTooLarge.",
     });
     expect(failure.body).toContain("SpecTooLarge(9000, 8192)");
-    expect(publishFailureText({ kind: "unknown" }).offersNewSalt).toBe(false);
+    expect(publishFailureText({ kind: "unknown" })).toMatchObject({ offersNewSalt: false, reported: null });
+  });
+
+  test("a plain revert reason is kept apart from the app's own sentences", () => {
+    const failure = publishFailureText({ kind: "revert", reason: "custom text" });
+    expect(failure.reported).toBe("custom text");
+    expect(`${failure.title} ${failure.body}`).not.toContain("custom text");
   });
 });
 

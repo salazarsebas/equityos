@@ -20,7 +20,18 @@ export interface RegistryReads {
   maxFeePerGas(): Promise<bigint>;
   /** ETH balance of the account, in wei. */
   balance(account: Address): Promise<bigint>;
+  /**
+   * The L1 data fee of the transaction in wei, from the `GasPriceOracle` predeploy of an OP Stack chain such as
+   * Base. `null` on a chain that charges none, such as a local node.
+   */
+  l1DataFee(plan: PublishPlan): Promise<bigint | null>;
 }
+
+/**
+ * The balance must cover this multiple of the estimated fee. The estimate is read before signing and fees move
+ * until the transaction is included, so an exact cover is not a safe one.
+ */
+export const BALANCE_MARGIN = 2n;
 
 export type Preflight =
   /** There is no contract at the registry address on this chain. */
@@ -36,6 +47,10 @@ export type Preflight =
       readonly maxFeePerGasWei: bigint;
       /** Upper bound of the execution fee: `gas * maxFeePerGasWei`, in wei. */
       readonly feeWei: bigint;
+      /** L1 data fee in wei, `null` on a chain that charges none. */
+      readonly l1FeeWei: bigint | null;
+      /** Execution fee plus L1 data fee, in wei. */
+      readonly totalFeeWei: bigint;
       readonly balanceWei: bigint;
     };
 
@@ -58,12 +73,15 @@ export async function runPreflight(
   } catch (error) {
     return { status: "simulation_failed", identifier, failure: classify(error) };
   }
-  const [gas, maxFeePerGasWei, balanceWei] = await Promise.all([
+  const [gas, maxFeePerGasWei, balanceWei, l1FeeWei] = await Promise.all([
     reads.estimateGas(plan),
     reads.maxFeePerGas(),
     reads.balance(plan.creator),
+    reads.l1DataFee(plan),
   ]);
-  return { status: "ready", identifier, gas, maxFeePerGasWei, feeWei: gas * maxFeePerGasWei, balanceWei };
+  const feeWei = gas * maxFeePerGasWei;
+  const totalFeeWei = feeWei + (l1FeeWei ?? 0n);
+  return { status: "ready", identifier, gas, maxFeePerGasWei, feeWei, l1FeeWei, totalFeeWei, balanceWei };
 }
 
 /** `checking`: the reads are running. `failed`: the chain could not be read. `null`: nothing to check yet. */
@@ -151,23 +169,18 @@ export function publishChecklist(input: ChecklistInput): ChecklistItem[] {
     pending("balance", "ETH balance");
     return items;
   }
-  add("fee", "done", "Gas and fee", `${formatCount(live.gas)} gas, at most ${eth(live.feeWei)}`);
-  const covered = live.balanceWei >= live.feeWei;
+  const l1 =
+    live.l1FeeWei === null
+      ? "no L1 data fee on this chain"
+      : `L1 data fee ${eth(live.l1FeeWei)}, total ${eth(live.totalFeeWei)}`;
+  add("fee", "done", "Gas and fee", `${formatCount(live.gas)} gas, execution fee at most ${eth(live.feeWei)}, ${l1}`);
+  const required = live.totalFeeWei * BALANCE_MARGIN;
+  const covered = live.balanceWei >= required;
   add(
     "balance",
     covered ? "done" : "blocked",
     "ETH balance",
-    covered ? `${eth(live.balanceWei)}, enough for the fee` : `${eth(live.balanceWei)}, less than the fee`,
+    `${eth(live.balanceWei)}, ${covered ? "at least" : "less than"} ${BALANCE_MARGIN} times the estimated fee (${eth(required)})`,
   );
   return items;
-}
-
-/**
- * Whether the publish button may send. Every precondition has to be established, and on a network that
- * requires it the acknowledgement has to be given.
- */
-export function canPublish(items: readonly ChecklistItem[], policy: NetworkPolicy, acknowledged: boolean): boolean {
-  if (policy.status !== "available") return false;
-  if (policy.requiresAcknowledgement && !acknowledged) return false;
-  return items.length > 0 && items.every(({ state }) => state === "done");
 }
