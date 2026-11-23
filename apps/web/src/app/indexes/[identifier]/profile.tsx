@@ -114,6 +114,15 @@ function Header({ profile, name }: { profile: IndexProfile; name: string }) {
       {view.conformant && view.spec.description !== "" ? (
         <p className="mt-3 max-w-measure text-md">{view.spec.description}</p>
       ) : null}
+      {view.conformant ? (
+        <p className="mt-3">
+          <Link
+            href={`/portfolio?${new URLSearchParams({ index: index.identifier, ...(superseded ? { version: String(view.version) } : {}) })}`}
+          >
+            Compare a wallet with this index
+          </Link>
+        </p>
+      ) : null}
       <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <HeaderFact term="Creator">
           {creatorUrl ? (
