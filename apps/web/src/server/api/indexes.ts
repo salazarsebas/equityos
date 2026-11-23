@@ -58,7 +58,7 @@ const NOT_FOUND = {
 } as const;
 
 /** The registry facts every index response carries in `meta`. */
-function registryMeta({ registry, mode, now = systemClock }: IndexApiOptions) {
+export function registryMeta({ registry, mode, now = systemClock }: IndexApiOptions) {
   const reader = registry();
   return {
     asOf: isoTimestamp(now()),
@@ -149,7 +149,7 @@ function versionDetail(index: IndexSummary, view: IndexVersionView) {
  *
  * @throws {ApiError} 400 `invalid_parameter`
  */
-function parseVersion(raw: string): number {
+export function parseVersion(raw: string): number {
   const version = /^[1-9][0-9]{0,9}$/.test(raw) ? Number(raw) : Number.NaN;
   if (!(version <= 0xffff_ffff)) {
     throw new ApiError(400, "invalid_parameter", "The version is not an integer from 1 to 4294967295.", {
@@ -160,10 +160,28 @@ function parseVersion(raw: string): number {
 }
 
 /** Loads an index with one of its versions, or throws the API error of the reason there is none. */
-async function requireProfile(options: IndexApiOptions, identifier: string, version?: number) {
+export async function requireProfile(options: IndexApiOptions, identifier: string, version?: number) {
   const profile = await loadIndexProfile(options.registry(), identifier, version);
   if (profile.status === "ok") return profile;
   throw profile.status === "registry_not_deployed" ? notDeployed(profile) : NOT_FOUND[profile.status];
+}
+
+/**
+ * Refuses a version that fails verification: there is no composition to compute anything from.
+ *
+ * @throws {ApiError} 409 `version_not_conformant`
+ */
+export function requireConformant(
+  view: IndexVersionView,
+  what: string,
+): asserts view is Extract<IndexVersionView, { conformant: true }> {
+  if (view.conformant) return;
+  const { failedCheck } = verificationSummary(view);
+  throw new ApiError(409, "version_not_conformant", `The version fails verification, so it has no ${what}.`, {
+    version: view.version,
+    failedCheck: failedCheck?.id ?? null,
+    code: failedCheck?.code ?? null,
+  });
 }
 
 /**
@@ -232,14 +250,7 @@ export function indexCompositionHandler(options: IndexApiOptions & { readonly ma
       (await context.params).identifier,
       requested === null ? undefined : parseVersion(requested),
     );
-    if (!view.conformant) {
-      const { failedCheck } = verificationSummary(view);
-      throw new ApiError(409, "version_not_conformant", "The version fails verification, so it has no composition.", {
-        version: view.version,
-        failedCheck: failedCheck?.id ?? null,
-        code: failedCheck?.code ?? null,
-      });
-    }
+    requireConformant(view, "composition");
     const snapshot = await options.marketData().getSnapshot();
     const constituents = joinComposition(view.constituents, snapshot).map((row) => {
       const { eligible, ineligibleReasons, transfersPaused } = constituentStatus(row);

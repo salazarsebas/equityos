@@ -10,6 +10,7 @@ import {
   indexVersionHandler,
 } from "../../src/server/api/indexes";
 import { openApiDocument, type Schema } from "../../src/server/api/openapi";
+import { portfolioHandler, portfolioPlanHandler } from "../../src/server/api/portfolio";
 import { statusHandler } from "../../src/server/api/status";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
@@ -265,6 +266,65 @@ describe("handler output validates against the document", () => {
     ];
     expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 404, 409, 409, 503]);
     for (const response of responses) await expectDocumented("/indexes/{identifier}/composition", response);
+  });
+
+  test("GET /portfolio and /portfolio/plan: every state, each error and a source down", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const portfolioOptions = (registry: RegistryReader = recordedRegistry(), service = fixtureService()) => ({
+        ...registryOptions(registry, service),
+        marketMode: () => "replay" as const,
+      });
+      const accounts = [
+        "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+        "0x0000000000000000000000000000000000001001",
+        "0x0000000000000000000000000000000000001003",
+        "0x0000000000000000000000000000000000001004",
+      ];
+      const index = `index=${DIVERSIFIED}`;
+      const stale = portfolioOptions(recordedRegistry(), fixtureService(RECORDED_AT + 198_000));
+      const notDeployedOptions = { ...notDeployed(), marketMode: () => "live" as const };
+      const failing = [
+        `address=0x12&${index}`,
+        `address=${accounts[0]}&index=${UNKNOWN}`,
+        `address=${accounts[0]}&index=${MISMATCHED}`,
+        `address=0x${"9".repeat(40)}&${index}`,
+      ];
+      const responses: Response[] = [];
+      for (const address of accounts) {
+        responses.push(await portfolioHandler(portfolioOptions())(get(`/?address=${address}&${index}`), undefined));
+        responses.push(await portfolioHandler(stale)(get(`/?address=${address}&${index}`), undefined));
+      }
+      responses.push(
+        await portfolioHandler(portfolioOptions())(get(`/?address=${accounts[3]}&${index}&version=1`), undefined),
+      );
+      for (const query of failing)
+        responses.push(await portfolioHandler(portfolioOptions())(get(`/?${query}`), undefined));
+      responses.push(await portfolioHandler(notDeployedOptions)(get(`/?address=${accounts[0]}&${index}`), undefined));
+      expect(responses.map((response) => response.status)).toEqual([...Array(9).fill(200), 400, 404, 409, 503, 409]);
+      for (const response of responses) await expectDocumented("/portfolio", response);
+
+      const plans: Response[] = [];
+      for (const address of accounts) {
+        for (const mode of ["rebalance", "buy_only&depositUsdE8=200000000", "buy_only&depositUsdE8=100000000000"]) {
+          plans.push(
+            await portfolioPlanHandler(portfolioOptions())(
+              get(`/?address=${address}&${index}&mode=${mode}`),
+              undefined,
+            ),
+          );
+        }
+        plans.push(await portfolioPlanHandler(stale)(get(`/?address=${address}&${index}&mode=rebalance`), undefined));
+      }
+      plans.push(await portfolioPlanHandler(portfolioOptions())(get(`/?address=${accounts[0]}&${index}`), undefined));
+      for (const query of failing) {
+        plans.push(await portfolioPlanHandler(portfolioOptions())(get(`/?${query}&mode=rebalance`), undefined));
+      }
+      expect(plans.map((response) => response.status)).toEqual([...Array(16).fill(200), 400, 400, 404, 409, 503]);
+      for (const response of plans) await expectDocumented("/portfolio/plan", response);
+    } finally {
+      log.mockRestore();
+    }
   });
 
   test("a response with an undocumented field does not validate", () => {
