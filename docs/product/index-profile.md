@@ -34,7 +34,8 @@ visitor sees. Indexes exist only on a [local chain](../development/local-chain.m
 One version of one index, in a fixed order:
 
 1. **Header.** Name, version, whether it is the latest, deprecation, description, creator, publication time and
-   spec hash.
+   spec hash. A verified version links to "Compare a wallet with this index", the
+   [portfolio page](portfolio.md) with the index, and the version when it is not the latest, filled in.
 2. **Key facts.** Number of constituents, largest weight, rebalance rule, date of the last publication.
 3. **Composition.** Every constituent with its target weight, its reference price and its status now.
 4. **Verification.** The panel described below.
