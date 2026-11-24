@@ -8,8 +8,8 @@ import {
   type RegistryReads,
   runPreflight,
 } from "../../src/lib/studio/preflight";
-import { buildPublishPlan, type NetworkPolicy } from "../../src/lib/studio/publish";
-import { ASSETS, CHAIN_ID, SALT, validDraft } from "./support";
+import { buildPublishPlan, buildVersionPlan, type NetworkPolicy } from "../../src/lib/studio/publish";
+import { ASSETS, CHAIN_ID, SALT, validDraft, versionTarget } from "./support";
 
 const REGISTRY: Address = "0x4BD4D49A9C88f75FB97674488E23A7Fa59F9506c";
 const CREATOR: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -25,6 +25,8 @@ function reads(overrides: Partial<RegistryReads> = {}): RegistryReads & { calls:
     code: async () => "0x6080",
     computeIndexId: async () => plan.indexId,
     indexIds: async () => [],
+    index: async () => ({ creator: CREATOR, latestVersion: 1, deprecated: false }),
+    versionHash: async () => plan.specHash,
     simulate: async () => undefined,
     estimateGas: async () => 700_000n,
     maxFeePerGas: async () => 2_000_000_000n,
@@ -44,8 +46,9 @@ function reads(overrides: Partial<RegistryReads> = {}): RegistryReads & { calls:
   return { ...traced, calls };
 }
 const classify = () => ({ kind: "contract_error", name: "IndexAlreadyExists", args: [plan.indexId] }) as const;
-const READY: Preflight = {
+const READY: Extract<Preflight, { status: "ready" }> = {
   status: "ready",
+  index: null,
   identifier: "test-index-abcdef12",
   gas: 700_000n,
   maxFeePerGasWei: 2_000_000_000n,
@@ -115,6 +118,7 @@ function input(overrides: Partial<ChecklistInput> = {}): ChecklistInput {
     account: CREATOR,
     walletChainId: CHAIN_ID,
     preflight: READY,
+    newVersion: null,
     ...overrides,
   };
 }
@@ -149,7 +153,9 @@ describe("publishChecklist", () => {
       simulation: "waiting",
     });
     expect(
-      states({ preflight: { status: "simulation_failed", identifier: "x", failure: { kind: "unknown" } } }),
+      states({
+        preflight: { status: "simulation_failed", identifier: "x", failure: { kind: "unknown" }, index: null },
+      }),
     ).toMatchObject({ index_id: "done", simulation: "blocked", fee: "waiting", balance: "waiting" });
     expect(states({ preflight: "failed" })).toMatchObject({ index_id: "blocked", simulation: "blocked" });
     // The balance must cover twice the estimated fee, L1 data fee included.
@@ -173,5 +179,95 @@ describe("publishChecklist", () => {
     expect(l1.balance).toBe("0 ETH, less than 2 times the estimated fee (0.004 ETH)");
     expect(items.hash).toBe(valid.specHash);
     expect(items.spec).toContain(`${valid.specBytes.length} of 8,192 bytes`);
+  });
+});
+
+describe("a new version", () => {
+  const OTHER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+  const target = versionTarget(CREATOR, REGISTRY);
+  const edited = evaluateDraft(validDraft({ name: "Test Index Two" }), ASSETS).valid;
+  if (edited === null) throw new Error("expected a valid draft");
+  const versionPlan = buildVersionPlan({ valid: edited, target, creator: CREATOR });
+  const INDEX = { creator: CREATOR, latestVersion: 1, deprecated: false };
+
+  test("is ready with the index as read, after the base version's hash was read back", async () => {
+    const chain = reads({ versionHash: async () => target.base.specHash });
+    expect(await runPreflight(chain, versionPlan, classify)).toMatchObject({ status: "ready", index: INDEX });
+    expect(chain.calls).toEqual([
+      "code",
+      "index",
+      "versionHash",
+      "indexIds",
+      "simulate",
+      "estimateGas",
+      "maxFeePerGas",
+      "balance",
+      "l1DataFee",
+    ]);
+    expect(chain.calls).not.toContain("computeIndexId");
+  });
+
+  test("a base the registry does not hold stops before any simulation", async () => {
+    const chain = reads({ versionHash: async () => `0x${"cd".repeat(32)}` });
+    expect(await runPreflight(chain, versionPlan, classify)).toEqual({ status: "base_mismatch", index: INDEX });
+    expect(chain.calls).not.toContain("simulate");
+  });
+
+  test("the registry's own refusal is reported with the index, so the checklist can say which check fails", async () => {
+    const moved = { ...INDEX, latestVersion: 2 };
+    const chain = reads({
+      index: async () => moved,
+      versionHash: async () => target.base.specHash,
+      simulate: async () => {
+        throw new Error("execution reverted");
+      },
+    });
+    const result = await runPreflight(chain, versionPlan, () => ({
+      kind: "contract_error",
+      name: "UnexpectedVersion",
+      args: [2, 3],
+    }));
+    expect(result).toMatchObject({ status: "simulation_failed", index: moved, failure: { name: "UnexpectedVersion" } });
+  });
+
+  const ready = { ...READY, index: INDEX };
+  const versionStates = (overrides: Partial<ChecklistInput> = {}) =>
+    states({ newVersion: 2, preflight: ready, ...overrides });
+
+  test("eleven items, each established from the index as read", () => {
+    const items = publishChecklist(input({ newVersion: 2, preflight: ready }));
+    expect(items.map(({ id }) => id)).toEqual([
+      "spec",
+      "hash",
+      "wallet",
+      "network",
+      "registry",
+      "creator",
+      "active",
+      "version",
+      "simulation",
+      "fee",
+      "balance",
+    ]);
+    expect(items.every(({ state }) => state === "done")).toBe(true);
+    expect(items.find(({ id }) => id === "simulation")?.detail).toBe(
+      "publishVersion succeeded against the current state",
+    );
+  });
+
+  test("another account, a deprecation, a moved version or another base each block their own item", () => {
+    expect(versionStates({ account: OTHER })).toMatchObject({ creator: "blocked", active: "done", version: "done" });
+    expect(versionStates({ preflight: { ...ready, index: { ...INDEX, deprecated: true } } })).toMatchObject({
+      creator: "done",
+      active: "blocked",
+    });
+    expect(versionStates({ preflight: { ...ready, index: { ...INDEX, latestVersion: 2 } } })).toMatchObject({
+      version: "blocked",
+    });
+    expect(versionStates({ preflight: { status: "base_mismatch", index: INDEX } })).toMatchObject({
+      version: "blocked",
+      simulation: "waiting",
+    });
+    expect(versionStates({ preflight: "checking" })).toMatchObject({ creator: "checking", version: "checking" });
   });
 });

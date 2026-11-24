@@ -13,6 +13,7 @@ import {
 import { createIndexDirectory, formatIdentifier } from "@/lib/registry/identifier";
 import type { Verification } from "@/lib/tx/run";
 import type { ValidDraft } from "./evaluate";
+import type { VersionTarget } from "./version";
 
 /** Whether a network accepts a publication from the Studio, decided before anything is read from it. */
 export type NetworkPolicy =
@@ -79,6 +80,76 @@ export interface PublishPlan {
   readonly args: readonly [Hex, Hex, readonly Address[], readonly number[]];
 }
 
+/** Everything one `publishVersion` call sends, and everything the review shows. */
+export interface VersionPlan {
+  readonly chainId: number;
+  readonly registry: Address;
+  /** The connected account. The registry accepts the call only from the creator of the index. */
+  readonly creator: Address;
+  readonly functionName: "publishVersion";
+  readonly indexId: Hex;
+  /** `expectedVersion`: the version this call creates, one more than the latest version the draft was based on. */
+  readonly version: number;
+  /** The latest version when the draft was loaded, verified in the browser. */
+  readonly baseVersion: number;
+  readonly baseSpecHash: Hex;
+  /** Canonical bytes of the base version, as hex. A plan with the same bytes publishes nothing new. */
+  readonly baseSpecHex: Hex;
+  readonly slug: string;
+  readonly specBytes: Uint8Array;
+  readonly specHex: Hex;
+  readonly canonicalText: string;
+  readonly specHash: Hex;
+  readonly constituents: readonly Constituent[];
+  /** Arguments of `publishVersion(indexId, expectedVersion, spec, tokens, weightsBps)`. */
+  readonly args: readonly [Hex, number, Hex, readonly Address[], readonly number[]];
+}
+
+/** The plan of either call the Studio can send. `functionName` says which. */
+export type StudioPlan = PublishPlan | VersionPlan;
+
+/** The parts of a plan that do not depend on the function: the bytes, as hex and as text, and the weights. */
+function payload(valid: ValidDraft) {
+  const { specBytes, constituents } = valid;
+  return {
+    slug: valid.spec.slug,
+    specBytes,
+    specHex: bytesToHex(specBytes),
+    canonicalText: new TextDecoder("utf-8", { fatal: true }).decode(specBytes),
+    specHash: valid.specHash,
+    constituents,
+    tokens: constituents.map(({ token }) => token),
+    weightsBps: constituents.map(({ weightBps }) => weightBps),
+  };
+}
+
+/**
+ * The `publishVersion` plan of a draft based on the latest version of `target`. The expected version is the
+ * base version plus one: the review confirms it against the registry, and the click reads it again.
+ */
+export function buildVersionPlan(input: {
+  readonly valid: ValidDraft;
+  readonly target: VersionTarget;
+  readonly creator: Address;
+}): VersionPlan {
+  const { valid, target, creator } = input;
+  const { tokens, weightsBps, ...bytes } = payload(valid);
+  const version = target.base.version + 1;
+  return {
+    chainId: target.chainId,
+    registry: target.registry,
+    creator,
+    functionName: "publishVersion",
+    indexId: target.indexId,
+    version,
+    baseVersion: target.base.version,
+    baseSpecHash: target.base.specHash,
+    baseSpecHex: target.base.specHex,
+    ...bytes,
+    args: [target.indexId, version, bytes.specHex, tokens, weightsBps],
+  };
+}
+
 export function buildPublishPlan(input: {
   readonly valid: ValidDraft;
   readonly chainId: number;
@@ -87,8 +158,7 @@ export function buildPublishPlan(input: {
   readonly salt: Hex;
 }): PublishPlan {
   const { valid, chainId, registry, creator, salt } = input;
-  const { specBytes, constituents } = valid;
-  const specHex = bytesToHex(specBytes);
+  const { tokens, weightsBps, ...bytes } = payload(valid);
   return {
     chainId,
     registry,
@@ -97,13 +167,8 @@ export function buildPublishPlan(input: {
     salt,
     indexId: predictIndexId(creator, salt),
     version: 1,
-    slug: valid.spec.slug,
-    specBytes,
-    specHex,
-    canonicalText: new TextDecoder("utf-8", { fatal: true }).decode(specBytes),
-    specHash: valid.specHash,
-    constituents,
-    args: [salt, specHex, constituents.map(({ token }) => token), constituents.map(({ weightBps }) => weightBps)],
+    ...bytes,
+    args: [salt, bytes.specHex, tokens, weightsBps],
   };
 }
 
@@ -149,6 +214,42 @@ export function checkPublishReceipt(plan: PublishPlan, logs: readonly Log[]): Ve
   return { ok: true, result: null };
 }
 
+/**
+ * Compares the events of a `publishVersion` receipt with the plan: exactly one `VersionPublished` from the
+ * registry, with the index id, the expected version, the hash of the bytes that were shown and the connected
+ * account as publisher, and no `IndexCreated`. Events of any other contract are ignored.
+ */
+export function checkVersionReceipt(plan: VersionPlan, logs: readonly Log[]): Verification<null> {
+  const fromRegistry = logs.filter((log) => isAddressEqual(log.address, plan.registry));
+  const created = parseEventLogs({ abi: indexRegistryAbi, logs: fromRegistry, eventName: "IndexCreated" });
+  const published = parseEventLogs({ abi: indexRegistryAbi, logs: fromRegistry, eventName: "VersionPublished" });
+  const [event] = published;
+  if (created.length !== 0) {
+    return {
+      ok: false,
+      reason: `The receipt has ${created.length} IndexCreated events from the registry, expected 0.`,
+    };
+  }
+  if (published.length !== 1 || event === undefined) {
+    const reason = `The receipt has ${published.length} VersionPublished events from the registry, expected 1.`;
+    return { ok: false, reason };
+  }
+  const { indexId, version, specHash, creator } = event.args;
+  if (!same(indexId, plan.indexId)) {
+    return { ok: false, reason: `The registry published a version of ${indexId}, not of ${plan.indexId}.` };
+  }
+  if (version !== plan.version) {
+    return { ok: false, reason: `The registry published version ${version}, expected ${plan.version}.` };
+  }
+  if (!same(specHash, plan.specHash)) {
+    return { ok: false, reason: `The registry recorded spec hash ${specHash}, not ${plan.specHash}.` };
+  }
+  if (!same(creator, plan.creator)) {
+    return { ok: false, reason: `The registry records ${creator} as the publisher, not ${plan.creator}.` };
+  }
+  return { ok: true, result: null };
+}
+
 /** What the registry returns for one version, read after the transaction was mined. */
 export interface OnchainVersion {
   readonly creator: Address;
@@ -163,7 +264,7 @@ export interface OnchainVersion {
  * a version that passes the conformance checks C1 to C5 of `@equityos/core` on the values the chain returned.
  * Each comparison has its own reason, so a failure says which value differs.
  */
-export function verifyPublishedVersion(plan: PublishPlan, onchain: OnchainVersion): Verification<VerificationReport> {
+export function verifyPublishedVersion(plan: StudioPlan, onchain: OnchainVersion): Verification<VerificationReport> {
   if (!same(onchain.creator, plan.creator)) {
     return { ok: false, reason: `The registry records ${onchain.creator} as the creator, not ${plan.creator}.` };
   }
@@ -191,7 +292,7 @@ export function verifyPublishedVersion(plan: PublishPlan, onchain: OnchainVersio
 
 /** What is known once a publication is confirmed: all of it was read from the chain after the receipt. */
 export interface PublishResult {
-  readonly plan: PublishPlan;
+  readonly plan: StudioPlan;
   /** Canonical identifier of the index, from the ids the registry holds now. */
   readonly identifier: string;
   readonly blockNumber: bigint;
@@ -201,18 +302,21 @@ export interface PublishResult {
 
 /**
  * Everything that has to hold before a publication is shown as successful: the events of the receipt match
- * the plan, and the version read back from the registry is the one that was sent and passes verification.
- * The receipt must already be known to have status "success".
+ * the plan, for the function it called, and the version read back from the registry is the one that was sent
+ * and passes verification. The receipt must already be known to have status "success".
  */
 export async function verifyPublication(
-  plan: PublishPlan,
+  plan: StudioPlan,
   receipt: { readonly logs: readonly Log[]; readonly blockNumber: bigint },
   chain: {
     version(indexId: Hex, version: number): Promise<OnchainVersion>;
     indexIds(): Promise<readonly Hex[]>;
   },
 ): Promise<Verification<PublishResult>> {
-  const events = checkPublishReceipt(plan, receipt.logs);
+  const events =
+    plan.functionName === "createIndex"
+      ? checkPublishReceipt(plan, receipt.logs)
+      : checkVersionReceipt(plan, receipt.logs);
   if (!events.ok) return events;
   const verified = verifyPublishedVersion(plan, await chain.version(plan.indexId, plan.version));
   if (!verified.ok) return verified;

@@ -112,6 +112,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   time and the optional `dataSuffix` capability of a batch; nothing when no code is configured.
 - Browser tests of execution on a local Anvil node, with a mock router, executor and tokens installed at the
   pinned addresses, and of the review states with mocked plans.
+- Index Studio publishes a new version of an existing index: `/studio?index=<identifier>` opens the latest
+  version, verified in the browser, prefilled in the editor, with its changes in the words of the version
+  history. `publishVersion` is sent only by the creator, with `expectedVersion` read again at the click, and
+  success is shown only after the `VersionPublished` event and the version read back are verified. A deprecated
+  index, a version that fails verification and an unchanged spec are refused with the reason, and a version
+  published first elsewhere offers to load the latest version and keep the draft.
+- The index profile offers "Publish a new version" to its creator, and the Studio lists the indexes of the
+  connected account.
 
 ### Changed
 

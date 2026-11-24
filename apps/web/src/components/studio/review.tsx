@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { Chain, Hex } from "viem";
 import { useConfig, useConnection, useSwitchChain } from "wagmi";
 import { writeContract } from "wagmi/actions";
@@ -22,28 +22,34 @@ import {
   TableRowHeader,
 } from "@/components/ui/table";
 import { formatCount, formatPercent } from "@/lib/format";
-import { publishFailureText } from "@/lib/studio/messages";
+import { clickRefusalText, type FailureText, publishFailureText } from "@/lib/studio/messages";
 import { describeMethodology } from "@/lib/indexes/methodology";
 import { type ChecklistItem, publishChecklist, type RegistryPresence } from "@/lib/studio/preflight";
 import {
   buildPublishPlan,
+  buildVersionPlan,
   type NetworkPolicy,
-  type PublishPlan,
   type PublishResult,
+  type StudioPlan,
   verifyPublication,
 } from "@/lib/studio/publish";
 import {
   type Acknowledgement,
   acknowledgementEnds,
   buildPublishRequest,
+  decideAtClick,
+  type PublishDecisionInput,
+  type PublishRefusal,
   type PublishWriteRequest,
   publishPlanKey,
 } from "@/lib/studio/request";
 import type { ReviewSnapshot } from "@/lib/studio/snapshot";
+import { identifierAfter } from "@/lib/studio/version";
 import { isTxInFlight, type TxState } from "@/lib/tx/machine";
 import { useTransaction } from "@/lib/tx/use-transaction";
 import { registryChain, usePreflight } from "./chain";
-import { CanonicalJson, exportSpec } from "./preview";
+import { CanonicalJson, Changes, exportSpec } from "./preview";
+import { ReloadButton } from "./version";
 
 type ReviewProps = {
   /** What is reviewed and sent, taken when the review opened. Nothing else of the draft is read here. */
@@ -55,6 +61,8 @@ type ReviewProps = {
   /** Replaces the salt of the draft with a new random one, on an explicit click. */
   onNewSalt: () => void;
   onNewDraft: () => void;
+  /** A new version: back to the editor with the latest version loaded again as the base of the draft. */
+  onReload: () => void;
 };
 
 /** The profile page of an index on this site. */
@@ -137,17 +145,42 @@ function ReportedReason({ text }: { text: string | null }) {
   );
 }
 
+/** A refusal in words, with the one way forward it offers: a new salt, or the latest version. */
+function Failure({ text, onNewSalt, onReload }: { text: FailureText; onNewSalt: () => void; onReload: () => void }) {
+  return (
+    <Callout tone="negative" role="alert" title={text.title}>
+      <span className="[overflow-wrap:anywhere]">{text.body}</span>
+      <ReportedReason text={text.reported} />
+      {text.offersNewSalt ? (
+        <span className="mt-2 block">
+          <Button onClick={onNewSalt}>Use a new salt</Button>
+        </span>
+      ) : null}
+      {text.offersReload ? (
+        <span className="mt-2 block">
+          <ReloadButton onReload={onReload} loading={false} />
+        </span>
+      ) : null}
+    </Callout>
+  );
+}
+
 /** Where the transaction is, in words. The result of a publication is stated here and nowhere else. */
 function TransactionStatus({
   state,
   chain,
+  call,
   onRecheck,
   onNewSalt,
+  onReload,
 }: {
   state: TxState<PublishResult>;
   chain: Chain;
+  /** `createIndex` or `publishVersion`. */
+  call: string;
   onRecheck: () => void;
   onNewSalt: () => void;
+  onReload: () => void;
 }) {
   switch (state.status) {
     case "idle":
@@ -156,7 +189,7 @@ function TransactionStatus({
     case "awaiting_signature":
       return (
         <Callout tone="info" role="status" title="Confirm the transaction in your wallet.">
-          Nothing has been sent. The wallet shows the same call: createIndex on the registry.
+          Nothing has been sent. The wallet shows the same call: {call} on the registry.
         </Callout>
       );
     case "rejected":
@@ -165,20 +198,8 @@ function TransactionStatus({
           Nothing was sent and the draft is unchanged. You can publish whenever you are ready.
         </Callout>
       );
-    case "failed": {
-      const text = publishFailureText(state.failure);
-      return (
-        <Callout tone="negative" role="alert" title={text.title}>
-          <span className="[overflow-wrap:anywhere]">{text.body}</span>
-          <ReportedReason text={text.reported} />
-          {text.offersNewSalt ? (
-            <span className="mt-2 block">
-              <Button onClick={onNewSalt}>Use a new salt</Button>
-            </span>
-          ) : null}
-        </Callout>
-      );
-    }
+    case "failed":
+      return <Failure text={publishFailureText(state.failure)} onNewSalt={onNewSalt} onReload={onReload} />;
     case "submitted":
       return (
         <Callout tone="info" role="status" title="Transaction submitted. Waiting for it to be mined.">
@@ -220,7 +241,10 @@ function TransactionStatus({
     case "dropped":
       return (
         <Callout tone="warning" role="alert" title="No receipt was found for the transaction.">
-          It may still be mined later. Publishing again targets the same index id, so it cannot create a second index.{" "}
+          It may still be mined later.{" "}
+          {call === "createIndex"
+            ? "Publishing again targets the same index id, so it cannot create a second index."
+            : "Publishing again sends the same expected version, so it cannot publish twice."}{" "}
           <TxLink chain={chain} hash={state.hash} />
         </Callout>
       );
@@ -231,8 +255,8 @@ function TransactionStatus({
  * The publish step: everything `createIndex` will send, the preconditions with their real state, and the one
  * button that sends. The wallet is asked for a signature only from the click on that button.
  */
-export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, onNewDraft }: ReviewProps) {
-  const { valid, assets } = snapshot;
+export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, onNewDraft, onReload }: ReviewProps) {
+  const { valid, assets, target } = snapshot;
   const { salt } = snapshot.draft;
   const config = useConfig();
   const { address, chainId: walletChainId } = useConnection();
@@ -240,16 +264,22 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
   const tx = useTransaction<PublishResult>();
   const [connecting, setConnecting] = useState(false);
   const [acknowledgement, setAcknowledgement] = useState<Acknowledgement>(null);
+  /** A refusal of the decision made at the click, after the registry was read again. */
+  const [refusal, setRefusal] = useState<PublishRefusal | null>(null);
+  /** True from the click until the decision made at the click is known: a second click must not send. */
+  const [deciding, setDeciding] = useState(false);
+  const decidingNow = useRef(false);
   const account = address ?? null;
   const registry = policy.status === "available" ? policy.deployment.registry : null;
 
-  const plan = useMemo(
-    () =>
-      account === null || registry === null
-        ? null
-        : buildPublishPlan({ valid, chainId: chain.id, registry, creator: account, salt }),
-    [valid, chain.id, registry, account, salt],
-  );
+  const plan = useMemo((): StudioPlan | null => {
+    if (account === null || registry === null) return null;
+    return target === null
+      ? buildPublishPlan({ valid, chainId: chain.id, registry, creator: account, salt })
+      : buildVersionPlan({ valid, target, creator: account });
+  }, [valid, chain.id, registry, account, salt, target]);
+  const newVersion = target === null ? 1 : target.base.version + 1;
+  const call = target === null ? "createIndex" : "publishVersion";
   const settled = ["verifying", "confirmed", "unverified"].includes(tx.state.status);
   const onChain = account !== null && walletChainId === chain.id;
   const preflight = usePreflight(plan, onChain && presence === "deployed" && !isTxInFlight(tx.state) && !settled);
@@ -270,6 +300,7 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
     account,
     walletChainId: walletChainId ?? null,
     preflight: preflight.state,
+    newVersion: target === null ? null : newVersion,
   });
   // An attempt that ended without publishing withdraws the acknowledgement: the next attempt is a new decision.
   const withdrawn = acknowledgementEnds(tx.state);
@@ -278,30 +309,62 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
   }, [withdrawn]);
   // An acknowledgement holds for the plan it was given for only, so it lapses when the plan changes.
   const acknowledged = plan !== null && acknowledgement?.planKey === publishPlanKey(plan);
-  const decision = buildPublishRequest({
+  const live = typeof preflight.state === "object" ? preflight.state : null;
+  const decisionInput: PublishDecisionInput = {
     plan,
     policy,
     acknowledgement,
     walletChainId: walletChainId ?? null,
     checklist,
-    busy: isTxInFlight(tx.state) || settled,
-  });
-  const simulation =
-    typeof preflight.state === "object" && preflight.state?.status === "simulation_failed"
-      ? preflight.state.failure
-      : null;
+    busy: isTxInFlight(tx.state) || settled || deciding,
+    index:
+      live !== null &&
+      (live.status === "ready" || live.status === "simulation_failed" || live.status === "base_mismatch")
+        ? live.index
+        : null,
+  };
+  const decision = buildPublishRequest(decisionInput);
+  const simulation = live?.status === "simulation_failed" ? live.failure : null;
+  const refused = refusal === null ? null : clickRefusalText(refusal);
   const identifier =
     typeof preflight.state === "object" && preflight.state !== null && "identifier" in preflight.state
       ? preflight.state.identifier
       : null;
   const unavailable = policy.status === "not_deployed" || presence === "no_code";
 
-  /** Sends exactly the request `buildPublishRequest` returned. It is reachable only when that decision is `ok`. */
-  function publish(request: PublishWriteRequest, sent: PublishPlan) {
+  /**
+   * Decides again at the click, with the index read from the registry again for a new version, and sends
+   * exactly the request that decision returned. It is reachable only when the decision of the review is `ok`.
+   */
+  async function publish() {
+    if (decidingNow.current) return;
+    decidingNow.current = true;
+    setDeciding(true);
+    setRefusal(null);
+    try {
+      const decided = await decideAtClick(decisionInput, (read) =>
+        registryChain(config, read.chainId, read.registry).index(read.indexId),
+      );
+      if (!decided.ok) {
+        setRefusal(decided.refusal);
+        refetch();
+        return;
+      }
+      send(decided.request, decided.plan);
+    } finally {
+      decidingNow.current = false;
+      setDeciding(false);
+    }
+  }
+
+  function send(request: PublishWriteRequest, sent: StudioPlan) {
     void tx.execute({
       chainId: request.chainId,
       abi: request.abi,
-      send: () => writeContract(config, { ...request }),
+      send: () =>
+        request.functionName === "createIndex"
+          ? writeContract(config, { ...request })
+          : writeContract(config, { ...request }),
       verify: (receipt) => verifyPublication(sent, receipt, registryChain(config, sent.chainId, sent.registry)),
     });
   }
@@ -350,13 +413,20 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
           ))}
         </ul>
         <p className="max-w-measure text-secondary">
-          <Link href={indexPage(result.identifier)}>Open the index page</Link>. The explorer lists the index once it has
-          read the registry again, within ten seconds, when this site reads {chain.name}.
+          <Link href={indexPage(result.identifier)}>Open the index page</Link>.{" "}
+          {target === null ? "The explorer lists the index" : `The index page shows version ${result.plan.version}`}{" "}
+          once it has read the registry again, within ten seconds, when this site reads {chain.name}.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button size="lg" onClick={onNewDraft}>
-            Start a new draft
-          </Button>
+          {target === null ? (
+            <Button size="lg" onClick={onNewDraft}>
+              Start a new draft
+            </Button>
+          ) : (
+            <Button size="lg" onClick={onReload}>
+              Edit the next version
+            </Button>
+          )}
           <Button size="lg" onClick={() => exportSpec(valid)}>
             <DownloadIcon />
             Export spec JSON
@@ -400,16 +470,35 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
                 {registry === null ? "Not deployed on this network" : <Mono>{registry}</Mono>}
               </Fact>
               <Fact term="Function">
-                <Mono>createIndex(salt, spec, tokens, weightsBps)</Mono>
+                <Mono>
+                  {target === null
+                    ? "createIndex(salt, spec, tokens, weightsBps)"
+                    : "publishVersion(indexId, expectedVersion, spec, tokens, weightsBps)"}
+                </Mono>
               </Fact>
               <Fact term="From">
-                {account === null ? "Connect a wallet to set the creator" : <Mono>{account}</Mono>}
+                {account === null ? (
+                  `Connect a wallet to set the ${target === null ? "creator" : "publisher"}`
+                ) : (
+                  <Mono>{account}</Mono>
+                )}
               </Fact>
-              <Fact term="Salt">
-                <Mono>{salt}</Mono>
-              </Fact>
+              {target === null ? (
+                <Fact term="Salt">
+                  <Mono>{salt}</Mono>
+                </Fact>
+              ) : (
+                <Fact term="Creator">
+                  <Mono>{target.creator}</Mono>
+                  <span className="block text-sm text-secondary">
+                    The only account the registry accepts this call from
+                  </span>
+                </Fact>
+              )}
               <Fact term="Index id">
-                {plan === null ? (
+                {target !== null ? (
+                  <Mono>{target.indexId}</Mono>
+                ) : plan === null ? (
                   "Derived from the creator and the salt"
                 ) : (
                   <>
@@ -421,9 +510,33 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
                 )}
               </Fact>
               <Fact term="Identifier">
-                {identifier === null ? "Known once the registry has been read" : <Mono>{identifier}</Mono>}
+                {target !== null ? (
+                  <>
+                    <Mono>{identifier ?? identifierAfter(target, valid.spec.slug)}</Mono>
+                    {valid.spec.slug === target.base.spec.slug ? null : (
+                      <span className="block text-sm text-secondary">
+                        The slug changes, so the canonical identifier changes from {target.identifier}
+                      </span>
+                    )}
+                  </>
+                ) : identifier === null ? (
+                  "Known once the registry has been read"
+                ) : (
+                  <Mono>{identifier}</Mono>
+                )}
               </Fact>
-              <Fact term="Version">1</Fact>
+              <Fact term="Version">
+                {target === null ? (
+                  "1"
+                ) : (
+                  <>
+                    <span className="num">{newVersion}</span>
+                    <span className="block text-sm text-secondary">
+                      expectedVersion: the registry is at version {target.base.version}, read again at the click
+                    </span>
+                  </>
+                )}
+              </Fact>
               <Fact term="Spec hash">
                 <Mono>{valid.specHash}</Mono>
               </Fact>
@@ -432,6 +545,17 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
               </Fact>
             </dl>
           </section>
+
+          {target === null ? null : (
+            <section aria-labelledby="review-changes">
+              <h3 id="review-changes" className="text-lg font-medium">
+                Changes from version {target.base.version}
+              </h3>
+              <div className="mt-3">
+                <Changes valid={valid} base={target.base} />
+              </div>
+            </section>
+          )}
 
           <section aria-label="Constituents sent to the registry" className="flex flex-col gap-3">
             <Table label="tokens and weightsBps" dense>
@@ -501,16 +625,8 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
             ) : null}
           </section>
 
-          {simulation !== null && tx.state.status !== "failed" ? (
-            <Callout tone="negative" role="alert" title={publishFailureText(simulation).title}>
-              <span className="[overflow-wrap:anywhere]">{publishFailureText(simulation).body}</span>
-              <ReportedReason text={publishFailureText(simulation).reported} />
-              {publishFailureText(simulation).offersNewSalt ? (
-                <span className="mt-2 block">
-                  <Button onClick={onNewSalt}>Use a new salt</Button>
-                </span>
-              ) : null}
-            </Callout>
+          {simulation !== null && tx.state.status !== "failed" && refused === null ? (
+            <Failure text={publishFailureText(simulation)} onNewSalt={onNewSalt} onReload={onReload} />
           ) : null}
 
           {unavailable ? (
@@ -529,7 +645,10 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
           ) : (
             <>
               <div className="flex flex-col gap-1 text-sm text-secondary">
-                <p>Version 1 will be permanent. It cannot be edited or removed, and nothing published can be undone.</p>
+                <p>
+                  Version {newVersion} will be permanent. It cannot be edited or removed, and nothing published can be
+                  undone.{target === null ? "" : " Earlier versions stay published and readable."}
+                </p>
                 <p>You are publishing a methodology. You are not managing anyone's assets.</p>
               </div>
               {policy.status === "available" && policy.requiresAcknowledgement ? (
@@ -561,13 +680,17 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
                   variant="primary"
                   size="lg"
                   disabled={!decision.ok}
-                  loading={isTxInFlight(tx.state)}
+                  loading={isTxInFlight(tx.state) || deciding}
                   loadingLabel={
-                    tx.state.status === "awaiting_signature" ? "Waiting for the wallet" : "Publishing version 1"
+                    deciding
+                      ? "Reading the registry again"
+                      : tx.state.status === "awaiting_signature"
+                        ? "Waiting for the wallet"
+                        : `Publishing version ${newVersion}`
                   }
-                  onClick={decision.ok ? () => publish(decision.request, decision.plan) : undefined}
+                  onClick={decision.ok ? () => void publish() : undefined}
                 >
-                  Publish version 1
+                  Publish version {newVersion}
                   {policy.status === "available" && policy.requiresAcknowledgement ? ` on ${chain.name}` : ""}
                 </Button>
               )}
@@ -578,7 +701,15 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
               ) : null}
             </>
           )}
-          <TransactionStatus state={tx.state} chain={chain} onRecheck={() => void tx.recheck()} onNewSalt={onNewSalt} />
+          {refused === null ? null : <Failure text={refused} onNewSalt={onNewSalt} onReload={onReload} />}
+          <TransactionStatus
+            state={tx.state}
+            chain={chain}
+            call={call}
+            onRecheck={() => void tx.recheck()}
+            onNewSalt={onNewSalt}
+            onReload={onReload}
+          />
         </div>
       </div>
       <ConnectDialog open={connecting} onClose={() => setConnecting(false)} />

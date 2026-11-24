@@ -19,6 +19,7 @@ import { formatCount, formatPercent } from "@/lib/format";
 import type { StudioAsset } from "@/lib/studio/assets";
 import type { Evaluation, FieldIssue, ValidDraft } from "@/lib/studio/evaluate";
 import { describeMethodology } from "@/lib/indexes/methodology";
+import { type BaseVersion, describeChanges, isUnchanged } from "@/lib/studio/version";
 import { sumBps } from "@/lib/studio/weights";
 import { issueSummary, StatusMark } from "./parts";
 
@@ -109,6 +110,29 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/**
+ * What a valid draft changes against the version it is based on, in the phrases of the version history of the
+ * index profile, which come from the same module.
+ */
+export function Changes({ valid, base }: { valid: ValidDraft | null; base: BaseVersion }) {
+  if (valid === null) return <p className="text-secondary">The changes appear once the spec is valid.</p>;
+  if (isUnchanged(valid, base)) {
+    return (
+      <p className="text-primary" data-testid="unchanged">
+        Nothing changed: this spec is version {base.version}, byte for byte. A new version must change something.
+      </p>
+    );
+  }
+  const changes = describeChanges(valid, base);
+  return (
+    <ul aria-label={`Changes from version ${base.version}`} className="flex list-disc flex-col gap-1 pl-4">
+      {(changes.length === 0 ? [`The canonical bytes differ from version ${base.version}`] : changes).map((change) => (
+        <li key={change}>{change}</li>
+      ))}
+    </ul>
+  );
+}
+
 /** The exact canonical text, wrapped for reading. Selecting all of it copies the bytes that are hashed. */
 export function CanonicalJson({ text }: { text: string }) {
   return (
@@ -128,10 +152,12 @@ type PreviewProps = {
   evaluation: Evaluation | null;
   assets: readonly StudioAsset[];
   assetsFailed: boolean;
+  /** The latest version of the index a new version is based on. `null` for a new index. */
+  base: BaseVersion | null;
 };
 
 /** What the draft produces, recomputed in the browser on every edit: composition, methodology, bytes and hash. */
-export function Preview({ evaluation, assets, assetsFailed }: PreviewProps) {
+export function Preview({ evaluation, assets, assetsFailed, base }: PreviewProps) {
   if (evaluation === null) {
     return (
       <div className="flex flex-col gap-4">
@@ -181,6 +207,12 @@ export function Preview({ evaluation, assets, assetsFailed }: PreviewProps) {
           ))}
         </ul>
       ) : null}
+
+      {base === null ? null : (
+        <Block title={`Changes from version ${base.version}`}>
+          <Changes valid={valid} base={base} />
+        </Block>
+      )}
 
       {previewWeights === null ? (
         <p className="text-secondary">The composition appears once every weight is a percentage.</p>
