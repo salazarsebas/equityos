@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { INDEX_REGISTRY_ADDRESS } from "@equityos/contracts-abi";
 import vectors from "@equityos/core/vectors/specs-valid.json";
+import { LiveData } from "../src/components/landing/live";
 import { buildExampleSpec, EXAMPLE_VECTOR_NAME } from "../src/lib/landing/example-spec";
 import { executionAvailability } from "../src/server/api/status";
 import { executionReleased, loadRegistry, loadUniverse, summarizeUniverse } from "../src/server/landing";
 import { resolveRegistryConfig } from "../src/server/registry/config";
-import { createRegistryReader } from "../src/server/registry/reader";
+import { RegistryUpstreamError } from "../src/server/registry/errors";
+import { createRegistryReader, type RegistryReader } from "../src/server/registry/reader";
+import type { IndexPage, RegistryRead } from "../src/server/registry/types";
 import { fixtureService, RECORDED_AT, recordedRegistry } from "./api/support";
 
 describe("example spec of the landing page", () => {
@@ -77,6 +82,36 @@ describe("registry of the landing page", () => {
     expect(registry.total).toBe(5);
     expect(registry.newest?.latest.spec?.name).toBe("Diversified Equity");
     expect(registry.newest?.position).toBe(4);
+  });
+
+  test("is unavailable, never empty, when it holds indexes and the newest one cannot be read", async () => {
+    const reader = recordedRegistry();
+    const newestRead: (() => Promise<RegistryRead<IndexPage>>)[] = [
+      async () => {
+        throw new RegistryUpstreamError("simulated failure");
+      },
+      async () => ({
+        status: "registry_not_deployed",
+        chainId: reader.chainId,
+        registry: reader.registry,
+        reason: "no_code",
+      }),
+      async () => ({ status: "ok", total: 5, offset: 4, indexes: [] }),
+    ];
+    for (const second of newestRead) {
+      const flaky: RegistryReader = {
+        ...reader,
+        listIndexes: (request) => (request?.offset === undefined ? reader.listIndexes(request) : second()),
+      };
+      const registry = await loadRegistry(
+        () => flaky,
+        () => 1_000,
+      );
+      expect(registry).toEqual({ status: "unavailable" });
+      const html = renderToStaticMarkup(createElement(LiveData, { universe: { status: "unavailable" }, registry }));
+      expect(html).toContain("The index registry cannot be read right now.");
+      expect(html).not.toContain("None yet");
+    }
   });
 
   test("is unavailable when the reader cannot be built", async () => {
