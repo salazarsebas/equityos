@@ -1,9 +1,10 @@
 # EquityOS
 
-Programmable index infrastructure for tokenized stocks on Base.
+Open, verifiable index infrastructure for tokenized stocks on Base.
 
-EquityOS lets anyone define an index of tokenized stocks as a transparent, deterministic methodology, publish it,
-and let others replicate it from their own wallets.
+EquityOS lets anyone define an index of tokenized stocks as a transparent, deterministic methodology and publish
+it. The hash of each published version is stored onchain, anyone can recompute its weights with the open
+calculator, and whoever follows an index holds the tokens in their own wallet. It is not a fund.
 
 ## Core idea
 
@@ -24,7 +25,8 @@ What exists today:
 - `contracts`: `IndexRegistry` and `RebalanceLog`, immutable and ownerless, with a deterministic deployment script.
   Not audited. See [docs/architecture/index-registry.md](docs/architecture/index-registry.md) and
   [docs/security/index-registry.md](docs/security/index-registry.md).
-- `apps/web`: a design system, the asset universe page with reference prices read from Base mainnet, an index
+- `apps/web`: a landing page that shows the asset universe and registry state with their sources, a design
+  system, the asset universe page with reference prices read from Base mainnet, an index
   explorer and index profile pages that verify each published version against the registry, and the public API
   v1 for assets and indexes. On a network without the registry the index pages and the API say so. See
   [docs/api/README.md](docs/api/README.md) and [docs/product/index-profile.md](docs/product/index-profile.md).
@@ -33,7 +35,10 @@ What exists today:
 The Index Studio drafts, validates and exports an index, and publishes it where the registry is deployed, which
 today is a local chain only. See [docs/product/index-studio.md](docs/product/index-studio.md).
 
-Not built yet: new versions of a published index from the app, portfolio replication, rebalance execution.
+The portfolio page compares any address with a published index and previews a rebalance plan at reference
+prices. It does not trade. See [docs/product/portfolio.md](docs/product/portfolio.md).
+
+Not built yet: new versions of a published index from the app, rebalance execution.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 

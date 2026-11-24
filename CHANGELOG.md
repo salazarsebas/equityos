@@ -59,6 +59,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Portfolio page at `/portfolio`: any address compared with a published index version, with a drift table, the
   holdings outside the index and a reference-price plan preview in rebalance or buy-only mode. Linked from the
   index profile and the primary navigation.
+- Landing page at `/`: what an index is and is not, an example spec with its hash and weights computed by
+  `@equityos/core`, the commands that verify a published version, the asset universe and registry state with
+  their sources and times, the portfolio comparison, the keyless API and the current limitations. Rendered on
+  request. Open Graph image at `/opengraph-image`.
 
 ### Changed
 
