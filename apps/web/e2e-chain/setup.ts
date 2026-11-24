@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { DEPLOYMENTS, LOCAL_CHAIN_ID } from "@equityos/contracts-abi";
 import { createPublicClient, http } from "viem";
 import { anvil } from "viem/chains";
+import { OPEN_MARKET_TIME } from "../e2e/execution-plans";
 import { TEST_ACCOUNT } from "../e2e/wallet-support";
 import { ANVIL_PORT, ANVIL_RPC_URL } from "../playwright.chain.config";
 import { installExecutionMocks } from "./execution-chain";
@@ -16,7 +17,10 @@ const web = fileURLToPath(new URL("..", import.meta.url));
  * created. Returns the teardown that stops the node.
  */
 export default async function setup(): Promise<() => void> {
-  const node = spawn("anvil", ["--port", String(ANVIL_PORT), "--silent"], { stdio: "ignore" });
+  // The chain starts in an open session of the US market, so the reference feeds the browser reads are live.
+  const node = spawn("anvil", ["--port", String(ANVIL_PORT), "--silent", "--timestamp", String(OPEN_MARKET_TIME)], {
+    stdio: "ignore",
+  });
   const stop = () => void node.kill();
   try {
     const client = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC_URL) });

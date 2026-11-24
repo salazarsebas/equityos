@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { type Address, decodeFunctionData, encodeFunctionResult, type Hex, multicall3Abi, parseAbi } from "viem";
+import { REFERENCE_FEEDS } from "../src/lib/market/feeds";
 
 /** The first account of the standard development mnemonic. It holds nothing of value on any network. */
 export const TEST_ACCOUNT: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -23,6 +24,8 @@ export interface MockWallet {
    * reverts instead of refusing it at estimation, as a wallet does when the user confirms it anyway.
    */
   readonly sendGas?: Hex;
+  /** Milliseconds the wallet waits before it sends each transaction, as a person takes time to confirm. */
+  readonly sendDelayMs?: number;
 }
 
 /**
@@ -39,7 +42,7 @@ export interface MockWallet {
  */
 export async function installMockWallet(page: Page, wallet: MockWallet): Promise<void> {
   await page.addInitScript(
-    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend, sendGas }) => {
+    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend, sendGas, sendDelayMs }) => {
       const KEY = "mock-wallet";
       const stored = sessionStorage.getItem(KEY);
       const state: { connected: boolean; chainId: number } = stored
@@ -66,6 +69,7 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
       const withGas = (transaction: Record<string, unknown>) =>
         sendGas === null || transaction.gas !== undefined ? transaction : { ...transaction, gas: sendGas };
       const BATCHES = "mock-wallet-batches";
+      let queue: Promise<unknown> = Promise.resolve();
 
       const provider = {
         async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
@@ -92,7 +96,14 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
             case "eth_sendTransaction": {
               if (rejectSend) throw rpcError(4001, "User rejected the request.");
               const [transaction] = params as [Record<string, unknown>];
-              return forward(method, [withGas(transaction)]);
+              // One request at a time, in the order they arrive, as a wallet queues its confirmations: the node
+              // then gives each transaction its own nonce.
+              const sent = queue.then(async () => {
+                if (sendDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, sendDelayMs));
+                return forward(method, [withGas(transaction)]);
+              });
+              queue = sent.catch(() => undefined);
+              return sent;
             }
             case "wallet_sendCalls": {
               if (rejectSend) throw rpcError(4001, "User rejected the request.");
@@ -205,11 +216,20 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
       signer: wallet.signer ?? null,
       rejectSend: wallet.rejectSend ?? false,
       sendGas: wallet.sendGas ?? null,
+      sendDelayMs: wallet.sendDelayMs ?? 0,
     },
   );
 }
 
-const balanceOfAbi = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
+const readAbi = parseAbi([
+  "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function description() view returns (string)",
+  "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
+]);
+
+/** USDC on Base mainnet, lowercase: 6 decimals. Every other token in these tests has 8. */
+const USDC_TOKEN = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 
 interface RpcRequest {
   readonly id: number;
@@ -220,16 +240,25 @@ interface RpcRequest {
 /**
  * Answers the browser's Base mainnet JSON-RPC requests, so that no test reaches a network. Balances are served
  * through Multicall3 `aggregate3`, the one contract call the app makes from the browser: `balances` maps a
- * lowercase token address to base units, and a token that is not in it has a zero balance. The latest block,
- * which the execution review reads for its clock, has the timestamp `blockTimestamp`.
+ * lowercase token address to base units, and a token that is not in it has a zero balance. The execution review's
+ * reads are answered too: `decimals()` (6 for USDC, 8 for any other token), and the pinned feeds, which answer
+ * their description and `options.prices` with a round a minute before the latest block, whose timestamp is
+ * `options.blockTimestamp`.
  *
  * @returns the methods that were requested, in order
  */
 export async function mockBaseRpc(
   page: Page,
   balances: Readonly<Record<string, bigint>>,
-  blockTimestamp = 1_800_000_000,
+  options: {
+    /** Timestamp of the latest block, Unix seconds. */
+    readonly blockTimestamp?: number;
+    /** Answer of the pinned feed of each token, by lowercase token. A feed of a token not in it fails to read. */
+    readonly prices?: Readonly<Record<string, bigint>>;
+  } = {},
 ): Promise<string[]> {
+  const blockTimestamp = options.blockTimestamp ?? 1_800_000_000;
+  const feedOf = new Map([...REFERENCE_FEEDS].map(([token, feed]) => [feed.proxy.toLowerCase(), { token, feed }]));
   const methods: string[] = [];
 
   function answer({ method, params }: RpcRequest): unknown {
@@ -252,9 +281,29 @@ export async function mockBaseRpc(
     const { args } = decodeFunctionData({ abi: multicall3Abi, data });
     const calls = args[0] as readonly { target: Address; callData: Hex }[];
     const results = calls.map(({ target, callData }) => {
-      decodeFunctionData({ abi: balanceOfAbi, data: callData });
-      const balance = balances[target.toLowerCase()] ?? 0n;
-      return { success: true, returnData: encodeFunctionResult({ abi: balanceOfAbi, result: balance }) };
+      const { functionName } = decodeFunctionData({ abi: readAbi, data: callData });
+      const address = target.toLowerCase();
+      const feed = feedOf.get(address);
+      const price = feed === undefined ? undefined : options.prices?.[feed.token];
+      const ok = (returnData: Hex) => ({ success: true, returnData });
+      switch (functionName) {
+        case "balanceOf":
+          return ok(encodeFunctionResult({ abi: readAbi, functionName, result: balances[address] ?? 0n }));
+        case "decimals":
+          return ok(encodeFunctionResult({ abi: readAbi, functionName, result: address === USDC_TOKEN ? 6 : 8 }));
+        case "description":
+          return feed === undefined
+            ? { success: false, returnData: "0x" as Hex }
+            : ok(encodeFunctionResult({ abi: readAbi, functionName, result: feed.feed.description }));
+        case "latestRoundData": {
+          if (price === undefined) return { success: false, returnData: "0x" as Hex };
+          const updatedAt = BigInt(blockTimestamp - 60);
+          return ok(
+            encodeFunctionResult({ abi: readAbi, functionName, result: [7n, price, updatedAt, updatedAt, 7n] }),
+          );
+        }
+      }
+      throw new Error(`Unexpected contract call in a test: ${functionName}`);
     });
     return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result: results });
   }

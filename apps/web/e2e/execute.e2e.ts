@@ -1,16 +1,22 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { Address } from "viem";
-import { buildBlockedPlan, buildReadyPlan, NVDA, TSLA, USDC } from "./execution-plans";
+import { buildBlockedPlan, buildReadyPlan, fairPriceE8, NVDA, OPEN_MARKET_TIME, TSLA, USDC } from "./execution-plans";
 import { installMockWallet, mockBaseRpc, TEST_ACCOUNT } from "./wallet-support";
 
 /**
  * The review states of an executable plan, without a chain. The server of these tests replays recorded market
  * data and builds no executable plan, so each test answers `POST /api/v1/portfolio/execution-plan` itself
- * with a plan of `execution-plans.ts`, and the Base mainnet endpoint with `mockBaseRpc`. Nothing is sent.
+ * with a plan of `execution-plans.ts`, and the Base mainnet endpoint with `mockBaseRpc`, whose feeds answer the
+ * price at which each leg's quote is fair, a minute before a latest block in an open session. Nothing is sent.
  */
 const INDEX = "diversified-equity-d622e2a5";
 const ACCOUNT = TEST_ACCOUNT.toLowerCase() as Address;
-const CHAIN_TIME = 1_800_000_000;
+const CHAIN_TIME = OPEN_MARKET_TIME;
+
+/** Feed answers at which the legs of the ready plan are quoted fairly. */
+function fairPrices(): Record<string, bigint> {
+  return Object.fromEntries(readyPlan(CHAIN_TIME + 100).data.legs.map((leg) => [leg.token, fairPriceE8(leg)]));
+}
 
 function readyPlan(expiresAt: number) {
   return buildReadyPlan({
@@ -35,9 +41,9 @@ async function answerPlan(page: Page, body: unknown, status = 200) {
   return requests;
 }
 
-async function openReview(page: Page) {
+async function openReview(page: Page, prices: Record<string, bigint> = fairPrices()) {
   await installMockWallet(page, { chainId: 8453, rejectSend: true });
-  await mockBaseRpc(page, {}, CHAIN_TIME);
+  await mockBaseRpc(page, {}, { blockTimestamp: CHAIN_TIME, prices });
   await page.goto(`/portfolio?address=${TEST_ACCOUNT}&index=${INDEX}`);
   const panel = page.getByRole("region", { name: "Execute from your wallet" });
   await panel.getByRole("button", { name: "Connect wallet" }).click();
@@ -64,6 +70,16 @@ test.describe("execution review", () => {
     await expect(calls.getByRole("rowheader")).toHaveText(["Approve NVDAc", "Approve USDC", "Sell NVDAc", "Buy TSLAc"]);
     await expect(calls.getByRole("row", { name: /Approve NVDAc/ })).toContainText("Exactly 4 NVDAc to the router");
     await expect(calls.getByRole("row", { name: /Sell NVDAc/ })).toContainText("for at least 516.405 USDC");
+    // The worst price against the feed read in the browser, and the route deadline decoded from the calldata.
+    await expect(calls.getByRole("row", { name: /Sell NVDAc/ })).toContainText(
+      "Reference 129.75 USD a token, read in this browser from its feed (live): the minimum is 0.50% worse than it",
+    );
+    await expect(calls.getByRole("row", { name: /Sell NVDAc/ })).toContainText(
+      `Reverts after ${new Date((CHAIN_TIME + 100) * 1000).toISOString().replace(".000Z", "Z")}`,
+    );
+    await expect(review).toContainText(
+      "Index id 0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610, version 2",
+    );
     await expect(review).toContainText("The rebalance log is not deployed on this network");
     await expect(review.getByRole("region", { name: "Expected balances at minimum amounts out" })).toContainText(
       "466.905",
@@ -92,6 +108,40 @@ test.describe("execution review", () => {
     await expect(declined).toContainText("Nothing was sent");
     await declined.getByRole("button", { name: "Back to the review" }).click();
     await expect(signButton(page)).toBeVisible();
+  });
+
+  test("a sale at a price the feed read in the browser contradicts is refused, whatever the plan says", async ({
+    page,
+  }) => {
+    await answerPlan(page, readyPlan(CHAIN_TIME + 100));
+    // The plan sells 4 NVDAc for at least 516.405 USDC; the feed read in the browser answers 134 USD a token.
+    const review = await openReview(page, { ...fairPrices(), [NVDA]: 13_400_000_000n });
+    await expect(review.getByRole("alert")).toContainText("This browser refused the plan.");
+    await expect(review.getByRole("alert")).toContainText("further from the reference price read in this browser");
+    await expect(review.getByRole("alert")).toContainText("price_out_of_bounds");
+    await expect(signButton(page)).toHaveCount(0);
+  });
+
+  test("an allowance already above the plan is shown with how to reduce it, and is not approved again", async ({
+    page,
+  }) => {
+    const plan = buildReadyPlan({
+      account: ACCOUNT,
+      chainId: 8453,
+      expiresAt: CHAIN_TIME + 100,
+      legs: [{ side: "buy", token: TSLA, symbol: "TSLAc", amountIn: 300_000_000n, quotedAmountOut: 77_000_000n }],
+      balances: { [USDC]: 250_500_000n },
+      allowances: { [USDC]: 2n ** 256n - 1n },
+    });
+    await answerPlan(page, plan);
+    // The same buy as the ready plan, so the same fair feed price.
+    const review = await openReview(page);
+    const calls = review.getByRole("region", { name: "Calls you would sign" });
+    await expect(calls.getByRole("rowheader")).toHaveText(["Buy TSLAc"]);
+    const callout = review.getByText("Your wallet already allows the router to spend more than this plan swaps.");
+    await expect(callout).toBeVisible();
+    await expect(review).toContainText("USDC: allowed an unlimited amount, this plan swaps 300 USDC");
+    await expect(review).toContainText("approve a lower amount, or zero, for this spender");
   });
 
   test("a blocked plan offers nothing to sign and says what blocks it", async ({ page }) => {
@@ -142,7 +192,7 @@ test.describe("execution review", () => {
       409,
     );
     await installMockWallet(page, { chainId: 8453 });
-    await mockBaseRpc(page, {}, CHAIN_TIME);
+    await mockBaseRpc(page, {}, { blockTimestamp: CHAIN_TIME, prices: fairPrices() });
     await page.goto(`/portfolio?address=${TEST_ACCOUNT}&index=${INDEX}`);
     await page
       .getByRole("region", { name: "Execute from your wallet" })
@@ -163,7 +213,7 @@ test.describe("where execution is unavailable", () => {
   test("the review cannot be reached and the reason is shown", async ({ page }) => {
     const requests = await answerPlan(page, readyPlan(CHAIN_TIME + 100));
     await installMockWallet(page, { chainId: 8453 });
-    await mockBaseRpc(page, {}, CHAIN_TIME);
+    await mockBaseRpc(page, {}, { blockTimestamp: CHAIN_TIME, prices: fairPrices() });
     await page.goto(`/portfolio?address=${TEST_ACCOUNT}&index=${INDEX}`);
     const panel = page.getByRole("region", { name: "Execute from your wallet" });
     await expect(panel).toContainText("Execution is not available in your region.");

@@ -6,11 +6,12 @@ import { builderCodeSuffix } from "../src/lib/execution/builder-code";
 import { KYBERSWAP_ROUTER } from "../src/lib/execution/calldata";
 import { formatTokenQuantity } from "../src/lib/format";
 import { AMZN, buildReadyPlan, DIVERSIFIED, NVDA, type TestLeg, TSLA, USDC } from "../e2e/execution-plans";
-import { installMockWallet, TEST_ACCOUNT } from "../e2e/wallet-support";
+import { installMockWallet, setChainSilently, TEST_ACCOUNT } from "../e2e/wallet-support";
 import { ANVIL_RPC_URL, BUILDER_CODE } from "../playwright.chain.config";
 
 /**
- * Execution end to end on a local chain. The server of this suite reads the local registry and replays the
+ * Execution end to end on a local chain. The chain starts in an open session, and the seed's mock reference feeds
+ * answer 100.00 USD a token, so the plans below are quoted at that price. The server of this suite reads the local registry and replays the
  * recorded market data, so it builds no executable plan: each test answers the plan request with a plan built
  * for the local node's state, in exactly the server's shape (`e2e/execution-plans.ts`). Everything after that
  * is the app: the verification in the browser, the send decision, the wallet requests, the receipts, the
@@ -83,9 +84,9 @@ test("an atomic wallet executes the plan and the attestation in one batch, and t
     capabilities: { "0x7a69": { atomic: { status: "supported" } } },
   });
   await answerPlan(page, [
-    { side: "sell", token: NVDA, symbol: "NVDAc", amountIn: 400_000_000n, quotedAmountOut: 519_000_000n },
-    { side: "buy", token: TSLA, symbol: "TSLAc", amountIn: 300_000_000n, quotedAmountOut: 77_500_000n },
-    { side: "buy", token: AMZN, symbol: "AMZNc", amountIn: 200_000_000n, quotedAmountOut: 90_000_000n },
+    { side: "sell", token: NVDA, symbol: "NVDAc", amountIn: 400_000_000n, quotedAmountOut: 400_000_000n },
+    { side: "buy", token: TSLA, symbol: "TSLAc", amountIn: 300_000_000n, quotedAmountOut: 300_000_000n },
+    { side: "buy", token: AMZN, symbol: "AMZNc", amountIn: 200_000_000n, quotedAmountOut: 200_000_000n },
   ]);
   const before = await balances();
   const nonceBefore = await nonce();
@@ -101,7 +102,7 @@ test("an atomic wallet executes the plan and the attestation in one batch, and t
   ]);
   // Nothing was sent by preparing, reviewing or acknowledging.
   expect(await nonce()).toBe(nonceBefore);
-  const blockBefore = await chain.getBlockNumber();
+  const blockBefore = await chain.getBlockNumber({ cacheTime: 0 });
   await page.getByRole("button", { name: "Sign 6 calls in your wallet" }).click();
 
   await expect(
@@ -125,9 +126,9 @@ test("an atomic wallet executes the plan and the attestation in one batch, and t
   // On the chain: the swaps took effect within their bounds, and the attestation names the account.
   const after = await balances();
   expect(after[NVDA]).toBe((before[NVDA] ?? 0n) - 400_000_000n);
-  expect(after[TSLA]).toBe((before[TSLA] ?? 0n) + 77_500_000n);
-  expect(after[AMZN]).toBe((before[AMZN] ?? 0n) + 90_000_000n);
-  expect(after[USDC]).toBe((before[USDC] ?? 0n) + 519_000_000n - 500_000_000n);
+  expect(after[TSLA]).toBe((before[TSLA] ?? 0n) + 300_000_000n);
+  expect(after[AMZN]).toBe((before[AMZN] ?? 0n) + 200_000_000n);
+  expect(after[USDC]).toBe((before[USDC] ?? 0n) + 400_000_000n - 500_000_000n);
   expect(
     await chain.readContract({
       address: USDC,
@@ -169,17 +170,17 @@ test("a sequential wallet stops at a swap that reverts and reports exactly what 
     sendGas: "0x2dc6c0",
   });
   await answerPlan(page, [
-    { side: "sell", token: NVDA, symbol: "NVDAc", amountIn: 100_000_000n, quotedAmountOut: 129_000_000n },
+    { side: "sell", token: NVDA, symbol: "NVDAc", amountIn: 100_000_000n, quotedAmountOut: 100_000_000n },
     // The executor pays half the quote: the router reverts this swap below its minimum.
     {
       side: "buy",
       token: TSLA,
       symbol: "TSLAc",
       amountIn: 100_000_000n,
-      quotedAmountOut: 25_800_000n,
-      payout: 12_900_000n,
+      quotedAmountOut: 100_000_000n,
+      payout: 50_000_000n,
     },
-    { side: "buy", token: AMZN, symbol: "AMZNc", amountIn: 50_000_000n, quotedAmountOut: 22_500_000n },
+    { side: "buy", token: AMZN, symbol: "AMZNc", amountIn: 50_000_000n, quotedAmountOut: 50_000_000n },
   ]);
   const before = await balances();
   const nonceBefore = await nonce();
@@ -206,7 +207,7 @@ test("a sequential wallet stops at a swap that reverts and reports exactly what 
   expect(after[NVDA]).toBe((before[NVDA] ?? 0n) - 100_000_000n);
   expect(after[TSLA]).toBe(before[TSLA]);
   expect(after[AMZN]).toBe(before[AMZN]);
-  expect(after[USDC]).toBe((before[USDC] ?? 0n) + 129_000_000n);
+  expect(after[USDC]).toBe((before[USDC] ?? 0n) + 100_000_000n);
   // The exact USDC approval stays, for the two buys that did not take effect.
   expect(
     await chain.readContract({
@@ -230,4 +231,85 @@ test("a sequential wallet stops at a swap that reverts and reports exactly what 
     formatTokenQuantity(after[NVDA] ?? 0n, 8),
   );
   await expect(page.getByRole("list", { name: "Executions from this browser" })).toContainText("sequential, partial");
+});
+
+/** The legs of a plan that confirms whole one transaction at a time. */
+const SMALL_PLAN: readonly TestLeg[] = [
+  { side: "sell", token: NVDA, symbol: "NVDAc", amountIn: 10_000_000n, quotedAmountOut: 10_000_000n },
+  { side: "buy", token: TSLA, symbol: "TSLAc", amountIn: 5_000_000n, quotedAmountOut: 5_000_000n },
+];
+
+test("after every swap confirmed one at a time, the attestation is offered once, and two clicks send it once", async ({
+  page,
+}) => {
+  await installMockWallet(page, { chainId: LOCAL_CHAIN_ID, signer: ANVIL_RPC_URL, capabilities: null });
+  await answerPlan(page, SMALL_PLAN);
+  const blockBefore = await chain.getBlockNumber({ cacheTime: 0 });
+  await review(page);
+  await page.getByRole("button", { name: "Sign 4 transactions in your wallet, one at a time" }).click();
+  await expect(page.getByTestId("execution-summary")).toHaveText(
+    "4 confirmed: Approve NVDAc, Approve USDC, Sell NVDAc, Buy TSLAc. 0 not sent: none.",
+  );
+  const record = page.getByRole("button", { name: "Sign 1 more transaction to record the rebalance" });
+  // The click decides again with the wallet's network of that moment: moved away silently, nothing is sent.
+  const nonceBefore = await nonce();
+  await setChainSilently(page, 8453);
+  await record.click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "The wallet is on another network than the plan." }),
+  ).toBeVisible();
+  expect(await nonce()).toBe(nonceBefore);
+  await setChainSilently(page, LOCAL_CHAIN_ID);
+  // Two clicks in the same task: the second arrives before anything of the first has been awaited.
+  await record.evaluate((button) => {
+    if (!(button instanceof HTMLElement)) throw new Error("not a button");
+    button.click();
+    button.click();
+  });
+  await expect(page.getByTestId("attestation-event")).toContainText(`RebalanceRecorded(account ${TEST_ACCOUNT}`);
+  // Long enough for a second transaction, had one been sent, to be mined: the node mines each one at once.
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  expect(await nonce()).toBe(nonceBefore + 1);
+  const logs = await chain.getContractEvents({
+    address: LOG,
+    abi: rebalanceLogAbi,
+    eventName: "RebalanceRecorded",
+    args: { account: TEST_ACCOUNT },
+    fromBlock: blockBefore + 1n,
+  });
+  expect(logs).toHaveLength(1);
+  await expect(record).toHaveCount(0);
+});
+
+test("leaving the page during a run stops it before the next transaction, and the history says where", async ({
+  page,
+}) => {
+  // Each transaction waits a second in the wallet, as a person confirming it would.
+  await installMockWallet(page, {
+    chainId: LOCAL_CHAIN_ID,
+    signer: ANVIL_RPC_URL,
+    capabilities: null,
+    sendDelayMs: 1_000,
+  });
+  await answerPlan(page, SMALL_PLAN);
+  const nonceBefore = await nonce();
+  await review(page);
+  await page.getByRole("button", { name: "Sign 4 transactions in your wallet, one at a time" }).click();
+  const steps = page.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+  await expect(steps.nth(0)).toHaveAttribute("data-status", "confirmed");
+  // A link of the site: the page changes without reloading, so the run that is in flight sees it.
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Indexes" }).click();
+  await expect(page).toHaveURL(/\/indexes$/);
+  // The transaction with the wallet when the page was left can still land; none after it is asked for.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("equityos.execution.history.v1") ?? ""), { timeout: 15_000 })
+    .toMatch(/"stoppedBefore":[0-9]/);
+  const history = await page.evaluate(() => JSON.parse(localStorage.getItem("equityos.execution.history.v1") ?? "{}"));
+  const entry = history.entries[0];
+  expect(entry.stoppedBefore).toBeGreaterThanOrEqual(1);
+  expect(entry.stoppedBefore).toBeLessThanOrEqual(2);
+  const sent = (await nonce()) - nonceBefore;
+  expect(sent).toBe(entry.stoppedBefore);
+  await new Promise((resolve) => setTimeout(resolve, 2_500));
+  expect((await nonce()) - nonceBefore).toBe(sent);
 });
