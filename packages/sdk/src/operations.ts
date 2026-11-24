@@ -9,6 +9,7 @@ import {
   asset,
   assetListMeta,
   compositionMeta,
+  executionPlan,
   index,
   indexComposition,
   indexListMeta,
@@ -24,7 +25,8 @@ import {
 } from "./schemas.ts";
 
 export interface EnvelopeOperation {
-  readonly method: "GET";
+  /** `POST` takes a JSON body; every other operation is a `GET`. */
+  readonly method: "GET" | "POST";
   readonly path: string;
   /** The success response is `{ data, meta }`. */
   readonly envelope: true;
@@ -67,6 +69,13 @@ export const OPERATIONS = {
     path: "/portfolio/plan",
     envelope: true,
     data: portfolioPlan,
+    meta: portfolioMeta,
+  },
+  executionPlan: {
+    method: "POST",
+    path: "/portfolio/execution-plan",
+    envelope: true,
+    data: executionPlan,
     meta: portfolioMeta,
   },
   getStatus: { method: "GET", path: "/status", envelope: true, data: status, meta: statusMeta },

@@ -50,6 +50,11 @@ export const API_ERROR_CODES = [
   "token_paused",
   "missing_feed",
   "stale_feed",
+  "invalid_body",
+  "execution_unavailable",
+  "rate_limited",
+  "provider_rate_limited",
+  "deadline_exceeded",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
@@ -480,6 +485,107 @@ export const portfolioPlan = object({
   plan: union("status", { blocked: blockedPlan, ready: readyPlan }),
 });
 
+/** The statement every execution plan carries, as the API returns it. */
+export const EXECUTION_STATEMENT =
+  "Executable quotes from a third-party aggregator, checked against reference prices and the chain at one block. Each swap returns at least its minimum amount out or reverts; more than the minimum is not guaranteed. The plan must be quoted again after expiresAt, and it is not an instruction to trade.";
+
+export const executionCheck = object({
+  check: enumOf([
+    "jurisdiction",
+    "reference_plan",
+    "reference_freshness",
+    "quote",
+    "transfers_not_paused",
+    "policy_authorized",
+    "multiplier_window",
+    "price_deviation",
+    "balance",
+    "allowance",
+    "simulation",
+    "plan_expiry",
+  ]),
+  status: enumOf(["pass", "warn", "block", "not_simulated", "skipped"]),
+  reason: string(),
+  token: nullable(address()),
+  leg: nullable(integer()),
+  detail: nullable(string()),
+});
+
+export const executionLeg = object({
+  side,
+  token: address(),
+  symbol: nullable(string()),
+  decimals: integer(),
+  tokenIn: address(),
+  tokenOut: address(),
+  amountIn: uint(),
+  referencePriceE8: uint(),
+  referenceStatus: enumOf(["live", "delayed", "last_close", "unavailable"]),
+  referenceAmountOut: uint(),
+  quote: nullable(
+    object({
+      provider: string(),
+      router: address(),
+      functionName: enumOf(["swap"]),
+      quotedAmountOut: uint(),
+      minAmountOut: uint(),
+      deviationBps: integer(),
+      minimumDeviationBps: integer(),
+      deadline: timestamp(),
+      gasEstimate: uint(),
+      quotedAt: timestamp(),
+      routeId: string(),
+    }),
+  ),
+});
+
+export const executionCall = object({
+  kind: enumOf(["approve", "swap"]),
+  to: address(),
+  data: hex(),
+  value: uint(),
+  token: address(),
+  leg: nullable(integer()),
+  minAmountOut: nullable(uint()),
+});
+
+export const executionPlan = object({
+  address: address(),
+  index: portfolioIndex,
+  chainId: integer(),
+  priceBasis: constant("executable_quote"),
+  statement: constant(EXECUTION_STATEMENT),
+  mode: enumOf(["rebalance", "buy_only"]),
+  reserveBps: integer(),
+  minLegValueUsdE8: uint(),
+  slippageBps: integer(),
+  maxDeviationBps: integer(),
+  allowUnsimulated: boolean(),
+  provider: object({ name: string(), router: address() }),
+  status: enumOf(["ready", "blocked"]),
+  executable: boolean(),
+  expiresAt: nullable(timestamp()),
+  checkedAtBlock: nullable(object({ number: uint(), timestamp: timestamp() })),
+  simulationMethod: nullable(enumOf(["eth_simulateV1", "eth_call"])),
+  legs: array(executionLeg),
+  checks: array(executionCheck),
+  blockedBy: array(executionCheck),
+  warnings: array(executionCheck),
+  approvals: array(
+    object({ token: address(), spender: address(), currentAllowance: uint(), amount: uint(), required: boolean() }),
+  ),
+  calls: nullable(array(executionCall)),
+  totals: nullable(
+    object({
+      usdcBalance: uint(),
+      minUsdcFromSells: uint(),
+      maxUsdcForBuys: uint(),
+      endBalances: array(object({ token: address(), before: uint(), after: uint() })),
+    }),
+  ),
+  planHash: nullable(bytes32()),
+});
+
 export const errorBody = object({
   error: object({ code: enumOf(API_ERROR_CODES), message: string(), details: errorDetails }),
 });
@@ -520,3 +626,7 @@ export type SkippedLeg = Infer<typeof skippedLeg>;
 export type BlockedPlan = Infer<typeof blockedPlan>;
 export type ReadyPlan = Infer<typeof readyPlan>;
 export type PortfolioPlan = Infer<typeof portfolioPlan>;
+export type ExecutionCheck = Infer<typeof executionCheck>;
+export type ExecutionLeg = Infer<typeof executionLeg>;
+export type ExecutionCall = Infer<typeof executionCall>;
+export type ExecutionPlan = Infer<typeof executionPlan>;
