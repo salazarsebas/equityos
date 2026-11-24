@@ -35,8 +35,8 @@ describe("GET /api/v1/status", () => {
         apiVersion: "1.3.0",
         chainId: 8453,
         marketPhase: "closed",
-        executionAvailable: false,
-        executionUnavailableReason: "not_released",
+        executionAvailable: true,
+        executionUnavailableReason: null,
         marketData: {
           mode: "live",
           available: true,
@@ -75,19 +75,19 @@ describe("GET /api/v1/status", () => {
     });
   });
 
-  test("execution is unavailable to everyone, and the reason reflects the jurisdiction gate first", async () => {
-    const reasons = new Map<string | null, string>([
+  test("execution is available unless the jurisdiction gate withholds it, and then the reason says why", async () => {
+    const reasons = new Map<string | null, string | null>([
       ["US", "restricted_jurisdiction"],
       ["PR", "restricted_jurisdiction"],
-      ["DE", "not_released"],
+      ["DE", null],
       ["??", "jurisdiction_unknown"],
-      // The unit tests do not run in production mode, where an absent header is also jurisdiction_unknown.
-      [null, "not_released"],
+      // The unit tests do not run in production mode, where an absent header is jurisdiction_unknown.
+      [null, null],
     ]);
     for (const [country, reason] of reasons) {
       const request = get("/api/v1/status", country === null ? {} : { "x-vercel-ip-country": country });
       const { data } = await body(await handler()(request, undefined));
-      expect(data).toMatchObject({ executionAvailable: false, executionUnavailableReason: reason });
+      expect(data).toMatchObject({ executionAvailable: reason === null, executionUnavailableReason: reason });
     }
   });
 

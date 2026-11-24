@@ -325,7 +325,7 @@ export const status = object({
   chainId: integer(),
   marketPhase,
   executionAvailable: boolean(),
-  executionUnavailableReason: nullable(enumOf(["restricted_jurisdiction", "jurisdiction_unknown", "not_released"])),
+  executionUnavailableReason: nullable(enumOf(["restricted_jurisdiction", "jurisdiction_unknown"])),
   marketData: object({
     mode,
     available: boolean(),

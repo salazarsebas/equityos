@@ -523,12 +523,13 @@ const schemas: Record<string, Schema> = {
     marketPhase: ref("MarketPhase"),
     executionAvailable: {
       type: "boolean",
-      description: "Whether trade execution is available to this request. Always false in this release.",
+      description:
+        "Whether trade execution is available to this request: true unless the jurisdiction gate withholds it. The client sends an execution plan from the user's own wallet.",
     },
     executionUnavailableReason: nullable(
       oneOf(
-        ["restricted_jurisdiction", "jurisdiction_unknown", "not_released"],
-        "restricted_jurisdiction: the request is located in the United States. jurisdiction_unknown: its location could not be established. not_released: no execution endpoint exists in this release.",
+        ["restricted_jurisdiction", "jurisdiction_unknown"],
+        "null when execution is available. restricted_jurisdiction: the request is located in the United States. jurisdiction_unknown: its location could not be established.",
       ),
     ),
     marketData: object({

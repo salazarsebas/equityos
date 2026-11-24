@@ -75,3 +75,10 @@ export function attestationRefusalMessage(refusal: AttestationRefusal): string {
       return "The wallet is on another network than the plan.";
   }
 }
+
+/** The three statements every review carries. */
+export const EXECUTION_STATEMENTS = [
+  "Executable prices come from the aggregator's quotes and differ from the reference prices of the comparison. Each swap returns at least its minimum or reverts.",
+  "Nothing here is advice. The plan is arithmetic toward the published target weights of the index.",
+  "You sign every call in your own wallet. This site holds no key and cannot sign or send anything for you.",
+] as const;

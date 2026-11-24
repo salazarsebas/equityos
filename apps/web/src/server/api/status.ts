@@ -9,21 +9,21 @@ import { API_VERSION, isoTimestamp, NO_STORE, ok, route } from "./http";
 import { parseQuery } from "./params";
 
 /**
- * Why execution is not available to the caller.
- * - `restricted_jurisdiction` and `jurisdiction_unknown`: the jurisdiction gate withholds it from this request.
- * - `not_released`: the gate would let the request through, and this release sends no transaction.
+ * Why execution is not available to the caller: the jurisdiction gate withholds it from this request, because
+ * it is located in a restricted country (`restricted_jurisdiction`) or its location could not be established
+ * (`jurisdiction_unknown`).
  */
-type ExecutionUnavailableReason = "restricted_jurisdiction" | "jurisdiction_unknown" | "not_released";
+type ExecutionUnavailableReason = "restricted_jurisdiction" | "jurisdiction_unknown";
 
 /**
- * Execution availability for a request. This release prepares execution plans and sends nothing, so the answer
- * is `false` for everyone. The reason already reflects the jurisdiction gate, which takes precedence.
+ * Execution availability for a request: available to every request the jurisdiction gate lets through. The
+ * client then sends an execution plan from the user's own wallet, after verifying it in the browser.
  */
 export function executionAvailability(jurisdiction: Jurisdiction): {
   executionAvailable: boolean;
   executionUnavailableReason: ExecutionUnavailableReason | null;
 } {
-  if (!jurisdiction.restricted) return { executionAvailable: false, executionUnavailableReason: "not_released" };
+  if (!jurisdiction.restricted) return { executionAvailable: true, executionUnavailableReason: null };
   const reason = jurisdiction.reason === "restricted_country" ? "restricted_jurisdiction" : "jurisdiction_unknown";
   return { executionAvailable: false, executionUnavailableReason: reason };
 }

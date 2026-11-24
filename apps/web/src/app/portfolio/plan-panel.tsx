@@ -18,13 +18,19 @@ import {
   TableRowHeader,
 } from "@/components/ui/table";
 import { StatusTag } from "@/components/ui/tag";
-import { useExecutionAvailability } from "@/components/wallet/hooks";
 import { formatFixed, formatTokenQuantity, formatUsd } from "@/lib/format";
-import { type ApiIssue, type ApiPlan, type ComparisonState, comparisonQuery, readEnvelope } from "@/lib/portfolio/api";
+import {
+  type ApiIssue,
+  type ApiPlan,
+  type ApiPortfolio,
+  type ComparisonState,
+  comparisonQuery,
+  readEnvelope,
+} from "@/lib/portfolio/api";
 import { DEPOSIT_ERRORS, parseDepositUsd } from "@/lib/portfolio/deposit";
 import { describeIssues } from "@/lib/portfolio/issues";
-import { EXECUTION_UNAVAILABLE_MESSAGES } from "@/lib/wallet/execution";
 import { Missing } from "./drift-table";
+import { ExecutePanel } from "./execute/execute-panel";
 
 type Mode = "rebalance" | "buy_only";
 
@@ -168,15 +174,19 @@ function PlanResult({
 }
 
 /**
- * The reference-price plan of the methodology for the compared address, in rebalance or buy-only mode. It is
- * arithmetic shown for reading: there is no control on this page that sends, signs or prepares anything.
+ * The reference-price plan of the methodology for the compared address, in rebalance or buy-only mode, and
+ * below it the step that prepares an executable plan for the connected owner of the address. The preview is
+ * arithmetic shown for reading; only the review of an executable plan can ask a wallet to sign.
  */
 export function PlanPanel({
   state,
+  comparison,
   symbolOf,
   shown,
 }: {
   state: ComparisonState;
+  /** The comparison the plan is for: its constituents bound what an executable plan may trade. */
+  comparison: ApiPortfolio;
   symbolOf: (token: string) => string;
   /** Finding codes the page already states, which the plan does not repeat. */
   shown: ReadonlySet<string>;
@@ -185,7 +195,6 @@ export function PlanPanel({
   const [mode, setMode] = useState<Mode>(initial.mode);
   const [draft, setDraft] = useState(initial.deposit);
   const [deposit, setDeposit] = useState(initial.deposit);
-  const execution = useExecutionAvailability();
   const parsed = deposit === "" ? null : parseDepositUsd(deposit);
   const draftParse = draft === "" ? null : parseDepositUsd(draft);
   const depositUsdE8 = mode === "buy_only" && parsed?.ok ? parsed.usdE8 : 0n;
@@ -277,11 +286,16 @@ export function PlanPanel({
           This preview is arithmetic toward the published target weights at reference prices. It contains no executable
           quote, no slippage and no gas, so executable prices will differ, and it is not an instruction to trade.
         </p>
-        <p>
-          Executing a plan is not available on this site.{" "}
-          {execution.executionAvailable ? null : EXECUTION_UNAVAILABLE_MESSAGES[execution.reason]}
-        </p>
       </div>
+      {result.data?.plan.status === "ready" && result.data.plan.legs.length > 0 ? (
+        <ExecutePanel
+          key={`${mode}:${query.toString()}`}
+          comparison={comparison}
+          version={state.version}
+          mode={mode}
+          depositIgnored={depositUsdE8 > 0n}
+        />
+      ) : null}
     </section>
   );
 }

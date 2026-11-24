@@ -79,8 +79,8 @@ test.describe("portfolio page", () => {
     await expect(legs(page).getByRole("rowheader")).toHaveText(["NVDAc", "TSLAc", "MSTRc", "AAPLc", "AMZNc"]);
     await expect(legs(page).getByRole("row", { name: /NVDAc/ })).toContainText("Sell");
     await expect(page.getByText("it is not an instruction to trade")).toBeVisible();
-    await expect(page.getByText("Executing a plan is not available on this site.")).toBeVisible();
-    // Nothing on the page offers to trade.
+    // Without the wallet of the address, nothing on the page offers to trade: it offers to connect it.
+    await expect(page.getByText("Connect the wallet of this address to prepare a plan for it.")).toBeVisible();
     await expect(page.getByRole("button", { name: /execute|swap|trade|buy|sell|deposit|invest/i })).toHaveCount(0);
     expect(errors).toEqual([]);
   });

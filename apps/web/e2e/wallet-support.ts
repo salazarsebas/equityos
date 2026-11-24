@@ -16,8 +16,13 @@ export interface MockWallet {
    * for its own unlocked development account: this provider holds no key and signs nothing itself.
    */
   readonly signer?: string;
-  /** Makes `eth_sendTransaction` fail as a wallet does when the user declines the transaction. */
+  /** Makes `eth_sendTransaction` and `wallet_sendCalls` fail as a wallet does when the user declines. */
   readonly rejectSend?: boolean;
+  /**
+   * Gas limit, as a hex quantity, given to a transaction that has none, so that Anvil mines a transaction that
+   * reverts instead of refusing it at estimation, as a wallet does when the user confirms it anyway.
+   */
+  readonly sendGas?: Hex;
 }
 
 /**
@@ -25,10 +30,16 @@ export interface MockWallet {
  * the name "Test Wallet". It answers the account, chain and capability methods. It signs nothing: a transaction
  * is refused unless `signer` names a local Anvil node, which then signs it for its unlocked development account.
  * Its state is kept in `sessionStorage`, so it survives a reload the way an extension does.
+ *
+ * With a `signer`, it also answers `wallet_sendCalls` (EIP-5792) for an atomic batch: it refuses a request
+ * without `atomicRequired` or for another chain, takes an Anvil snapshot, sends the calls in order from the
+ * account and reverts to the snapshot if any of them reverts, so that the batch takes effect entirely or not at
+ * all. A `dataSuffix` capability is appended to every call it sends, as a wallet appends it to the transaction it
+ * builds. Each request is recorded under `mock-wallet-batches` in `sessionStorage` for the test to read.
  */
 export async function installMockWallet(page: Page, wallet: MockWallet): Promise<void> {
   await page.addInitScript(
-    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend }) => {
+    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend, sendGas }) => {
       const KEY = "mock-wallet";
       const stored = sessionStorage.getItem(KEY);
       const state: { connected: boolean; chainId: number } = stored
@@ -40,6 +51,21 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
         for (const listener of listeners.get(event) ?? []) listener(payload);
       };
       const rpcError = (code: number, message: string) => Object.assign(new Error(message), { code });
+      const forward = async (method: string, params: unknown[]): Promise<unknown> => {
+        if (signer === null) throw rpcError(4200, `Unsupported method: ${method}`);
+        const response = await fetch(signer, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        });
+        const body: { result?: unknown; error?: { code: number; message: string; data?: unknown } } =
+          await response.json();
+        if (body.error) throw Object.assign(rpcError(body.error.code, body.error.message), { data: body.error.data });
+        return body.result;
+      };
+      const withGas = (transaction: Record<string, unknown>) =>
+        sendGas === null || transaction.gas !== undefined ? transaction : { ...transaction, gas: sendGas };
+      const BATCHES = "mock-wallet-batches";
 
       const provider = {
         async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
@@ -65,17 +91,71 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
               return capabilities;
             case "eth_sendTransaction": {
               if (rejectSend) throw rpcError(4001, "User rejected the request.");
-              if (signer === null) throw rpcError(4200, "Unsupported method: eth_sendTransaction");
-              const response = await fetch(signer, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-              });
-              const body: { result?: unknown; error?: { code: number; message: string; data?: unknown } } =
-                await response.json();
-              if (body.error)
-                throw Object.assign(rpcError(body.error.code, body.error.message), { data: body.error.data });
-              return body.result;
+              const [transaction] = params as [Record<string, unknown>];
+              return forward(method, [withGas(transaction)]);
+            }
+            case "wallet_sendCalls": {
+              if (rejectSend) throw rpcError(4001, "User rejected the request.");
+              if (signer === null) throw rpcError(4200, "Unsupported method: wallet_sendCalls");
+              const [request] = params as [
+                {
+                  chainId: string;
+                  from: string;
+                  atomicRequired: boolean;
+                  calls: { to: string; data?: string; value?: string }[];
+                  capabilities?: { dataSuffix?: { value: string } };
+                },
+              ];
+              const recorded: unknown[] = JSON.parse(sessionStorage.getItem(BATCHES) ?? "[]");
+              sessionStorage.setItem(BATCHES, JSON.stringify([...recorded, request]));
+              if (request.atomicRequired !== true) throw rpcError(5700, "This wallet only sends atomic batches.");
+              if (Number(request.chainId) !== state.chainId) throw rpcError(5710, "Unsupported chain id.");
+              const suffix = request.capabilities?.dataSuffix?.value.slice(2) ?? "";
+              const snapshot = await forward("evm_snapshot", []);
+              const receipts: { status: string }[] = [];
+              const undo = async (error: unknown) => {
+                await forward("evm_revert", [snapshot]);
+                throw error;
+              };
+              for (const call of request.calls) {
+                const hash = await forward("eth_sendTransaction", [
+                  withGas({
+                    from: request.from,
+                    to: call.to,
+                    data: `${call.data ?? "0x"}${suffix}`,
+                    value: call.value,
+                  }),
+                ]).catch(undo);
+                const receipt = (await forward("eth_getTransactionReceipt", [hash]).catch(undo)) as { status: string };
+                receipts.push(receipt);
+                if (receipt.status !== "0x1") break;
+              }
+              const succeeded = receipts.every((receipt) => receipt.status === "0x1");
+              if (!succeeded) await forward("evm_revert", [snapshot]);
+              const id = `0x${crypto.randomUUID().replaceAll("-", "")}`;
+              sessionStorage.setItem(
+                `mock-wallet-batch:${id}`,
+                JSON.stringify({
+                  status: succeeded ? 200 : 500,
+                  receipts: succeeded ? receipts : [],
+                  chainId: request.chainId,
+                }),
+              );
+              return { id };
+            }
+            case "wallet_getCallsStatus": {
+              const [id] = params as [string];
+              const stored = sessionStorage.getItem(`mock-wallet-batch:${id}`);
+              if (stored === null) throw rpcError(5730, "Unknown bundle id.");
+              const batch = JSON.parse(stored) as { status: number; receipts: unknown[]; chainId: string };
+              return {
+                version: "2.0.0",
+                id,
+                chainId: batch.chainId,
+                atomic: true,
+                status: batch.status,
+                receipts: batch.receipts,
+              };
             }
             // Test control, not a wallet method: changes the chain without telling the page, as a wallet whose
             // network is changed in another tab or window may do before the page hears of it.
@@ -124,6 +204,7 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
       rejectSwitch: wallet.rejectSwitch ?? false,
       signer: wallet.signer ?? null,
       rejectSend: wallet.rejectSend ?? false,
+      sendGas: wallet.sendGas ?? null,
     },
   );
 }
@@ -139,16 +220,33 @@ interface RpcRequest {
 /**
  * Answers the browser's Base mainnet JSON-RPC requests, so that no test reaches a network. Balances are served
  * through Multicall3 `aggregate3`, the one contract call the app makes from the browser: `balances` maps a
- * lowercase token address to base units, and a token that is not in it has a zero balance.
+ * lowercase token address to base units, and a token that is not in it has a zero balance. The latest block,
+ * which the execution review reads for its clock, has the timestamp `blockTimestamp`.
  *
  * @returns the methods that were requested, in order
  */
-export async function mockBaseRpc(page: Page, balances: Readonly<Record<string, bigint>>): Promise<string[]> {
+export async function mockBaseRpc(
+  page: Page,
+  balances: Readonly<Record<string, bigint>>,
+  blockTimestamp = 1_800_000_000,
+): Promise<string[]> {
   const methods: string[] = [];
 
-  function answer({ method, params }: RpcRequest): Hex {
+  function answer({ method, params }: RpcRequest): unknown {
     methods.push(method);
     if (method === "eth_chainId") return "0x2105";
+    if (method === "eth_blockNumber") return "0x3e8";
+    if (method === "eth_getBlockByNumber") {
+      return {
+        number: "0x3e8",
+        hash: `0x${"11".repeat(32)}`,
+        parentHash: `0x${"22".repeat(32)}`,
+        timestamp: `0x${blockTimestamp.toString(16)}`,
+        gasLimit: "0x1c9c380",
+        gasUsed: "0x0",
+        transactions: [],
+      };
+    }
     if (method !== "eth_call") throw new Error(`Unexpected JSON-RPC method in a test: ${method}`);
     const [{ data }] = params as [{ data: Hex }];
     const { args } = decodeFunctionData({ abi: multicall3Abi, data });

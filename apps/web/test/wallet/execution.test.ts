@@ -9,7 +9,7 @@ const body = (data: unknown) => ({ data, meta: { asOf: "2026-11-21T19:10:55Z" } 
 
 describe("parseExecutionAvailability", () => {
   test("reads each reason the status endpoint states", () => {
-    for (const reason of ["restricted_jurisdiction", "jurisdiction_unknown", "not_released"] as const) {
+    for (const reason of ["restricted_jurisdiction", "jurisdiction_unknown"] as const) {
       expect(
         parseExecutionAvailability(body({ executionAvailable: false, executionUnavailableReason: reason })),
       ).toEqual({ executionAvailable: false, reason });
@@ -33,6 +33,7 @@ describe("parseExecutionAvailability", () => {
       body({ executionAvailable: "true" }),
       body({ executionAvailable: false }),
       body({ executionAvailable: false, executionUnavailableReason: "maintenance" }),
+      body({ executionAvailable: false, executionUnavailableReason: "not_released" }),
       { error: { code: "internal_error" } },
     ];
     for (const unexpected of bodies) {
