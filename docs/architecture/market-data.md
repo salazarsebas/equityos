@@ -188,6 +188,10 @@ It is skipped unless `LIVE_TESTS=1` and does not run in CI.
 | --------------------------- | ---------- | --------------------------- | ------------------------------------------------------ |
 | Asset list                  | 10 minutes | 24 more hours               | Listings change rarely; token state is re-read onchain |
 | Token state and feed rounds | 15 seconds | 5 more minutes              | Feeds publish minutes apart; bounds RPC load           |
+| Balances of one account     | 15 seconds | never                       | Balances move with every transfer                      |
+
+Balances are cached per account, at most 1,000 accounts, the entry loaded longest ago dropped first. The key is
+the account address, so the balances of one address are never returned for another.
 
 - A cached value keeps the time it was loaded (`fetchedAt`). Serving it again, fresh or stale, never changes
   that time.
@@ -231,6 +235,16 @@ Every failure has a typed error with a stable `code`.
 `requireReferencePrice` returns a usable price or throws one of the errors above, for callers that cannot
 proceed without a price.
 
+## Balances
+
+`getBalances(account)` reads `balanceOf(account)` of USDC (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`, the
+address Circle publishes for its native USDC on Base) and of every token of the asset list, in one Multicall3
+request at the latest block, with the same chain id check as the snapshot (`readBalances` in
+`apps/web/src/server/market/balances.ts`). A call that reverts or does not decode is `null` for that token, never
+zero. A failed request is an `UpstreamError`, and a failed balance read is not answered from an older one.
+
+The balance read and the snapshot are two reads, each at its own block. A consumer reports both blocks.
+
 ## Replay of a recording
 
 When `MARKET_REPLAY_DIR` names a directory, the process-wide service does not read the API or the chain. It
@@ -243,10 +257,16 @@ to serve users: a replayed snapshot is real data of a past block, not current da
 `replay`, the assets page shows a warning that names the recorded block, and `GET /api/v1/status` reports
 `marketData.mode: "replay"`. Never set the variable on a deployment.
 
+A recording can also hold `balances.json`: balances for a few fixed accounts, constructed for the tests and not
+read from any chain. The replay answers `balanceOf` of those accounts from it, a token an account does not list at
+zero, and fails the read of any other account as an endpoint that does not answer. A surface that shows them says
+that they are constructed.
+
 ## Consumers
 
 - `/assets` renders the snapshot as a table.
 - The public API under `/api/v1` serializes it. See [the API documentation](../api/README.md).
+- `GET /api/v1/portfolio` joins the balances of an address with the snapshot. See [Portfolio](../api/portfolio.md).
 
 `listAssets(snapshot, eligible?)` returns the tokens of a snapshot ordered by symbol and then by address, for
 both.
@@ -256,4 +276,5 @@ both.
 Unit tests run without a network. They replay fixtures recorded from the live API and from Base mainnet
 (`apps/web/test/fixtures/market`, recorded 2026-11-21 at block 60489401) through a mocked `fetch` and a mocked
 viem transport that answers Multicall3 requests call by call. The fixture files state their source, time and how
-they were trimmed.
+they were trimmed. `balances-recorded.json` is a balance read of one Base mainnet contract, recorded with
+`bun run --filter @equityos/web record:balances <account> <file>`.

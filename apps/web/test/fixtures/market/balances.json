@@ -1,0 +1,39 @@
+{
+  "description": "Constructed balances for the browser tests, not read from any chain. They are served by the market data replay at the recorded block and valued at its recorded reference prices. A token an account does not list is held at zero. An account that is not listed has no answer, as an endpoint that fails.",
+  "accounts": {
+    "0x0000000000000000000000000000000000001001": {
+      "label": "on target",
+      "tokens": {
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "120000000",
+        "0xb2000000000000000000001e800a7f5189430cd0": "713368526",
+        "0xb2000000000000000000004884b426556b92883d": "1259921884",
+        "0xb20000000000000000000078ee7ce2fe4908108c": "1925672131",
+        "0xb200000000000000000000c2e324d24d7eecd1fb": "724012938",
+        "0xb200000000000000000000d9192b6b456483c2e8": "597897791"
+      }
+    },
+    "0x0000000000000000000000000000000000001003": {
+      "label": "empty",
+      "tokens": {}
+    },
+    "0x0000000000000000000000000000000000001004": {
+      "label": "only USDC",
+      "tokens": {
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "1000000000"
+      }
+    },
+    "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266": {
+      "label": "above threshold, with assets outside the index",
+      "tokens": {
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "250500000",
+        "0xb2000000000000000000001e800a7f5189430cd0": "456555856",
+        "0xb2000000000000000000004884b426556b92883d": "503968753",
+        "0xb20000000000000000000078ee7ce2fe4908108c": "2464860328",
+        "0xb2000000000000000000008bc8786b856e61707c": "300000000",
+        "0xb200000000000000000000ab99cfa739e253872b": "125000000",
+        "0xb200000000000000000000c2e324d24d7eecd1fb": "463368280",
+        "0xb200000000000000000000d9192b6b456483c2e8": "478318233"
+      }
+    }
+  }
+}
