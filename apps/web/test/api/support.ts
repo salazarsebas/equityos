@@ -1,5 +1,14 @@
-import { type Address, createPublicClient, encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
-import { b20AssetAbi, multicall3Abi } from "../../src/server/market/abis";
+import { readFileSync } from "node:fs";
+import {
+  type Address,
+  createPublicClient,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeFunctionData,
+  encodeFunctionResult,
+  type Hex,
+} from "viem";
+import { b20AssetAbi, erc20BalanceAbi, multicall3Abi } from "../../src/server/market/abis";
 import { createMarketData, type MarketData } from "../../src/server/market/index";
 import { MULTICALL3_ADDRESS } from "../../src/server/market/onchain";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
@@ -19,6 +28,32 @@ export interface FixtureServiceOptions {
   readonly apiBody?: unknown;
 }
 
+/** The constructed balances the replay serves, per lowercase account and token. */
+export const CONSTRUCTED_BALANCES: Record<string, { label: string; tokens: Record<string, string> }> = JSON.parse(
+  readFileSync(new URL("../fixtures/market/balances.json", import.meta.url), "utf8"),
+).accounts;
+
+/**
+ * Answers `balanceOf` from the constructed balances. An account they do not list fails like an endpoint that
+ * does not answer.
+ */
+function constructedBalance(call: { target: Address; callData: Hex }): Answer | undefined {
+  let account: string;
+  try {
+    const decoded = decodeFunctionData({ abi: erc20BalanceAbi, data: call.callData });
+    account = decoded.args[0].toLowerCase();
+  } catch {
+    return undefined;
+  }
+  const held = CONSTRUCTED_BALANCES[account];
+  if (held === undefined) throw new Error(`no constructed balances for ${account}`);
+  const result = BigInt(held.tokens[call.target.toLowerCase()] ?? "0");
+  return {
+    success: true,
+    returnData: encodeFunctionResult({ abi: erc20BalanceAbi, functionName: "balanceOf", result }),
+  };
+}
+
 /**
  * A market data service fed by the recorded API pages and the recorded block, with a clock and two switches
  * that take a source down. No network access is made.
@@ -28,7 +63,7 @@ export function fixtureService(start: number = RECORDED_AT, options: FixtureServ
   const outage = { api: false, rpc: false };
   const api = fixtureFetch();
   const rpc = fixtureTransport(onchainFixture, {
-    ...(options.override ? { override: options.override } : {}),
+    override: (call) => options.override?.(call) ?? constructedBalance(call),
     failEthCall: () => outage.rpc,
   });
   const serve = (...args: Parameters<typeof fetch>): Promise<Response> => {

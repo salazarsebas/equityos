@@ -46,6 +46,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Registry replay (`REGISTRY_REPLAY_DIR`) and a recorder, so that tests serve a recorded local registry.
 - The local seed publishes an index that fails verification and a deprecated index next to the three examples.
 - Documentation of the indexes API and of the index profile and its verification checks.
+- Public API v1.2.0: `GET /api/v1/portfolio` compares any address on Base mainnet with a published index version
+  (balances, values, current and target weights, drift, holdings outside the index, findings), and
+  `GET /api/v1/portfolio/plan` returns the reference-price rebalance plan of `@equityos/core`. Nothing is stored.
+- Balance read of the market data layer (`balanceOf` by multicall), a recorded Base mainnet fixture, a recorder,
+  and constructed balances served by the market data replay for tests.
 
 ### Changed
 

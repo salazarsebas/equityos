@@ -1,7 +1,8 @@
 import "server-only";
 import type { Address } from "viem";
-import { type Cache, type Cached, type CachePolicy, createCache } from "../cache";
+import { type Cache, type Cached, type CachePolicy, createCache, createKeyedCache } from "../cache";
 import { type AssetList, type AssetListOptions, fetchAssetList, type ListedAsset } from "./asset-list";
+import { type BalanceRead, readBalances, USDC_ADDRESS } from "./balances";
 import { assessEligibility, type Eligibility } from "./eligibility";
 import {
   IneligibleTokenError,
@@ -30,6 +31,16 @@ export const ASSET_LIST_CACHE: CachePolicy = { ttlSeconds: 10 * 60, staleIfError
  * flagged, with every price capped at `delayed`.
  */
 export const ONCHAIN_CACHE: CachePolicy = { ttlSeconds: 15, staleIfErrorSeconds: 5 * 60 };
+
+/**
+ * Balances of one account. They move with every transfer, so they are reused for the TTL of the onchain read
+ * and never served past it: a balance read that fails is an error, not an older answer. One entry per account,
+ * so the balances of one address are never returned for another.
+ */
+export const BALANCE_CACHE: CachePolicy = { ttlSeconds: 15, staleIfErrorSeconds: 0 };
+
+/** Accounts whose balances are kept in memory at once. */
+const BALANCE_CACHE_ENTRIES = 1_000;
 
 /** Everything this layer knows about one listed token. */
 export interface AssetMarketData {
@@ -109,6 +120,30 @@ export interface MarketData {
    * @throws {MissingConfigurationError} if `BASE_RPC_URL` is missing in production or is not Base mainnet.
    */
   getSnapshot(): Promise<MarketSnapshot>;
+  /**
+   * Balances of USDC and of every token of the asset list held by `account`, read at one Base mainnet block.
+   *
+   * @param account lowercase account address
+   * @throws {UpstreamError} if the endpoint does not answer.
+   * @throws {MissingConfigurationError} as `getSnapshot`.
+   */
+  getBalances(account: Address): Promise<Cached<BalanceRead>>;
+}
+
+/** The tokens whose balances are read: USDC, then the asset list in its order. */
+function balanceTokens(assetList: AssetList): Address[] {
+  return [USDC_ADDRESS, ...[...assetList.keys()].filter((token) => token !== USDC_ADDRESS)];
+}
+
+/** Reads the balances of one account through a keyed cache. */
+function balanceReader(now: () => number, load: (account: Address) => Promise<BalanceRead>) {
+  const cache = createKeyedCache<BalanceRead>(BALANCE_CACHE, now, { maxEntries: BALANCE_CACHE_ENTRIES });
+  return async (account: Address): Promise<Cached<BalanceRead>> => {
+    const loaded = await cache.getMany([account], async () => new Map([[account, await load(account)]]));
+    const read = loaded.get(account);
+    if (read === undefined) throw new UpstreamError("base_rpc", "the balance read returned nothing");
+    return read;
+  };
 }
 
 function systemClock(): number {
@@ -132,11 +167,17 @@ export function createMarketData(options: MarketDataOptions = {}): MarketData {
     },
     now,
   );
+  const getBalances = balanceReader(now, async (account) => {
+    const assetList = await assetLists.get();
+    client ??= createMarketClient();
+    return readBalances(client, account, balanceTokens(assetList.value));
+  });
   return {
     async getSnapshot(): Promise<MarketSnapshot> {
       const read = await reads.get();
       return buildMarketSnapshot(read.value.assetList, { ...read, value: read.value.onchain }, now());
     },
+    getBalances,
   };
 }
 
@@ -159,12 +200,20 @@ export function marketDataMode(env: NodeJS.ProcessEnv = process.env): MarketData
   return replayDirectory(env) === null ? "live" : "replay";
 }
 
-/** Serves one recorded block forever. The clock is the block time, so the staleness classes never change. */
+/**
+ * Serves one recorded block forever. The clock is the block time, so the staleness classes never change.
+ * Balances come from the constructed balances of the recording.
+ */
 function createReplayMarketData(directory: string): MarketData {
+  let replay: ReturnType<typeof loadReplay> | undefined;
+  const load = () => {
+    replay ??= loadReplay(directory);
+    return replay;
+  };
   let snapshot: Promise<MarketSnapshot> | undefined;
   return {
     getSnapshot(): Promise<MarketSnapshot> {
-      snapshot ??= loadReplay(directory).then(({ assetList, onchain }) => {
+      snapshot ??= load().then(({ assetList, onchain }) => {
         const fetchedAt = onchain.blockTimestamp;
         return buildMarketSnapshot(
           { value: assetList, fetchedAt, servedStale: false, error: null },
@@ -173,6 +222,12 @@ function createReplayMarketData(directory: string): MarketData {
         );
       });
       return snapshot;
+    },
+    async getBalances(account: Address): Promise<Cached<BalanceRead>> {
+      // An account the recording holds no balances for fails like an endpoint that does not answer.
+      const { assetList, client } = await load();
+      const value = await readBalances(client, account, balanceTokens(assetList));
+      return { value, fetchedAt: value.blockTimestamp, servedStale: false, error: null };
     },
   };
 }
@@ -241,6 +296,7 @@ export function requireTransferable(snapshot: MarketSnapshot, token: Address): v
 }
 
 export type { AssetList, ListedAsset } from "./asset-list";
+export { type BalanceRead, USDC_ADDRESS } from "./balances";
 export { BASE_CHAIN_ID } from "./config";
 export type { Eligibility, IneligibilityCode } from "./eligibility";
 export * from "./errors";
