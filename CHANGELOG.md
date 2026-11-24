@@ -93,6 +93,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   as one source of the response is a replayed recording. The SDK decodes it.
 - `transferWarnings` on `GET /api/v1/portfolio` and `GET /api/v1/portfolio/plan`: a typed `transfers_paused`
   warning for each constituent whose issuer paused transfers, and a line in the plan statement of the page.
+- Execution from the user's wallet on the portfolio page: "Prepare to execute" requests an executable plan,
+  the browser verifies every call against the plan's legs and the connected account and recomputes `planHash`,
+  and a review built on a frozen snapshot shows each call, the totals, the checks, a checkbox per warning, the
+  expiry and three fixed statements. One pure send decision returns the exact wallet request or a typed refusal,
+  with the expiry measured by the latest block. Atomic wallets sign one EIP-5792 batch with `atomicRequired`;
+  others sign one transaction at a time, each after the previous one confirmed, stopping at the first failure
+  with an exact report of what confirmed, failed and was not sent. Receipts are checked against the account and
+  the plan's transfer bounds; balances are read again and drift recomputed. Executions are recorded in the
+  browser's local storage only.
+- `RebalanceLog` attestation where the log is deployed: the last call of an atomic batch, or an optional
+  transaction after every swap confirmed one at a time. Not on Base, where the contracts are not deployed.
+- The browser bounds every swap of a plan with its own reads before it can be signed: `decimals()` of every token
+  and the pinned Chainlink feed of every leg, at the latest block, with the server's validity and staleness
+  rules; a minimum out more than 200 bps worse than that reference, a closed or stale feed, other decimals, or a
+  plan for another index or version than the comparison is refused. The feed map is shared with the server.
+- ERC-8021 Builder Code attribution with `NEXT_PUBLIC_BUILDER_CODE`: the suffix on each transaction sent one at a
+  time and the optional `dataSuffix` capability of a batch; nothing when no code is configured.
+- Browser tests of execution on a local Anvil node, with a mock router, executor and tokens installed at the
+  pinned addresses, and of the review states with mocked plans.
 - Index Studio publishes a new version of an existing index: `/studio?index=<identifier>` opens the latest
   version, verified in the browser, prefilled in the editor, with its changes in the words of the version
   history. `publishVersion` is sent only by the creator, with `expectedVersion` read again at the click, and
@@ -104,12 +123,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Public API v1.6.0: `GET /api/v1/status` answers `executionAvailable: true` for every request the jurisdiction
+  gate lets through.
+  The `not_released` reason is no longer returned, and the SDK and the OpenAPI document no longer list it.
+
 - The home page uses the application shell and the design tokens.
 - The home page states that indexes can be browsed and verified, and what a network without the registry shows.
 - IBM Plex Sans and IBM Plex Mono load from pinned Fontsource packages with `next/font/local`, so the build
   makes no network request.
 
 ### Fixed
+
+- A transaction that is mined and reverts is reported as reverted, in the Studio as in execution, instead of as
+  not found: its receipt is read with viem, which returns a reverted receipt, rather than wagmi, which throws.
 
 - A deployment can no longer serve a replayed recording: `MARKET_REPLAY_DIR` and `REGISTRY_REPLAY_DIR` are
   refused on Vercel (`VERCEL_ENV` set) and in a production build without the test-only flag

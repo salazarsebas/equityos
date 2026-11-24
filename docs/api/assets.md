@@ -270,8 +270,8 @@ names sources by identifier and never returns an endpoint URL.
 | `apiVersion`                 | Version of the API contract                                             |
 | `chainId`                    | `8453`, Base mainnet                                                    |
 | `marketPhase`                | Phase of the US equity market now                                       |
-| `executionAvailable`         | Always `false` in this version                                          |
-| `executionUnavailableReason` | `restricted_jurisdiction`, `jurisdiction_unknown` or `not_released`     |
+| `executionAvailable`         | `true` unless the jurisdiction gate withholds execution                 |
+| `executionUnavailableReason` | `null`, or `restricted_jurisdiction` or `jurisdiction_unknown`          |
 | `marketData.mode`            | `live`, or `replay` when the server serves a recorded block for testing |
 | `marketData.available`       | Whether the market data could be loaded                                 |
 | `marketData.datasets`        | The two datasets as in the asset `meta`, or `null` when unavailable     |
@@ -327,7 +327,8 @@ curl -H "x-vercel-ip-country: US" "http://localhost:3000/api/v1/status"
 The response was recorded with version 1.0.0 of the API. Since 1.1.0 `data` also carries `registry`, shown in
 [Indexes](./indexes.md#the-registry-may-not-be-deployed).
 
-The same request with `x-vercel-ip-country: DE` answered `"executionUnavailableReason": "not_released"`.
+The same request with `x-vercel-ip-country: DE` answered, at the time, `"executionUnavailableReason": "not_released"`.
+It now answers `"executionAvailable": true` and `"executionUnavailableReason": null`.
 
 ## GET /api/v1/openapi.json
 

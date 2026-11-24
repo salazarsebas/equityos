@@ -1,13 +1,12 @@
 /**
  * Why execution is not available to this visitor.
- * - `restricted_jurisdiction`, `jurisdiction_unknown`, `not_released`: stated by `GET /api/v1/status`.
+ * - `restricted_jurisdiction`, `jurisdiction_unknown`: stated by `GET /api/v1/status`.
  * - `checking`: the status has not been read yet.
  * - `status_unavailable`: the status could not be read or understood. Unavailable, because the gate fails closed.
  */
 export type ExecutionUnavailableReason =
   | "restricted_jurisdiction"
   | "jurisdiction_unknown"
-  | "not_released"
   | "checking"
   | "status_unavailable";
 
@@ -21,7 +20,7 @@ export const EXECUTION_STATUS_UNAVAILABLE: ExecutionAvailability = {
   reason: "status_unavailable",
 };
 
-const STATED_REASONS = ["restricted_jurisdiction", "jurisdiction_unknown", "not_released"] as const;
+const STATED_REASONS = ["restricted_jurisdiction", "jurisdiction_unknown"] as const;
 
 /** Reads the execution fields of a `GET /api/v1/status` body. Anything unexpected is `status_unavailable`. */
 export function parseExecutionAvailability(body: unknown): ExecutionAvailability {
@@ -43,7 +42,6 @@ export const EXECUTION_UNAVAILABLE_MESSAGES: Record<ExecutionUnavailableReason, 
   restricted_jurisdiction: "Execution is not available in your region. Connecting and reading work everywhere.",
   jurisdiction_unknown:
     "Your region could not be determined, so execution is not available. Connecting and reading still work.",
-  not_released: "Execution is not released yet. Connecting only lets this site read your public address.",
   checking: "Checking whether execution is available.",
   status_unavailable: "Execution availability could not be checked, so it is treated as unavailable.",
 };

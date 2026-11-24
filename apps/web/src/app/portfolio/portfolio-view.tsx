@@ -241,7 +241,12 @@ function Comparison({ state, connected }: { state: ComparisonState; connected: b
         <IssueList issues={data.issues.filter(({ severity }) => severity === "warning")} symbolOf={symbolOf} />
       </div>
       <OutsideIndex data={data} />
-      <PlanPanel state={state} symbolOf={symbolOf} shown={new Set(data.issues.map(({ code }) => code))} />
+      <PlanPanel
+        state={state}
+        comparison={data}
+        symbolOf={symbolOf}
+        shown={new Set(data.issues.map(({ code }) => code))}
+      />
     </div>
   );
 }

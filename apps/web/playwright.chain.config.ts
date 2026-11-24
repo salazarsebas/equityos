@@ -5,10 +5,13 @@ import { defineConfig, devices } from "@playwright/test";
 export const ANVIL_PORT = Number(process.env.E2E_ANVIL_PORT ?? 8576);
 export const ANVIL_RPC_URL = `http://127.0.0.1:${ANVIL_PORT}`;
 const port = Number(process.env.E2E_PORT ?? 3110);
+/** The Builder Code of this suite's server, so that the tests see the ERC-8021 suffix on what is sent. */
+export const BUILDER_CODE = "bc_e2etest";
 
 /**
- * The publish flow against a real local chain: `e2e-chain/setup.ts` starts Anvil and runs the deployment
- * script, and the tests drive the Studio in a browser. It needs Foundry, so it runs in the `integration` job
+ * The publish and execute flows against a real local chain: `e2e-chain/setup.ts` starts Anvil, runs the
+ * deployment script, seeds the example indexes and installs the execution mocks, and the tests drive the
+ * Studio and the portfolio page in a browser. It needs Foundry, so it runs in the `integration` job
  * and not with the smoke tests. Run it with `bun run test:e2e:chain`.
  *
  * The app runs in development mode because the local chain exists in development builds only. The market data
@@ -38,6 +41,7 @@ export default defineConfig({
       // The server reads the same local registry, so the link to the new index resolves.
       EQUITYOS_CHAIN_ID: String(LOCAL_CHAIN_ID),
       EQUITYOS_RPC_URL: ANVIL_RPC_URL,
+      NEXT_PUBLIC_BUILDER_CODE: BUILDER_CODE,
     },
     reuseExistingServer: false,
     timeout: 120_000,

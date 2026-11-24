@@ -5,8 +5,9 @@ mainnet, and checks them. It lives in `apps/web/src/server/execution`, is guarde
 is served by `POST /api/v1/portfolio/execution-plan` ([API](../api/execution.md)).
 
 It reads and computes. **Nothing in it signs or sends a transaction**: no code path calls `writeContract`,
-`sendTransaction`, `sendCalls` or `signMessage`, and it holds no key. The calls it returns are data for a client
-to show, and for a later step to send through the user's wallet.
+`sendTransaction`, `sendCalls` or `signMessage`, and it holds no key. The calls it returns are data. The portfolio
+page verifies them again in the browser and asks the user's own wallet to sign them: see
+[Sending from the wallet](#sending-from-the-wallet) and [Sending an execution plan](../security/execution-sending.md).
 
 An executable plan is arithmetic and checks. It is not a recommendation and not an instruction to trade.
 
@@ -241,7 +242,41 @@ read. It reduces the chance of a revert; it does not remove it.
 The server's checks protect only what the server returns. A client that sends the calls verifies them again
 with `apps/web/src/lib/execution/calldata.ts` (`verifyQuote` for each swap, `isExactApproval` for each approval),
 recomputes `planHash` from the calls it is about to send and `expiresAt` and sends nothing when it differs, refuses
-to send after `expiresAt` measured by chain time, and asks for an acknowledgement of every warning.
+to send after `expiresAt` measured by chain time, and asks for an acknowledgement of every warning. The portfolio
+page is such a client; the next section summarizes how.
+
+## Sending from the wallet
+
+The browser side lives in `apps/web/src/lib/execution` (pure) and `apps/web/src/app/portfolio/execute`
+(components and wallet calls). Its safeguards, step by step, are in
+[Sending an execution plan](../security/execution-sending.md).
+
+1. **Verification in the browser.** `verifyExecutionPlan` parses nothing on trust: it decodes every call, checks it
+   against the plan's legs and the connected account with the module above, checks that the legs trade
+   constituents of the compared version and names its index id and version, recomputes the totals at minimum
+   amounts out, and recomputes `planHash`. It also reads on the chain itself `decimals()` of every token and the
+   pinned Chainlink feed of every leg, and refuses a leg whose minimum out is more than 200 bps worse than that
+   reference. Any failure, or a hash that differs from the server's, means nothing can be signed.
+2. **One send decision.** `buildExecutionRequest` returns the exact wallet request or a typed refusal: no plan,
+   execution unavailable, busy, verification failed, hash mismatch, wrong account, wrong network, chain time
+   unknown, expired by chain time, or warnings not acknowledged. The button's click handler exists only when it
+   allows, and the click decides again with the latest block's timestamp read at that moment.
+3. **Two paths.** A wallet that executes batches atomically (EIP-5792) gets one `sendCalls` with every call in
+   order and `atomicRequired`, the attestation last. Any other wallet gets one transaction at a time, each sent
+   only after the previous one confirmed and after the expiry, the account and the network are read again; the
+   run stops at the first failure and reports what confirmed, what failed and what was not sent.
+4. **Receipts.** A call is confirmed only when its receipt succeeded, was sent from the account to the expected
+   contract (sequential), and its token transfers stay within the plan's bounds; the attestation's event is
+   decoded and compared with the account, index and version.
+5. **Attestation.** `RebalanceLog.recordRebalance(indexId, version)` is added only where the deployment map
+   records the log, it has code, and the index was read from the registry it validates against. Atomic: in the
+   batch. Sequential: an optional transaction offered after every swap confirmed.
+6. **Builder Code.** With `NEXT_PUBLIC_BUILDER_CODE` set, the ERC-8021 suffix is appended to each sequential
+   transaction, and passed as the optional `dataSuffix` capability of an atomic batch. Without it, nothing is
+   appended. A read-only simulation on Base mainnet showed that the router and the tokens accept the trailing
+   bytes.
+7. **After.** Balances are read again on the chain, drift is recomputed against the index with the comparison's
+   reference prices, and the run is recorded in the browser's local storage only.
 
 ## What it does not guarantee
 

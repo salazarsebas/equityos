@@ -1,7 +1,15 @@
 import "server-only";
 import type { PriceStatus } from "@equityos/core";
 import { type Address, encodeFunctionData, type Hex, parseAbi } from "viem";
-import { type ExecutableQuote, KYBERSWAP_ROUTER, planHash, verifyQuote } from "@/lib/execution/calldata";
+import {
+  type ExecutableQuote,
+  KYBERSWAP_ROUTER,
+  PLAN_DEFAULT_MAX_DEVIATION_BPS,
+  PLAN_DEFAULT_SLIPPAGE_BPS,
+  planHash,
+  ROUTE_DEADLINE_TOLERANCE_SECONDS,
+  verifyQuote,
+} from "@/lib/execution/calldata";
 import type { Jurisdiction } from "@/server/jurisdiction";
 import { USDC_ADDRESS } from "@/server/market";
 import {
@@ -30,7 +38,7 @@ import { type ExecutionClient, type PlannedCall, type SimulationOutcome, simulat
  * available USDC plus the reference proceeds of the sells less the reserve, so when executable prices are
  * near the reference, sells whose minimum is 50 bps under their quote still fund the buys.
  */
-export const DEFAULT_SLIPPAGE_BPS = 50;
+export const DEFAULT_SLIPPAGE_BPS = PLAN_DEFAULT_SLIPPAGE_BPS;
 /** Largest slippage tolerance accepted, 200 bps. Together with the deviation band it bounds the loss a minimum allows. */
 export const MAX_SLIPPAGE_BPS = 200;
 /**
@@ -39,7 +47,7 @@ export const MAX_SLIPPAGE_BPS = 200;
  * by up to 50 bps, since the feed publishes on a 0.5% move, plus a pool fee and some price impact) and the
  * default 50 bps of slippage. A closed market is blocked by the freshness check instead of a wider band.
  */
-export const DEFAULT_MAX_DEVIATION_BPS = 150;
+export const DEFAULT_MAX_DEVIATION_BPS = PLAN_DEFAULT_MAX_DEVIATION_BPS;
 /** Largest deviation band accepted, 500 bps. */
 export const MAX_DEVIATION_BPS = 500;
 /** A multiplier update that takes effect within this many seconds blocks the legs of its token: 24 hours. */
@@ -50,7 +58,7 @@ export const MULTIPLIER_WINDOW_SECONDS = 86_400;
  */
 export const PLAN_TTL_SECONDS = 120;
 /** A route's deadline may exceed the plan's expiry by at most this many seconds, the clock skew allowed. */
-export const DEADLINE_TOLERANCE_SECONDS = 15;
+export const DEADLINE_TOLERANCE_SECONDS = ROUTE_DEADLINE_TOLERANCE_SECONDS;
 /**
  * Most legs one plan quotes: five. Each takes two provider requests, and the keyless limit is 10 requests per
  * 10 seconds, so a larger plan could not be quoted within one window.

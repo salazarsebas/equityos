@@ -2,7 +2,8 @@
 
 The Studio sends two transactions, both on `IndexRegistry`: `createIndex`, which creates an index with its
 version 1, and `publishVersion`, which appends a version to an index the connected account created. This page
-describes that write path and what protects each step. The user-facing behavior is in
+describes that write path and what protects each step. The other write path of the web app, executing a plan from
+the portfolio page, is described in [Sending an execution plan](execution-sending.md). The user-facing behavior is in
 [Index Studio](../product/index-studio.md), the contract in [Index registry](../architecture/index-registry.md).
 
 ## What is at stake
