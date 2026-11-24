@@ -69,6 +69,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `@equityos/core` from the same entry. A test keeps its types equal to the OpenAPI document.
 - Recorded example responses of the API in `apps/web/src/server/api/examples.json`, regenerated with
   `record:api-examples` and checked against the handlers.
+- Developer pages: `/developers` with the conventions, three keyless requests, the SDK and verification from the
+  contract; `/developers/api`, the API reference generated from the OpenAPI document; and `/developers/spec`, the
+  methodology spec reference generated from its JSON Schema with an example hashed at build time. Linked from the
+  primary navigation and listed in the sitemap.
+- `CodeBlock` component: monospace text with a title bar and a copy button.
 
 ### Changed
 
