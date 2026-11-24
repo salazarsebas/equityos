@@ -153,7 +153,11 @@ export type CallResults = readonly (Hex | null)[];
  * yields `null`. A request that fails rejects the whole read, so a transport failure is never mistaken for a
  * reverting call.
  */
-async function aggregate(client: MarketClient, calls: readonly Call[], blockNumber: bigint): Promise<CallResults> {
+export async function aggregate(
+  client: MarketClient,
+  calls: readonly Call[],
+  blockNumber: bigint,
+): Promise<CallResults> {
   const requests: Promise<readonly { success: boolean; returnData: Hex }[]>[] = [];
   for (let start = 0; start < calls.length; start += CALLS_PER_REQUEST) {
     const chunk = calls.slice(start, start + CALLS_PER_REQUEST);

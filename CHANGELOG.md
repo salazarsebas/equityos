@@ -74,6 +74,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   methodology spec reference generated from its JSON Schema with an example hashed at build time. Linked from the
   primary navigation and listed in the sitemap.
 - `CodeBlock` component: monospace text with a title bar and a copy button.
+- Public API v1.3.0: `POST /api/v1/portfolio/execution-plan` quotes the reference-price plan for execution on
+  Base mainnet through the KyberSwap aggregator, verifies the calldata against an allowlisted router, runs
+  pre-trade checks at one block (jurisdiction, reference freshness, price deviation, pause, B20 policies,
+  pending multiplier, balances at minimum amounts out, exact approvals), simulates the calls and returns either
+  the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent. Rate limited per address
+  and per instance, with a 20 second deadline. The calldata verification is a browser-safe module.
+- `@equityos/sdk`: `executionPlan` for the new endpoint.
 
 ### Changed
 

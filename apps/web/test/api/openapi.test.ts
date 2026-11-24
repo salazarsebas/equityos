@@ -9,13 +9,14 @@ import {
   indexHandler,
   indexVersionHandler,
 } from "../../src/server/api/indexes";
-import { openApiDocument, type Schema } from "../../src/server/api/openapi";
+import { openApiDocument, operationOf, type Schema } from "../../src/server/api/openapi";
 import { portfolioHandler, portfolioPlanHandler } from "../../src/server/api/portfolio";
 import { statusHandler } from "../../src/server/api/status";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
 import { buildSpec, FakeChain } from "../registry/support";
+import { executionResponses } from "./execution-support";
 import {
   addressContext,
   fakeRegistry,
@@ -65,7 +66,8 @@ ajv.addKeyword("components");
 ajv.addSchema({ $id: "openapi", components: { schemas: openApiDocument.components.schemas } });
 
 function responseSchema(path: string, status: number): Schema {
-  const schema = openApiDocument.paths[path]?.get.responses[String(status)]?.content["application/json"].schema;
+  const item = openApiDocument.paths[path];
+  const schema = item && operationOf(item).responses[String(status)]?.content["application/json"].schema;
   if (schema === undefined) throw new Error(`${path} documents no ${status} response`);
   return schema;
 }
@@ -111,7 +113,7 @@ describe("OpenAPI document", () => {
       const target = kind === "schemas" ? components.schemas : kind === "headers" ? components.headers : {};
       expect(Object.keys(target)).toContain(name ?? ref);
     }
-    const ids = Object.values(paths).map((path) => path.get.operationId);
+    const ids = Object.values(paths).map((path) => operationOf(path).operationId);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
@@ -131,7 +133,8 @@ describe("OpenAPI document", () => {
   });
 
   test("path parameters in the document match the placeholders of the path", () => {
-    for (const [path, { get: operation }] of Object.entries(openApiDocument.paths)) {
+    for (const [path, item] of Object.entries(openApiDocument.paths)) {
+      const operation = operationOf(item);
       const placeholders = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1] ?? "");
       const declared = (operation.parameters ?? []).filter((p) => p.in === "path").map((p) => p.name);
       expect(declared).toEqual(placeholders);
@@ -322,6 +325,17 @@ describe("handler output validates against the document", () => {
       }
       expect(plans.map((response) => response.status)).toEqual([...Array(16).fill(200), 400, 400, 404, 409, 503]);
       for (const response of plans) await expectDocumented("/portfolio/plan", response);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  test("POST /portfolio/execution-plan: ready, restricted, closed market, bad body, unknown index, replay, RPC down", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const responses = await executionResponses();
+      expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 404, 409, 503]);
+      for (const response of responses) await expectDocumented("/portfolio/execution-plan", response);
     } finally {
       log.mockRestore();
     }

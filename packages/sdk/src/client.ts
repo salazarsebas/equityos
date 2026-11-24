@@ -1,4 +1,4 @@
-import { type Decoder, DecodeFailure, type Infer, type OpenEnum, object } from "./decode.ts";
+import { DecodeFailure, type Decoder, type Infer, type OpenEnum, object } from "./decode.ts";
 import { ApiError, RegistryNotDeployedError, ResponseShapeError, TransportError } from "./errors.ts";
 import { type Fetch, type FetchResponse, globalFetch } from "./fetch.ts";
 import { type EnvelopeOperation, OPERATIONS } from "./operations.ts";
@@ -45,8 +45,30 @@ export interface PortfolioPlanQuery extends PortfolioQuery {
   readonly minLegValueUsdE8?: bigint;
 }
 
+/** The body of `POST /portfolio/execution-plan`. Absent fields take the defaults of the API. */
+export interface ExecutionPlanRequest {
+  /** The account on Base mainnet that would send and receive every swap, in any letter case. */
+  readonly address: string;
+  /** Index identifier (`<slug>-<prefix>`) or 32-byte index id. */
+  readonly index: string;
+  /** Version number. The latest version when absent. */
+  readonly version?: number;
+  /** `rebalance` sells and buys. `buy_only` never sells. */
+  readonly mode: OpenEnum<"rebalance" | "buy_only">;
+  /** Share of the funds the buys leave unspent, in basis points, 0 to 2000. 50 when absent. */
+  readonly reserveBps?: number;
+  /** Reference value below which a leg is not proposed, in USD scaled by 1e8. 1.00 USD when absent. */
+  readonly minLegValueUsdE8?: bigint;
+  /** Slippage tolerance of each swap, in basis points, 0 to 200. 50 when absent. */
+  readonly slippageBps?: number;
+  /** Largest deviation of the quoted and minimum prices from the reference, in basis points, 0 to 500. */
+  readonly maxDeviationBps?: number;
+  /** Accept calls that could not be simulated as a sequence. `false` when absent. */
+  readonly allowUnsimulated?: boolean;
+}
+
 /**
- * A typed client of the public API v1 of one deployment. Every method makes one GET request, decodes the
+ * A typed client of the public API v1 of one deployment. Every method makes one request, decodes the
  * response and returns `{ data, meta }`, or throws:
  *
  * - `ApiError` with the stable `code` of the API (`RegistryNotDeployedError` for `registry_not_deployed`).
@@ -81,6 +103,12 @@ export interface EquityOSClient {
   getPortfolio(query: PortfolioQuery): Promise<ResponseOf<"getPortfolio">>;
   /** `GET /portfolio/plan`: arithmetic toward the target weights at reference prices. Not an executable quote. */
   getPortfolioPlan(query: PortfolioPlanQuery): Promise<ResponseOf<"getPortfolioPlan">>;
+  /**
+   * `POST /portfolio/execution-plan`: the reference-price plan quoted and checked for execution on Base mainnet.
+   * Either `blocked` with the checks that fail, or `ready` with the calls and `planHash`. Nothing is signed or
+   * sent. A client that sends the calls must verify them and refuse to send after `expiresAt`.
+   */
+  executionPlan(request: ExecutionPlanRequest): Promise<ResponseOf<"executionPlan">>;
   /** `GET /status`: the API version, the age of each dataset and whether the registry is deployed. */
   getStatus(): Promise<ResponseOf<"getStatus">>;
   /** `GET /openapi.json`: the OpenAPI 3.1 document of the deployment, as it is served. */
@@ -168,12 +196,19 @@ export function createClient(options: ClientOptions): EquityOSClient {
   const fetch = options.fetch ?? globalFetch();
   const headers = { Accept: "application/json", ...options.headers };
 
-  async function get(path: string): Promise<{ readonly response: FetchResponse; readonly body: unknown }> {
+  async function send(
+    path: string,
+    json?: string,
+  ): Promise<{ readonly response: FetchResponse; readonly body: unknown }> {
     const url = `${apiUrl}${path}`;
     let response: FetchResponse;
     let text: string;
+    const init =
+      json === undefined
+        ? { method: "GET" as const, headers }
+        : { method: "POST" as const, headers: { ...headers, "Content-Type": "application/json" }, body: json };
     try {
-      response = await fetch(url, { method: "GET", headers });
+      response = await fetch(url, init);
       text = await response.text();
     } catch (error) {
       throw new TransportError(url, error);
@@ -187,9 +222,10 @@ export function createClient(options: ClientOptions): EquityOSClient {
     id: K,
     params: Readonly<Record<string, string | number>>,
     query: Query,
+    json?: string,
   ): Promise<ResponseOf<K>> {
     const operation: EnvelopeOperation = OPERATIONS[id];
-    const { response, body } = await get(`${fillPath(operation.path, params)}${queryString(query)}`);
+    const { response, body } = await send(`${fillPath(operation.path, params)}${queryString(query)}`, json);
     const envelope = object({ data: operation.data, meta: operation.meta });
     // The decoders of `OPERATIONS[id]` produce exactly `ResponseOf<K>`: the type is derived from them.
     return decodeBody(envelope, response.status, body) as ResponseOf<K>;
@@ -230,9 +266,19 @@ export function createClient(options: ClientOptions): EquityOSClient {
           minLegValueUsdE8: query.minLegValueUsdE8,
         },
       ),
+    executionPlan: (request) =>
+      call(
+        "executionPlan",
+        {},
+        {},
+        JSON.stringify({
+          ...request,
+          ...(request.minLegValueUsdE8 === undefined ? {} : { minLegValueUsdE8: request.minLegValueUsdE8.toString() }),
+        }),
+      ),
     getStatus: () => call("getStatus", {}, {}),
     async getOpenApiDocument() {
-      const { response, body } = await get(OPERATIONS.getOpenApiDocument.path);
+      const { response, body } = await send(OPERATIONS.getOpenApiDocument.path);
       return decodeBody(OPERATIONS.getOpenApiDocument.body, response.status, body);
     },
   };

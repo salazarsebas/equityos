@@ -75,6 +75,7 @@ node after `bun run contracts:deploy:local` and `bun run seed:local`. On Base ma
 | `getIndexComposition(identifier, { version? })`   | `GET /indexes/{identifier}/composition`          |
 | `getPortfolio({ address, index, version? })`      | `GET /portfolio`                                 |
 | `getPortfolioPlan({ address, index, mode, ... })` | `GET /portfolio/plan`                            |
+| `executionPlan({ address, index, mode, ... })`    | `POST /portfolio/execution-plan`                 |
 | `getStatus()`                                     | `GET /status`                                    |
 | `getOpenApiDocument()`                            | `GET /openapi.json`                              |
 

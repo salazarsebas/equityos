@@ -141,6 +141,12 @@ test("the API example and every link on the page resolve", async ({ page, reques
   }
 });
 
+test("the secondary action and the API reference link lead to the developer pages", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/developers");
+  await expect(page.getByRole("link", { name: "API reference" })).toHaveAttribute("href", "/developers/api");
+});
+
 test("execution is stated as not available, from the status of this release", async ({ page, request }) => {
   const status = await (await request.get("/api/v1/status")).json();
   await page.goto("/");

@@ -41,7 +41,9 @@ nor Node.js types and runs on Node.js 18 and later, Bun, Deno and browsers.
 
 `createClient({ baseUrl, fetch?, headers? })` returns one method per operation of the OpenAPI document, named by
 its `operationId`, plus `iterateIndexes`, an async iterator over every index that follows `meta.nextOffset`.
-Every method makes one GET request to `<baseUrl>/api/v1/...` and returns `{ data, meta }`.
+Every method makes one request to `<baseUrl>/api/v1/...`, a GET except `executionPlan`, which POSTs its request
+as JSON, and returns `{ data, meta }`. `executionPlan` returns calls to show: a client that sends them verifies
+them again and refuses to send after `expiresAt` (see [Execution plan](./execution.md)).
 
 ### Decoding
 

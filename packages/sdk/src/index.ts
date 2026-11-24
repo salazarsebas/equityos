@@ -1,13 +1,14 @@
+export { DEPLOYMENTS, type Deployment, INDEX_REGISTRY_ADDRESS, type SupportedChainId } from "@equityos/contracts-abi";
 export {
   bytesToHex,
-  canonicalize,
   type CheckCode,
   type CheckId,
   type CheckResult,
   type CheckStatus,
+  canonicalize,
   computeConstituents,
-  type IndexSpec,
   INDEX_SPEC_JSON_SCHEMA,
+  type IndexSpec,
   type JsonValue,
   type ParseCanonicalResult,
   type PublishedConstituent,
@@ -21,13 +22,13 @@ export {
   validateSpec,
   verifyVersion,
 } from "@equityos/core";
-export { DEPLOYMENTS, type Deployment, INDEX_REGISTRY_ADDRESS, type SupportedChainId } from "@equityos/contracts-abi";
 export type { Composition } from "./abi.ts";
 export {
   type ApiResponse,
   type ClientOptions,
   createClient,
   type EquityOSClient,
+  type ExecutionPlanRequest,
   type PortfolioPlanQuery,
   type PortfolioQuery,
   type ResponseOf,
@@ -57,6 +58,11 @@ export {
   type Dataset,
   type Datasets,
   type Eligibility,
+  EXECUTION_STATEMENT,
+  type ExecutionCall,
+  type ExecutionCheck,
+  type ExecutionLeg,
+  type ExecutionPlan,
   type Index,
   type IndexComposition,
   type IndexListMeta,
@@ -85,7 +91,6 @@ export {
   type VerificationSummary,
   type VersionSummary,
 } from "./schemas.ts";
-export { SDK_VERSION, type SemverString } from "./version.ts";
 export {
   type IndexVersionVerification,
   jsonRpcClient,
@@ -93,3 +98,4 @@ export {
   type VerifyIndexVersionOptions,
   verifyIndexVersion,
 } from "./verify.ts";
+export { SDK_VERSION, type SemverString } from "./version.ts";

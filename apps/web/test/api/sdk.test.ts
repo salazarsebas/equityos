@@ -39,6 +39,7 @@ function documentedOperations(): Map<string, DocumentedOperation> {
   const operations = new Map<string, DocumentedOperation>();
   for (const [path, item] of Object.entries(openApiDocument.paths)) {
     for (const [method, operation] of Object.entries(item)) {
+      if (operation === undefined) continue;
       operations.set(operation.operationId, { method: method.toUpperCase(), path, responses: operation.responses });
     }
   }
@@ -231,6 +232,14 @@ function callFor(client: EquityOSClient, example: RecordedExample): Promise<unkn
         mode: query.mode ?? "",
         ...(query.depositUsdE8 === undefined ? {} : { depositUsdE8: BigInt(query.depositUsdE8) }),
       });
+    case "executionPlan": {
+      const body = example.requestBody ?? {};
+      return client.executionPlan({
+        address: String(body.address),
+        index: String(body.index),
+        mode: String(body.mode),
+      });
+    }
     case "getStatus":
       return client.getStatus();
     default:

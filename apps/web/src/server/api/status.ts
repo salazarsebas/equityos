@@ -11,13 +11,13 @@ import { parseQuery } from "./params";
 /**
  * Why execution is not available to the caller.
  * - `restricted_jurisdiction` and `jurisdiction_unknown`: the jurisdiction gate withholds it from this request.
- * - `not_released`: the gate would let the request through, and this release has no execution endpoint.
+ * - `not_released`: the gate would let the request through, and this release sends no transaction.
  */
 type ExecutionUnavailableReason = "restricted_jurisdiction" | "jurisdiction_unknown" | "not_released";
 
 /**
- * Execution availability for a request. No execution endpoint exists in this release, so the answer is `false`
- * for everyone. The reason already reflects the jurisdiction gate, which takes precedence.
+ * Execution availability for a request. This release prepares execution plans and sends nothing, so the answer
+ * is `false` for everyone. The reason already reflects the jurisdiction gate, which takes precedence.
  */
 export function executionAvailability(jurisdiction: Jurisdiction): {
   executionAvailable: boolean;

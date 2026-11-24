@@ -1,5 +1,13 @@
 import "server-only";
+import { MAX_RESERVE_BPS } from "@equityos/core";
+import {
+  DEFAULT_MAX_DEVIATION_BPS,
+  DEFAULT_SLIPPAGE_BPS,
+  MAX_DEVIATION_BPS,
+  MAX_SLIPPAGE_BPS,
+} from "@/server/execution";
 import { API_ERROR_CODES, MARKET_ERROR_CODES } from "./errors";
+import { EXECUTION_STATEMENT } from "./execution";
 import { API_VERSION, API_VERSION_HEADER } from "./http";
 import { CALCULATION_ISSUE_CODES, MAX_DEPOSIT_USD_E8, MAX_MIN_LEG_VALUE_USD_E8, PLAN_STATEMENT } from "./portfolio";
 
@@ -34,13 +42,27 @@ interface ResponseObject {
   readonly content: { readonly "application/json": { readonly schema: Schema } };
 }
 
-interface Operation {
+export interface Operation {
   readonly operationId: string;
   readonly summary: string;
   readonly description: string;
   readonly tags: readonly string[];
   readonly parameters?: readonly Parameter[];
+  readonly requestBody?: {
+    readonly required: true;
+    readonly content: { readonly "application/json": { readonly schema: Schema } };
+  };
   readonly responses: Readonly<Record<string, ResponseObject>>;
+}
+
+/** One operation per path: a GET for reads, a POST for the one endpoint that takes a body. */
+export type PathItem =
+  | { readonly get: Operation; readonly post?: never }
+  | { readonly post: Operation; readonly get?: never };
+
+/** The operation of a path, whichever its method. */
+export function operationOf(item: PathItem): Operation {
+  return item.get ?? item.post;
 }
 
 export interface OpenApiDocument {
@@ -48,7 +70,7 @@ export interface OpenApiDocument {
   readonly info: { readonly title: string; readonly version: string; readonly description: string };
   readonly servers: readonly { readonly url: string; readonly description: string }[];
   readonly tags: readonly { readonly name: string; readonly description: string }[];
-  readonly paths: Readonly<Record<string, { readonly get: Operation }>>;
+  readonly paths: Readonly<Record<string, PathItem>>;
   readonly components: {
     readonly headers: Readonly<Record<string, { readonly description: string; readonly schema: Schema }>>;
     readonly schemas: Readonly<Record<string, Schema>>;
@@ -704,6 +726,165 @@ const schemas: Record<string, Schema> = {
     minLegValueUsdE8: ref("UintString"),
     plan: { anyOf: [ref("BlockedPlan"), ref("ReadyPlan")] },
   }),
+  ExecutionCheck: object(
+    {
+      check: oneOf(
+        [
+          "jurisdiction",
+          "reference_plan",
+          "reference_freshness",
+          "quote",
+          "transfers_not_paused",
+          "policy_authorized",
+          "multiplier_window",
+          "price_deviation",
+          "balance",
+          "allowance",
+          "simulation",
+          "plan_expiry",
+        ],
+        "Which check. See docs/architecture/execution.md.",
+      ),
+      status: oneOf(
+        ["pass", "warn", "block", "not_simulated", "skipped"],
+        "pass and warn let the plan proceed. block stops it. not_simulated stops it unless allowUnsimulated. skipped: a prerequisite failed.",
+      ),
+      reason: text("Stable reason code within the check."),
+      token: nullable(ref("Address")),
+      leg: nullable({ ...count, description: "Index of the leg in legs." }),
+      detail: nullable(text("Machine-readable context: failed scopes, a provider code, a time, needed/available.")),
+    },
+    "The result of one pre-trade check, as data.",
+  ),
+  ExecutionLeg: object({
+    side: oneOf(["sell", "buy"], "sell: token to USDC. buy: USDC to token."),
+    token: ref("Address"),
+    symbol: nullable(text("Display symbol.")),
+    decimals: count,
+    tokenIn: ref("Address"),
+    tokenOut: ref("Address"),
+    amountIn: { ...ref("UintString"), description: "Exact amount swapped, base units of tokenIn." },
+    referencePriceE8: { ...ref("UintString"), description: "Reference price the leg was sized with." },
+    referenceStatus: oneOf(["live", "delayed", "last_close", "unavailable"], "Staleness class of the reference."),
+    referenceAmountOut: { ...ref("UintString"), description: "Amount out at the reference price, base units." },
+    quote: nullable(
+      object({
+        provider: text("Quote provider."),
+        router: ref("Address"),
+        functionName: oneOf(["swap"], "Router function of the calldata."),
+        quotedAmountOut: { ...ref("UintString"), description: "Amount out the provider quotes. Not guaranteed." },
+        minAmountOut: { ...ref("UintString"), description: "Minimum the router enforces, decoded from calldata." },
+        deviationBps: {
+          type: "integer",
+          minimum: -10_000,
+          maximum: 1_000_000,
+          description: "Quoted price minus reference price, over the reference, rounded away from zero.",
+        },
+        minimumDeviationBps: {
+          type: "integer",
+          minimum: -10_000,
+          maximum: 1_000_000,
+          description: "The same at the minimum amount out: the worst price the swap accepts.",
+        },
+        deadline: { ...ref("Timestamp"), description: "Time after which the route reverts, decoded from calldata." },
+        gasEstimate: { ...ref("UintString"), description: "Gas estimated by the provider. Not verified." },
+        quotedAt: ref("Timestamp"),
+        routeId: text("Route identifier at the provider."),
+      }),
+    ),
+  }),
+  ExecutionCall: object({
+    kind: oneOf(["approve", "swap"], "approve: an exact ERC-20 approval of the router. swap: router calldata."),
+    to: ref("Address"),
+    data: { type: "string", pattern: "^0x([0-9a-fA-F]{2})*$", description: "Calldata." },
+    value: { ...ref("UintString"), description: "Native value in wei. Always 0." },
+    token: { ...ref("Address"), description: "Approve: the token approved. Swap: the token sold." },
+    leg: nullable({ ...count, description: "Swap: index of the leg in legs." }),
+    minAmountOut: nullable({ ...ref("UintString"), description: "Swap: minimum the router enforces." }),
+  }),
+  ExecutionPlan: object({
+    address: ref("Address"),
+    index: ref("PortfolioIndex"),
+    chainId: { type: "integer", const: 8453 },
+    priceBasis: { type: "string", const: "executable_quote" },
+    statement: { type: "string", const: EXECUTION_STATEMENT },
+    mode: oneOf(["rebalance", "buy_only"], "buy_only never sells."),
+    reserveBps: { type: "integer", minimum: 0, maximum: MAX_RESERVE_BPS },
+    minLegValueUsdE8: ref("UintString"),
+    slippageBps: { type: "integer", minimum: 0, maximum: MAX_SLIPPAGE_BPS },
+    maxDeviationBps: { type: "integer", minimum: 0, maximum: MAX_DEVIATION_BPS },
+    allowUnsimulated: { type: "boolean" },
+    provider: object({ name: text("Quote provider."), router: ref("Address") }),
+    status: oneOf(["ready", "blocked"], "ready: calls are given. blocked: see blockedBy."),
+    executable: { type: "boolean", description: "True only when every check passed or warned." },
+    expiresAt: nullable({ ...ref("Timestamp"), description: "Quote again after this time." }),
+    checkedAtBlock: nullable(object({ number: ref("UintString"), timestamp: ref("Timestamp") })),
+    simulationMethod: nullable(oneOf(["eth_simulateV1", "eth_call"], "How the calls were simulated.")),
+    legs: { type: "array", items: ref("ExecutionLeg"), description: "In the order of the reference plan." },
+    checks: { type: "array", items: ref("ExecutionCheck"), description: "Every check that ran, in order." },
+    blockedBy: { type: "array", items: ref("ExecutionCheck"), description: "The checks that block. Empty when ready." },
+    warnings: {
+      type: "array",
+      items: ref("ExecutionCheck"),
+      description: "Every check that passed with a warning. Show each one and ask for an acknowledgement.",
+    },
+    approvals: {
+      type: "array",
+      items: object({
+        token: ref("Address"),
+        spender: ref("Address"),
+        currentAllowance: ref("UintString"),
+        amount: { ...ref("UintString"), description: "Total the plan swaps of the token. Never more." },
+        required: { type: "boolean", description: "The current allowance is below amount." },
+      }),
+    },
+    calls: nullable({ type: "array", items: ref("ExecutionCall"), description: "Ready only, in order." }),
+    totals: nullable(
+      object({
+        usdcBalance: ref("UintString"),
+        minUsdcFromSells: { ...ref("UintString"), description: "Sum of the minimum amounts out of the sells." },
+        maxUsdcForBuys: { ...ref("UintString"), description: "Sum of the USDC the buys spend." },
+        endBalances: {
+          type: "array",
+          items: object({ token: ref("Address"), before: ref("UintString"), after: ref("UintString") }),
+          description: "Balances after every call at the minimum amounts out. USDC first.",
+        },
+      }),
+    ),
+    planHash: nullable({
+      ...ref("Bytes32"),
+      description: "keccak256 of the canonical encoding of the calls. Ready only.",
+    }),
+  }),
+  ExecutionPlanRequest: {
+    type: "object",
+    properties: {
+      address: { type: "string", pattern: "^0x[0-9a-fA-F]{40}$" },
+      index: text("An index identifier or index id."),
+      version: { type: "integer", minimum: 1, description: "Defaults to the latest version." },
+      mode: oneOf(["rebalance", "buy_only"], "buy_only never sells."),
+      reserveBps: { type: "integer", minimum: 0, maximum: MAX_RESERVE_BPS, description: "Defaults to 50." },
+      minLegValueUsdE8: { ...ref("UintString"), description: "Defaults to 100000000 (1.00 USD)." },
+      slippageBps: {
+        type: "integer",
+        minimum: 0,
+        maximum: MAX_SLIPPAGE_BPS,
+        description: `Defaults to ${DEFAULT_SLIPPAGE_BPS}.`,
+      },
+      maxDeviationBps: {
+        type: "integer",
+        minimum: 0,
+        maximum: MAX_DEVIATION_BPS,
+        description: `Defaults to ${DEFAULT_MAX_DEVIATION_BPS}.`,
+      },
+      allowUnsimulated: {
+        type: "boolean",
+        description: "Accept calls that could not be simulated. Defaults to false.",
+      },
+    },
+    required: ["address", "index", "mode"],
+    additionalProperties: false,
+  },
   ErrorDetails: nullable({
     type: "object",
     description: "Machine-readable context of an error, such as the offending parameter or the failing source.",
@@ -940,6 +1121,37 @@ export const openApiDocument: OpenApiDocument = {
         responses: {
           "200": success("The plan.", ref("PortfolioPlan"), ref("PortfolioMeta")),
           ...portfolioErrors,
+        },
+      },
+    },
+    "/portfolio/execution-plan": {
+      post: {
+        operationId: "executionPlan",
+        summary: "Executable plan with pre-trade checks",
+        description: `The reference-price plan of the same comparison, quoted for execution on Base mainnet and checked: blocked with the checks that fail, or ready with the ordered calls, totals at the minimum amounts out, an expiry and planHash. Nothing is signed or sent. Never cached. Rate limited per instance: 3 plans per address at once, then one every 20 seconds (429 rate_limited), and 10 quote provider requests per 10 seconds, two per leg (503 provider_rate_limited). A request answers within 20 seconds or with 503 deadline_exceeded. ${EXECUTION_STATEMENT}`,
+        tags: ["Portfolio"],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: ref("ExecutionPlanRequest") } },
+        },
+        responses: {
+          "200": success("The execution plan.", ref("ExecutionPlan"), ref("PortfolioMeta")),
+          "400": json("The body is not JSON, has an unknown field, or a field is out of its bounds.", ref("Error")),
+          "404": portfolioErrors["404"],
+          "409": json(
+            `${registryNotDeployed} version_not_conformant, ineligible_token, and execution_unavailable: the server serves replayed market data.`,
+            ref("Error"),
+          ),
+          "429": json(
+            "rate_limited: more execution plans from one address than the limit, 3 at once then one every 20 seconds. Carries Retry-After.",
+            ref("Error"),
+          ),
+          "500": failures["500"],
+          "502": failures["502"],
+          "503": json(
+            "upstream_unavailable: Base mainnet did not answer. provider_rate_limited: the quote provider's limit, or this instance's budget of 10 provider requests per 10 seconds, does not allow quoting now. deadline_exceeded: the plan was not built within 20 seconds. Carries Retry-After.",
+            ref("Error"),
+          ),
         },
       },
     },
