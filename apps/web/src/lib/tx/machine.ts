@@ -15,34 +15,38 @@ import type { TxFailure } from "./errors";
  * - `reverted`: mined and reverted. The fee was paid and nothing changed.
  * - `replaced`: another transaction with the same nonce was mined instead.
  * - `dropped`: no receipt was found in time. The transaction may still be mined later.
+ *
+ * `Id` identifies what was submitted: a transaction hash by default, or the identifier `wallet_sendCalls`
+ * returns for a batch (EIP-5792), whose receipts are then awaited together. A batch is never repriced or
+ * replaced as a whole, so those states do not occur for it.
  */
-export type TxState<Result> =
+export type TxState<Result, Id extends string = Hex> =
   | { readonly status: "idle" }
   | { readonly status: "awaiting_signature" }
   | { readonly status: "rejected" }
   | { readonly status: "failed"; readonly failure: TxFailure }
-  | { readonly status: "submitted"; readonly hash: Hex; readonly repriced: boolean }
-  | { readonly status: "verifying"; readonly hash: Hex }
-  | { readonly status: "confirmed"; readonly hash: Hex; readonly result: Result }
-  | { readonly status: "unverified"; readonly hash: Hex; readonly reason: string }
-  | { readonly status: "reverted"; readonly hash: Hex }
+  | { readonly status: "submitted"; readonly hash: Id; readonly repriced: boolean }
+  | { readonly status: "verifying"; readonly hash: Id }
+  | { readonly status: "confirmed"; readonly hash: Id; readonly result: Result }
+  | { readonly status: "unverified"; readonly hash: Id; readonly reason: string }
+  | { readonly status: "reverted"; readonly hash: Id }
   | {
       readonly status: "replaced";
-      readonly hash: Hex;
-      readonly replacement: Hex;
+      readonly hash: Id;
+      readonly replacement: Id;
       readonly reason: "cancelled" | "replaced";
     }
-  | { readonly status: "dropped"; readonly hash: Hex };
+  | { readonly status: "dropped"; readonly hash: Id };
 
-export type TxEvent<Result> =
+export type TxEvent<Result, Id extends string = Hex> =
   | { readonly type: "request" }
   | { readonly type: "rejected" }
   | { readonly type: "send_failed"; readonly failure: TxFailure }
-  | { readonly type: "submitted"; readonly hash: Hex }
-  | { readonly type: "repriced"; readonly hash: Hex }
-  | { readonly type: "replaced"; readonly replacement: Hex; readonly reason: "cancelled" | "replaced" }
+  | { readonly type: "submitted"; readonly hash: Id }
+  | { readonly type: "repriced"; readonly hash: Id }
+  | { readonly type: "replaced"; readonly replacement: Id; readonly reason: "cancelled" | "replaced" }
   | { readonly type: "dropped" }
-  | { readonly type: "receipt"; readonly status: "success" | "reverted"; readonly hash: Hex }
+  | { readonly type: "receipt"; readonly status: "success" | "reverted"; readonly hash: Id }
   | { readonly type: "verified"; readonly result: Result }
   | { readonly type: "verification_failed"; readonly reason: string }
   | { readonly type: "recheck" }
@@ -51,7 +55,7 @@ export type TxEvent<Result> =
 export const TX_IDLE = { status: "idle" } as const;
 
 /** States in which a transaction is with the wallet or the chain: a second one must not be requested. */
-export function isTxInFlight(state: TxState<unknown>): boolean {
+export function isTxInFlight(state: TxState<unknown, string>): boolean {
   return state.status === "awaiting_signature" || state.status === "submitted" || state.status === "verifying";
 }
 
@@ -59,7 +63,7 @@ export function isTxInFlight(state: TxState<unknown>): boolean {
  * States a new request may start from. A transaction that was mined successfully is not one of them: sending
  * it again would be a second transaction, so the caller has to reset first, on purpose.
  */
-function canRequest(state: TxState<unknown>): boolean {
+function canRequest(state: TxState<unknown, string>): boolean {
   return ["idle", "rejected", "failed", "reverted", "replaced", "dropped"].includes(state.status);
 }
 
@@ -67,7 +71,10 @@ function canRequest(state: TxState<unknown>): boolean {
  * The transition function. An event that does not apply to the current state leaves it unchanged, so a late
  * callback (a receipt after a reset, a second click) can never move the machine to a state it did not reach.
  */
-export function txReducer<Result>(state: TxState<Result>, event: TxEvent<Result>): TxState<Result> {
+export function txReducer<Result, Id extends string = Hex>(
+  state: TxState<Result, Id>,
+  event: TxEvent<Result, Id>,
+): TxState<Result, Id> {
   switch (event.type) {
     case "request":
       return canRequest(state) ? { status: "awaiting_signature" } : state;

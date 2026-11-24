@@ -195,7 +195,7 @@ test.describe("assets page on the recorded block", () => {
   }) => {
     const response = await request.get("/api/v1/assets?eligible=true");
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.5.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.6.0");
     expect(response.headers()["access-control-allow-origin"]).toBe("*");
     const { data, meta } = await response.json();
     expect(data).toHaveLength(13);

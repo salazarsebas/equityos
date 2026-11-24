@@ -17,13 +17,14 @@ A swap call runs with the user's approval of the router. Calldata that is wrong 
 - call a function of the router other than a swap, or another contract altogether;
 - carry native value or a permit that grants more than the plan needs.
 
-Nothing in the plan is signed or sent by EquityOS. The risk is that a user signs what the plan shows.
+EquityOS holds no key and signs nothing. The risk is that a user signs what the plan shows, which is why the
+browser verifies every call again before it offers to send it ([Sending an execution plan](execution-sending.md)).
 
 ## What is verified
 
 Every quote, from any provider, passes `verifyQuote` (`apps/web/src/lib/execution/calldata.ts`) or is refused
 with a typed reason. The module is pure and browser-safe: the server runs it before a plan is built, and the client
-that sends a plan must run it again on the calls it sends. The checks are deterministic and run on the decoded
+that sends a plan runs it again on the calls it sends. The checks are deterministic and run on the decoded
 calldata, not on the JSON fields the provider reports next to it. Every rule is an allowlist of what the provider
 returned for Base in every recorded answer, so a change at the provider blocks execution until it is reviewed.
 

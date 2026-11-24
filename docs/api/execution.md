@@ -4,7 +4,9 @@
 [`GET /api/v1/portfolio/plan`](./portfolio.md) into an executable plan for Base mainnet: a quote for each leg, the
 calls a wallet would make, and the result of every pre-trade check. It was added in API version 1.3.0.
 
-**Nothing is signed or sent.** The answer is data: calls to show, and to send later through the user's wallet.
+**Nothing is signed or sent by the endpoint.** The answer is data: calls to show, and to send through the user's
+wallet, as the portfolio page does after verifying them in the browser
+([Sending an execution plan](../security/execution-sending.md)).
 The design and every check are described in [Executable plan and pre-trade checks](../architecture/execution.md),
 and what is trusted of the quote provider in [Aggregator calldata](../security/aggregator-calldata.md).
 Conventions (envelope, errors, amounts as decimal strings, versioning) are in the [overview](./README.md).
@@ -101,7 +103,7 @@ reference price.
 
 ### What a client that sends the calls must do
 
-The next step of the product sends these calls. A client that sends them:
+A client that sends them, as the portfolio page does:
 
 1. verifies every swap again in the browser with the same module the server uses,
    `apps/web/src/lib/execution/calldata.ts` (`verifyQuote`, pure and browser-safe), and every approval for its

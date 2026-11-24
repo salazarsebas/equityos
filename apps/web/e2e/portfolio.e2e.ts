@@ -79,8 +79,8 @@ test.describe("portfolio page", () => {
     await expect(legs(page).getByRole("rowheader")).toHaveText(["NVDAc", "TSLAc", "MSTRc", "AAPLc", "AMZNc"]);
     await expect(legs(page).getByRole("row", { name: /NVDAc/ })).toContainText("Sell");
     await expect(page.getByText("it is not an instruction to trade")).toBeVisible();
-    await expect(page.getByText("Executing a plan is not available on this site.")).toBeVisible();
-    // Nothing on the page offers to trade.
+    // Without the wallet of the address, nothing on the page offers to trade: it offers to connect it.
+    await expect(page.getByText("Connect the wallet of this address to prepare a plan for it.")).toBeVisible();
     await expect(page.getByRole("button", { name: /execute|swap|trade|buy|sell|deposit|invest/i })).toHaveCount(0);
     expect(errors).toEqual([]);
   });
@@ -179,7 +179,7 @@ test.describe("portfolio API on the replay", () => {
   test("compares a constructed wallet and says where each input was read", async ({ request }) => {
     const response = await request.get(`/api/v1/portfolio?address=${ABOVE}&index=${INDEX}`);
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.5.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.6.0");
     const { data, meta } = await response.json();
     expect(data.drift).toMatchObject({ maxAbsDriftBps: 1500, thresholdReached: true });
     expect(meta.registry).toMatchObject({ chainId: 31_337, mode: "replay" });

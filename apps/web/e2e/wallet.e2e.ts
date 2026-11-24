@@ -53,7 +53,8 @@ test("the connect dialog lists the options, closes with Escape and returns focus
   await expect(dialog.getByRole("listitem")).toHaveText([/^Test Wallet/, /^Base Account/]);
   await expect(dialog.getByRole("button", { name: /Test Wallet/ })).toBeFocused();
   await expect(dialog).toContainText("It does not sign or send anything.");
-  await expect(dialog).toContainText("Execution is not released yet.");
+  // Execution is available to this request, so the dialog carries no note about it.
+  await expect(dialog).not.toContainText("Execution is");
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();

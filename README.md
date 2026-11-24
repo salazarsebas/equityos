@@ -40,9 +40,13 @@ The Index Studio drafts, validates and exports an index, and publishes it where 
 today is a local chain only. See [docs/product/index-studio.md](docs/product/index-studio.md).
 
 The portfolio page compares any address with a published index and previews a rebalance plan at reference
-prices. It does not trade. See [docs/product/portfolio.md](docs/product/portfolio.md).
+prices. For the connected owner of the address, where execution is available, it prepares an executable plan on
+Base mainnet, verifies every call in the browser and asks the user's own wallet to sign it, in one atomic batch
+or one transaction at a time; the site holds no key. The contracts are not deployed on Base, so no attestation is
+recorded there. See [docs/product/portfolio.md](docs/product/portfolio.md) and
+[docs/security/execution-sending.md](docs/security/execution-sending.md).
 
-Not built yet: new versions of a published index from the app, rebalance execution.
+Not built yet: new versions of a published index from the app, automated or scheduled rebalancing.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 

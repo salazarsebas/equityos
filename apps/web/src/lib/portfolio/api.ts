@@ -23,6 +23,8 @@ export interface ApiIssue {
 }
 
 export interface ApiIndexRef {
+  /** The index id, 32 bytes as lowercase hex. */
+  readonly indexId: string;
   readonly identifier: string;
   readonly name: string;
   readonly version: number;
