@@ -66,7 +66,8 @@ attached to one field by its JSON Pointer. A field that is simply empty is shown
 wrong value is shown as an issue. Clicking an entry of the list in the preview moves focus to the field.
 
 The preview recomputes on every edit: the composition with target weights, the methodology in plain sentences
-built from fixed templates, the spec hash, the size against the 8,192 byte limit and the canonical JSON.
+built from the same fixed templates as the index profile (`apps/web/src/lib/indexes/methodology.ts`), the spec
+hash, the size against the 8,192 byte limit and the canonical JSON.
 "Export spec JSON" saves a file that holds exactly the canonical bytes.
 
 ## Drafts
@@ -167,8 +168,9 @@ Success is never shown from the transaction hash alone. The write path and its s
 An index that already exists under the salt of the draft (`IndexAlreadyExists`) is explained, and "Use a new
 salt" replaces the salt on that click. The salt is never changed silently.
 
-The published state shows the canonical identifier, the index id, the spec hash, the block and the transaction.
-It does not link to an index page, because the app has none yet.
+The published state shows the canonical identifier, the index id, the spec hash, the block and the transaction,
+and links to the profile of the new index at `/indexes/<identifier>`. The explorer lists it once it reads the
+registry again, within ten seconds, when the site is configured for the chain the index was published on.
 
 ## Tests
 
