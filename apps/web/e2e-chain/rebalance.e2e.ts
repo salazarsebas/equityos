@@ -1,6 +1,6 @@
 import { DEPLOYMENTS, LOCAL_CHAIN_ID, rebalanceLogAbi } from "@equityos/contracts-abi";
-import { expect, type Page, test } from "@playwright/test";
-import { type Address, createPublicClient, erc20Abi, http } from "viem";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import { type Address, createPublicClient, erc20Abi, type Hex, http } from "viem";
 import { anvil } from "viem/chains";
 import { builderCodeSuffix } from "../src/lib/execution/builder-code";
 import { KYBERSWAP_ROUTER } from "../src/lib/execution/calldata";
@@ -27,6 +27,12 @@ const LOG = DEPLOYMENTS[LOCAL_CHAIN_ID].rebalanceLog;
 const balanceOf = (token: Address) =>
   chain.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [TEST_ACCOUNT] });
 const nonce = () => chain.getTransactionCount({ address: TEST_ACCOUNT });
+
+/** The transaction hashes a region of the page shows. */
+async function shownHashes(region: Locator): Promise<Hex[]> {
+  const texts = await region.locator("span.font-mono").allTextContents();
+  return texts.filter((text): text is Hex => /^0x[0-9a-f]{64}$/.test(text));
+}
 
 async function balances(): Promise<Record<string, bigint>> {
   const tokens = [USDC, NVDA, TSLA, AMZN];
@@ -139,13 +145,12 @@ test("an atomic wallet executes the plan and the attestation in one batch, and t
   });
   expect(logs).toHaveLength(1);
   expect(logs[0]?.args).toEqual({ account: TEST_ACCOUNT, indexId: DIVERSIFIED.indexId, version: DIVERSIFIED.version });
-  // Every transaction of the batch carries the Builder Code suffix the wallet appended.
-  const transactions = await Promise.all(
-    Array.from({ length: 6 }, (_, offset) =>
-      chain.getTransaction({ blockNumber: (logs[0]?.blockNumber ?? 0n) - 5n + BigInt(offset), index: 0 }),
-    ),
-  );
-  for (const transaction of transactions) expect(transaction.input.endsWith((suffix ?? "0x").slice(2))).toBe(true);
+  // Every transaction of the batch, as the page lists them, carries the Builder Code suffix the wallet appended.
+  const batchHashes = await shownHashes(page.getByRole("status").filter({ hasText: "Executed:" }));
+  expect(batchHashes).toHaveLength(6);
+  for (const hash of batchHashes) {
+    expect((await chain.getTransaction({ hash })).input.endsWith((suffix ?? "0x").slice(2))).toBe(true);
+  }
 
   // The balances read again and the drift after, against the same index.
   const table = page.getByRole("region", { name: "Balances before and after" });
@@ -211,10 +216,12 @@ test("a sequential wallet stops at a swap that reverts and reports exactly what 
       args: [TEST_ACCOUNT, KYBERSWAP_ROUTER],
     }),
   ).toBe(150_000_000n);
-  // The app appended the Builder Code suffix to every transaction it sent.
-  const latest = await chain.getBlockNumber();
-  for (let offset = 0n; offset < 4n; offset += 1n) {
-    const transaction = await chain.getTransaction({ blockNumber: latest - offset, index: 0 });
+  // The app appended the Builder Code suffix to every transaction it sent, as the page lists them.
+  const sentHashes = await shownHashes(page.getByRole("list", { name: "Transactions" }));
+  expect(sentHashes).toHaveLength(4);
+  for (const hash of sentHashes) {
+    const transaction = await chain.getTransaction({ hash });
+    expect(transaction.from.toLowerCase()).toBe(TEST_ACCOUNT.toLowerCase());
     expect(transaction.input.endsWith((suffix ?? "0x").slice(2))).toBe(true);
   }
 
