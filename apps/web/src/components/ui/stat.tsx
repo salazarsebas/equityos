@@ -11,11 +11,14 @@ type StatProps = {
   tone?: "positive" | "negative";
 };
 
-/** One label and value pair of a stats row. Not a card: cells are separated by hairlines only. */
+/**
+ * One label and value pair of a stats row. Not a card: cells are separated by hairlines only. A label may wrap on a
+ * narrow screen: the value then sits at the bottom of the cell, level with the values of the cells beside it.
+ */
 export function Stat({ label, value, unit, tone }: StatProps) {
   return (
-    <div className="flex flex-col border-t border-l px-4 py-3">
-      <dt className="flex h-6 items-center gap-2 text-xs text-secondary">{label}</dt>
+    <div className="flex flex-col justify-between border-t border-l px-4 py-3">
+      <dt className="flex min-h-6 items-center gap-2 text-xs text-secondary">{label}</dt>
       <dd
         className={cx(
           "num text-lg font-medium",
