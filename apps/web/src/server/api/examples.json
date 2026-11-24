@@ -1553,6 +1553,373 @@
       }
     },
     {
+      "name": "getNetworkMetrics",
+      "operationId": "getNetworkMetrics",
+      "title": "Registry and usage metrics of the recorded local chain, with the attestations of the seed",
+      "path": "/api/v1/network",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "chainId": 31337,
+          "registry": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+          "rebalanceLog": "0x593449aef0efc05528d3bc7be9eb8d99e39aa41c",
+          "scan": {
+            "fromBlock": "0",
+            "scannedToBlock": "29",
+            "targetBlock": "29",
+            "complete": true,
+            "usageComplete": true
+          },
+          "thresholds": { "minimumNotionalUsdE8": "100000000", "tierBWindowSeconds": 900, "toleranceMarginBps": 200 },
+          "metrics": {
+            "indexesPublished": {
+              "id": "registry.indexes_published",
+              "value": 5,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "versionsPublished": {
+              "id": "registry.versions_published",
+              "value": 6,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "distinctCreators": {
+              "id": "registry.distinct_creators",
+              "value": 1,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "indexesDeprecated": {
+              "id": "registry.indexes_deprecated",
+              "value": 1,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "versionsPerDay": {
+              "id": "registry.versions_per_day",
+              "value": [{ "day": "2026-11-16", "count": 6 }],
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "attestations": {
+              "id": "usage.attestations",
+              "value": 6,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "attestationsTierA": {
+              "id": "usage.attestations_tier_a",
+              "value": 3,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "attestationsTierB": {
+              "id": "usage.attestations_tier_b",
+              "value": 1,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "attestationsUnmatched": {
+              "id": "usage.attestations_unmatched",
+              "value": 2,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "accountsTierA": {
+              "id": "usage.accounts_tier_a",
+              "value": 3,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "accountsWithinTolerance": {
+              "id": "usage.accounts_within_tolerance",
+              "value": 2,
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "tierAPerDay": {
+              "id": "usage.tier_a_per_day",
+              "value": [{ "day": "2026-11-16", "count": 3 }],
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "byIndex": {
+              "id": "usage.by_index",
+              "value": [
+                {
+                  "indexId": "0xa3e409e2ba1d9818a1b8fe0630a2920b2e24be1f1acce585e22e0866ef0b2704",
+                  "label": { "identifier": "semiconductors-fixed-a3e409e2", "name": "Semiconductors Fixed Weight" },
+                  "attestations": { "tierA": 2, "tierB": 0, "unmatched": 1 },
+                  "accountsTierA": 2
+                },
+                {
+                  "indexId": "0xa4abb1bd873da973f8f67b9afdc261adc490db29e8c2069c7cf9c01ff37a1492",
+                  "label": { "identifier": "large-technology-equal-a4abb1bd", "name": "Large Technology Equal Weight" },
+                  "attestations": { "tierA": 1, "tierB": 1, "unmatched": 0 },
+                  "accountsTierA": 1
+                },
+                {
+                  "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+                  "label": { "identifier": "diversified-equity-d622e2a5", "name": "Diversified Equity" },
+                  "attestations": { "tierA": 0, "tierB": 0, "unmatched": 1 },
+                  "accountsTierA": 0
+                }
+              ],
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "tierAReferenceValueUsdE8": {
+              "id": "volume.tier_a_reference_value",
+              "value": "230000000000",
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            },
+            "excludedActivity": {
+              "id": "exclusions.activity",
+              "value": { "indexes": 0, "versions": 0, "attestations": { "tierA": 0, "tierB": 0, "unmatched": 0 } },
+              "chainId": 31337,
+              "fromBlock": "0",
+              "toBlock": "29",
+              "computedAt": "2026-11-21T19:10:55Z"
+            }
+          },
+          "attestations": [
+            {
+              "transactionHash": "0xb4df8db7c122199f43eee9c43c0d1848966968751e15a02a3454b38f37d843df",
+              "blockNumber": "29",
+              "blockTimestamp": "2026-11-16T14:00:05Z",
+              "account": "0x5eed00000000000000000000000000000000000e",
+              "indexId": "0xa3e409e2ba1d9818a1b8fe0630a2920b2e24be1f1acce585e22e0866ef0b2704",
+              "version": 1,
+              "tier": "a",
+              "reason": null,
+              "valueUsdE8": "100000000000",
+              "linkedTransaction": null,
+              "tracking": { "status": "within", "maxDriftBps": 0, "toleranceBps": 700, "reason": null },
+              "excluded": false
+            },
+            {
+              "transactionHash": "0xe737842909ad6d2ecc405e2ea900cc9d9cfc59c8fa754be34f934c2fe923cffc",
+              "blockNumber": "28",
+              "blockTimestamp": "2026-11-16T14:00:05Z",
+              "account": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+              "indexId": "0xa3e409e2ba1d9818a1b8fe0630a2920b2e24be1f1acce585e22e0866ef0b2704",
+              "version": 1,
+              "tier": "unmatched",
+              "reason": "no_constituent_flows",
+              "valueUsdE8": null,
+              "linkedTransaction": null,
+              "tracking": null,
+              "excluded": false
+            },
+            {
+              "transactionHash": "0x6a7ed891b509d234b1b4b27d4dc0a011df73b413c7aae7b6bc6a733b396dbe96",
+              "blockNumber": "27",
+              "blockTimestamp": "2026-11-16T14:00:05Z",
+              "account": "0x5eed00000000000000000000000000000000000d",
+              "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+              "version": 2,
+              "tier": "unmatched",
+              "reason": "below_minimum_notional",
+              "valueUsdE8": null,
+              "linkedTransaction": null,
+              "tracking": null,
+              "excluded": false
+            },
+            {
+              "transactionHash": "0x8f6107fa3603e291d69d42c09955601d8bf68979d8d9edffafcd1e16ae8ab022",
+              "blockNumber": "26",
+              "blockTimestamp": "2026-11-16T14:00:05Z",
+              "account": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+              "indexId": "0xa4abb1bd873da973f8f67b9afdc261adc490db29e8c2069c7cf9c01ff37a1492",
+              "version": 1,
+              "tier": "b",
+              "reason": "no_constituent_flows",
+              "valueUsdE8": "10000000000",
+              "linkedTransaction": "0xba7049f7bed165a9bf2baa1cfc0b7b8f8f828b4b41738fb7d126d1e175e8070c",
+              "tracking": null,
+              "excluded": false
+            },
+            {
+              "transactionHash": "0x26adc33bf748b7044ed528c0801f2e879a0536ec7fcdd47acc7c8345338a823e",
+              "blockNumber": "24",
+              "blockTimestamp": "2026-11-16T14:00:05Z",
+              "account": "0x5eed00000000000000000000000000000000000b",
+              "indexId": "0xa4abb1bd873da973f8f67b9afdc261adc490db29e8c2069c7cf9c01ff37a1492",
+              "version": 1,
+              "tier": "a",
+              "reason": null,
+              "valueUsdE8": "30000000000",
+              "linkedTransaction": null,
+              "tracking": { "status": "outside", "maxDriftBps": 4667, "toleranceBps": 700, "reason": null },
+              "excluded": false
+            },
+            {
+              "transactionHash": "0xcbe9c5e1ed4f1d89c6c2213ab5066a3337aadcfe10f2cca1044e02b284d2b115",
+              "blockNumber": "23",
+              "blockTimestamp": "2026-11-16T14:00:05Z",
+              "account": "0x5eed00000000000000000000000000000000000a",
+              "indexId": "0xa3e409e2ba1d9818a1b8fe0630a2920b2e24be1f1acce585e22e0866ef0b2704",
+              "version": 1,
+              "tier": "a",
+              "reason": null,
+              "valueUsdE8": "100000000000",
+              "linkedTransaction": null,
+              "tracking": { "status": "within", "maxDriftBps": 0, "toleranceBps": 700, "reason": null },
+              "excluded": false
+            }
+          ],
+          "exclusions": [],
+          "definitions": [
+            {
+              "id": "registry.indexes_published",
+              "title": "Published indexes",
+              "definition": "IndexCreated events. The registry writes version 1 in the same call, so every index has a published version. Activity of excluded accounts is not counted.",
+              "source": "IndexRegistry logs"
+            },
+            {
+              "id": "registry.versions_published",
+              "title": "Index versions",
+              "definition": "VersionPublished events, version 1 included. Activity of excluded accounts is not counted.",
+              "source": "IndexRegistry logs"
+            },
+            {
+              "id": "registry.distinct_creators",
+              "title": "Distinct creators",
+              "definition": "Distinct creator addresses of IndexCreated events. Activity of excluded accounts is not counted.",
+              "source": "IndexRegistry logs"
+            },
+            {
+              "id": "registry.indexes_deprecated",
+              "title": "Deprecated indexes",
+              "definition": "IndexDeprecated events. Deprecation is final, so an index counts once at most. Activity of excluded accounts is not counted.",
+              "source": "IndexRegistry logs"
+            },
+            {
+              "id": "registry.versions_per_day",
+              "title": "Versions published per day",
+              "definition": "VersionPublished events per UTC day of their block time. Days without one are absent.",
+              "source": "IndexRegistry logs"
+            },
+            {
+              "id": "usage.attestations",
+              "title": "Attestations recorded",
+              "definition": "RebalanceRecorded events of every tier. An attestation is a claim by the account that sent it and proves no trade by itself. Activity of excluded accounts is not counted.",
+              "source": "RebalanceLog logs"
+            },
+            {
+              "id": "usage.attestations_tier_a",
+              "title": "Attestations with matching flows (tier A)",
+              "definition": "Attestations whose own transaction carries Transfer logs of the attested version's constituents to or from the attesting account, worth at least 1.00 USD at the reference prices of that block.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            },
+            {
+              "id": "usage.attestations_tier_b",
+              "title": "Linked attestations (tier B)",
+              "definition": "Not tier A, sent in a transaction from the attesting account itself, and preceded by at most 900 seconds by another transaction from that account whose constituent flows meet the tier A rule. An earlier transaction links one attestation at most. Never in a headline figure.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            },
+            {
+              "id": "usage.attestations_unmatched",
+              "title": "Unmatched attestations",
+              "definition": "Attestations that are neither tier A nor tier B: no constituent flows, flows below 1.00 USD, or flows that could not be valued. Shown for transparency, never in a headline figure.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            },
+            {
+              "id": "usage.accounts_tier_a",
+              "title": "Distinct accounts (tier A)",
+              "definition": "Distinct attesting accounts with at least one tier A attestation.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            },
+            {
+              "id": "usage.accounts_within_tolerance",
+              "title": "Accounts within tolerance",
+              "definition": "Distinct accounts with a tier A attestation after which, at the end of its block, the largest drift of their holdings from the target weights was at most the version's drift threshold plus 200 basis points. Holdings are valued at the reference prices of that block. Assessed for verified versions with static weights only.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens, balances and Chainlink reference feeds read at the block"
+            },
+            {
+              "id": "usage.tier_a_per_day",
+              "title": "Tier A attestations per day",
+              "definition": "Tier A attestations per UTC day of their block time. Days without one are absent.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            },
+            {
+              "id": "usage.by_index",
+              "title": "Attestations by index",
+              "definition": "Per attested index: attestations of each tier and distinct accounts with a tier A attestation, ordered by distinct accounts, then by tier A attestations.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            },
+            {
+              "id": "volume.tier_a_reference_value",
+              "title": "Reference value moved (tier A)",
+              "definition": "Sum over tier A attestations of every constituent Transfer to or from the attesting account in the same transaction, each valued at the latest answer of the token's Chainlink reference feed as read at that block, rounded down. Purchases and sales both count. A reference valuation of token movements: not traded value, and not a price any trade executed at.",
+              "source": "RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens, and Chainlink reference feeds read at the block"
+            },
+            {
+              "id": "exclusions.activity",
+              "title": "Excluded activity",
+              "definition": "Indexes and versions created by excluded accounts, and attestations they recorded by tier. Counted here and in no other figure.",
+              "source": "IndexRegistry logs and RebalanceRecorded logs of RebalanceLog, the receipts of their transactions and the Transfer logs of the constituent tokens"
+            }
+          ]
+        },
+        "meta": {
+          "mode": "replay",
+          "asOf": "2026-11-21T19:10:55Z",
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
+        }
+      }
+    },
+    {
+      "name": "getNetworkMetrics.registryNotDeployed",
+      "operationId": "getNetworkMetrics",
+      "title": "A deployment whose chain has no registry has nothing to measure",
+      "path": "/api/v1/network",
+      "registry": "not_deployed",
+      "status": 409,
+      "body": {
+        "error": {
+          "code": "registry_not_deployed",
+          "message": "The index registry is not deployed on the configured chain.",
+          "details": {
+            "chainId": 8453,
+            "registry": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+            "reason": "not_configured"
+          }
+        }
+      }
+    },
+    {
       "name": "getStatus",
       "operationId": "getStatus",
       "title": "The status of the API and its data",
@@ -1561,7 +1928,7 @@
       "status": 200,
       "body": {
         "data": {
-          "apiVersion": "1.4.0",
+          "apiVersion": "1.5.0",
           "chainId": 8453,
           "marketPhase": "closed",
           "executionAvailable": false,

@@ -109,6 +109,11 @@ export interface EquityOSClient {
    * sent. A client that sends the calls must verify them and refuse to send after `expiresAt`.
    */
   executionPlan(request: ExecutionPlanRequest): Promise<ResponseOf<"executionPlan">>;
+  /**
+   * `GET /network`: registry and usage metrics computed from chain events only, each with its definition id,
+   * chain, block range and computation time, with the classified attestations and the excluded accounts.
+   */
+  getNetworkMetrics(): Promise<ResponseOf<"getNetworkMetrics">>;
   /** `GET /status`: the API version, the age of each dataset and whether the registry is deployed. */
   getStatus(): Promise<ResponseOf<"getStatus">>;
   /** `GET /openapi.json`: the OpenAPI 3.1 document of the deployment, as it is served. */
@@ -276,6 +281,7 @@ export function createClient(options: ClientOptions): EquityOSClient {
           ...(request.minLegValueUsdE8 === undefined ? {} : { minLegValueUsdE8: request.minLegValueUsdE8.toString() }),
         }),
       ),
+    getNetworkMetrics: () => call("getNetworkMetrics", {}, {}),
     getStatus: () => call("getStatus", {}, {}),
     async getOpenApiDocument() {
       const { response, body } = await send(OPERATIONS.getOpenApiDocument.path);

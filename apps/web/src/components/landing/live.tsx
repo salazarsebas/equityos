@@ -177,8 +177,9 @@ function RegistryState({ registry }: { registry: Registry }) {
         source={`IndexRegistry ${registry.address} on ${chain} (chain id ${registry.chainId})`}
         asOfUnixSeconds={BigInt(registry.readAt)}
       />
-      <p className="text-base">
+      <p className="flex flex-wrap gap-x-6 text-base">
         <Link href="/indexes">Explore indexes</Link>
+        <Link href="/network">Network activity, from chain events</Link>
       </p>
     </div>
   );

@@ -1,6 +1,7 @@
 /**
- * Records every read call of the IndexRegistry of a local Anvil node at its latest block, in the format the
- * registry replay serves (`REGISTRY_REPLAY_DIR`, see `src/server/registry/replay.ts`).
+ * Records every read call of the IndexRegistry of a local Anvil node at its latest block, and every request the
+ * network metrics make there, in the format the registry replay serves (`REGISTRY_REPLAY_DIR`, see
+ * `src/server/registry/replay.ts`).
  *
  *   bun run record:registry <directory>
  *
@@ -10,10 +11,79 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { indexRegistryAbi } from "@equityos/contracts-abi";
-import { createPublicClient, decodeFunctionResult, encodeFunctionData, type Hex, http } from "viem";
-import { LOCAL_CHAIN_ID, resolveRegistryConfig } from "../src/server/registry";
+import {
+  createPublicClient,
+  custom,
+  decodeFunctionData,
+  decodeFunctionResult,
+  encodeFunctionData,
+  encodeFunctionResult,
+  type Hex,
+  http,
+  isHex,
+} from "viem";
+import { multicall3Abi } from "../src/server/market/abis";
+import { createNetworkService } from "../src/server/network";
+import { createRegistryReader, LOCAL_CHAIN_ID, resolveRegistryConfig } from "../src/server/registry";
+import { MULTICALL3_ADDRESS } from "../src/server/registry/config";
+import { replayConfig } from "../src/server/registry/replay";
 
 const abi = indexRegistryAbi;
+
+/** Answered by the replay itself, so never recorded. */
+const UNRECORDED = new Set(["eth_chainId", "eth_blockNumber", "eth_getCode"]);
+
+/**
+ * Computes the network metrics against the node with the configuration the replay uses, and returns every
+ * request they made with its result. A local node has no Multicall3, so a batched read is answered here by
+ * running each of its calls at the block it names, as Multicall3 would.
+ */
+async function recordNetworkRequests(rpcUrl: string): Promise<{ method: string; params: unknown; result: unknown }[]> {
+  const node = http(rpcUrl)({});
+  const requests: { method: string; params: unknown; result: unknown }[] = [];
+  async function answer(method: string, params: unknown): Promise<unknown> {
+    const [request, blockTag] = Array.isArray(params) ? params : [];
+    const field = (key: string): unknown =>
+      typeof request === "object" && request !== null ? Reflect.get(request, key) : undefined;
+    const to = field("to");
+    const data = field("data");
+    const batched = typeof to === "string" && to.toLowerCase() === MULTICALL3_ADDRESS.toLowerCase();
+    if (method !== "eth_call" || !batched || !isHex(data)) return node.request({ method, params });
+    const decoded = decodeFunctionData({ abi: multicall3Abi, data });
+    if (decoded.functionName !== "aggregate3") throw new Error(`unexpected ${decoded.functionName} call`);
+    const result: { success: boolean; returnData: Hex }[] = [];
+    for (const { target, callData } of decoded.args[0]) {
+      const returnData: unknown = await node
+        .request({ method: "eth_call", params: [{ to: target, data: callData }, blockTag] })
+        .catch(() => null);
+      result.push(isHex(returnData) ? { success: true, returnData } : { success: false, returnData: "0x" });
+    }
+    return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result });
+  }
+  const client = createPublicClient({
+    transport: custom({
+      async request({ method, params }: { method: string; params?: unknown }) {
+        const result = await answer(method, params);
+        if (!UNRECORDED.has(method)) requests.push({ method, params: params ?? null, result });
+        return result;
+      },
+    }),
+  });
+  const config = replayConfig(LOCAL_CHAIN_ID);
+  const reader = createRegistryReader({ config, client });
+  const service = createNetworkService({
+    reader,
+    config,
+    client: () => client,
+    exclusions: [],
+    now: () => Math.floor(Date.now() / 1000),
+  });
+  const read = await service.read();
+  if (read.status !== "ok" || !read.scan.complete || !read.usageComplete) {
+    throw new Error("the network metrics did not cover the whole chain in one read");
+  }
+  return requests;
+}
 
 export async function recordRegistry(rpcUrl: string): Promise<Record<string, unknown>> {
   const client = createPublicClient({ transport: http(rpcUrl) });
@@ -62,6 +132,7 @@ export async function recordRegistry(rpcUrl: string): Promise<Record<string, unk
     blockNumber: block.number.toString(),
     blockTimestamp: Number(block.timestamp),
     calls,
+    requests: await recordNetworkRequests(rpcUrl),
   };
 }
 

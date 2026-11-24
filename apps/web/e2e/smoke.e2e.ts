@@ -10,6 +10,7 @@ const routes = [
   "/developers",
   "/developers/api",
   "/developers/spec",
+  "/network",
   "/dev/components",
 ];
 
@@ -56,6 +57,7 @@ for (const [route, prerendered] of [
   ["/assets", false],
   ["/portfolio", false],
   ["/wallet", false],
+  ["/network", false],
 ] as const) {
   test(`${route} is ${prerendered ? "prerendered at build time" : "rendered on request"}`, async ({ request }) => {
     const response = await request.get(route);
@@ -193,7 +195,7 @@ test.describe("assets page on the recorded block", () => {
   }) => {
     const response = await request.get("/api/v1/assets?eligible=true");
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.4.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.5.0");
     expect(response.headers()["access-control-allow-origin"]).toBe("*");
     const { data, meta } = await response.json();
     expect(data).toHaveLength(13);

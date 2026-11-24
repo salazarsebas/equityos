@@ -9,12 +9,15 @@ import {
   indexHandler,
   indexVersionHandler,
 } from "../../src/server/api/indexes";
+import { networkHandler } from "../../src/server/api/network";
 import { openApiDocument, operationOf, type Schema } from "../../src/server/api/openapi";
 import { portfolioHandler, portfolioPlanHandler } from "../../src/server/api/portfolio";
 import { statusHandler } from "../../src/server/api/status";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
+import { RegistryUpstreamError } from "../../src/server/registry/errors";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
+import { constructedRead, recordedNetwork, stubNetwork } from "../network/support";
 import { buildSpec, FakeChain } from "../registry/support";
 import { executionResponses } from "./execution-support";
 import {
@@ -291,6 +294,32 @@ describe("handler output validates against the document", () => {
     ];
     expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 404, 409, 409, 503]);
     for (const response of responses) await expectDocumented("/indexes/{identifier}/composition", response);
+  });
+
+  test("GET /network: constructed and recorded activity, an empty registry, bad parameter, not deployed and registry down", async () => {
+    const mode = () => "replay" as const;
+    const read = constructedRead();
+    const responses = [
+      await networkHandler({ network: stubNetwork(read), mode })(get("/api/v1/network"), undefined),
+      await recordedNetwork()(get("/api/v1/network"), undefined),
+      await recordedNetwork("registry-empty")(get("/api/v1/network"), undefined),
+      await networkHandler({ network: stubNetwork(read), mode })(get("/api/v1/network?x=1"), undefined),
+      await networkHandler({
+        network: stubNetwork({
+          status: "registry_not_deployed",
+          chainId: 8453,
+          registry: "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+          reason: "not_configured",
+        }),
+        mode,
+      })(get("/api/v1/network"), undefined),
+      await networkHandler({ network: stubNetwork(new RegistryUpstreamError("down")), mode })(
+        get("/api/v1/network"),
+        undefined,
+      ),
+    ];
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 409, 503]);
+    for (const response of responses) await expectDocumented("/network", response);
   });
 
   test("GET /portfolio and /portfolio/plan: every state, each error and a source down", async () => {

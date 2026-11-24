@@ -39,7 +39,7 @@ const REGISTRY_CACHE = publicCache(HEADS_CACHE.ttlSeconds);
  * see a list without indexes, not a 404, which says that one identifier is unknown, and not a 5xx, because
  * nothing failed and retrying does not help.
  */
-function notDeployed({ chainId, registry, reason }: RegistryNotDeployed): ApiError {
+export function notDeployed({ chainId, registry, reason }: RegistryNotDeployed): ApiError {
   return new ApiError(409, "registry_not_deployed", "The index registry is not deployed on the configured chain.", {
     chainId,
     registry: registry.toLowerCase(),

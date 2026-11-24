@@ -43,7 +43,11 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
   },
   webServer: [
-    server(port, { REGISTRY_REPLAY_DIR: "test/fixtures/registry" }),
+    server(port, {
+      REGISTRY_REPLAY_DIR: "test/fixtures/registry",
+      // The account of the usage seed that stands for a team or test account.
+      EQUITYOS_EXCLUDED_ACCOUNTS: "0x5eed00000000000000000000000000000000000e=Local seed test account",
+    }),
     server(port + 1, {}),
     server(port + 2, { REGISTRY_REPLAY_DIR: "test/fixtures/registry-empty" }),
   ],

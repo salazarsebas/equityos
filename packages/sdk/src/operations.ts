@@ -15,6 +15,7 @@ import {
   indexListMeta,
   indexSummary,
   indexVersion,
+  network,
   portfolio,
   portfolioMeta,
   portfolioPlan,
@@ -78,6 +79,7 @@ export const OPERATIONS = {
     data: executionPlan,
     meta: portfolioMeta,
   },
+  getNetworkMetrics: { method: "GET", path: "/network", envelope: true, data: network, meta: registryMeta },
   getStatus: { method: "GET", path: "/status", envelope: true, data: status, meta: statusMeta },
   getOpenApiDocument: { method: "GET", path: "/openapi.json", envelope: false, body: json() },
 } as const satisfies Readonly<Record<string, Operation>>;
