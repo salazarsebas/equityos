@@ -213,3 +213,14 @@ test.describe("assets page on the recorded block", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Assets" })).toBeVisible();
   });
 });
+
+test("an unknown path answers 404 with the site's not-found page inside the shell", async ({ page }) => {
+  const errors = collectErrors(page);
+  const response = await page.goto("/this-page-does-not-exist");
+  expect(response?.status()).toBe(404);
+  await expect(page).toHaveTitle("Page not found | EquityOS");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page not found");
+  await expect(page.getByRole("banner")).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Go to the overview" })).toHaveAttribute("href", "/");
+  expect(errors.filter((error) => !error.includes("404"))).toEqual([]);
+});
