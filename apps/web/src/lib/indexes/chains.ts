@@ -34,3 +34,9 @@ export function explorerAddressUrl(chainId: number, address: string): string | n
   const base = CHAINS[chainId]?.explorerUrl ?? null;
   return base === null ? null : `${base}/address/${address}`;
 }
+
+/** URL of a transaction on the public explorer of the chain, or `null` when the chain has no explorer. */
+export function explorerTransactionUrl(chainId: number, hash: string): string | null {
+  const base = CHAINS[chainId]?.explorerUrl ?? null;
+  return base === null ? null : `${base}/tx/${hash}`;
+}
