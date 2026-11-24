@@ -16,7 +16,9 @@ import {
 import { evaluateDraft } from "../../src/lib/studio/evaluate";
 import {
   buildPublishPlan,
+  buildVersionPlan,
   checkPublishReceipt,
+  checkVersionReceipt,
   networkPolicy,
   type OnchainVersion,
   type PublishPlan,
@@ -24,8 +26,9 @@ import {
   predictIndexId,
   verifyPublication,
   verifyPublishedVersion,
+  type VersionPlan,
 } from "../../src/lib/studio/publish";
-import { ASSETS, CHAIN_ID, SALT, validDraft } from "./support";
+import { ASSETS, CHAIN_ID, INDEX_ID, SALT, validDraft, versionTarget } from "./support";
 
 const REGISTRY: Address = "0x4BD4D49A9C88f75FB97674488E23A7Fa59F9506c";
 const CREATOR: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -260,5 +263,96 @@ describe("networkPolicy", () => {
     expect(networkPolicy(8453, deployed)).toMatchObject({ status: "available", requiresAcknowledgement: true });
     expect(networkPolicy(84_532, deployed)).toMatchObject({ status: "available", requiresAcknowledgement: false });
     expect(networkPolicy(8453, { 8453: { ...deployment, deployBlock: null } })).toEqual({ status: "not_deployed" });
+  });
+});
+
+describe("a new version", () => {
+  function versionPlan(name = "Test Index Two"): VersionPlan {
+    const { valid } = evaluateDraft(validDraft({ name }), ASSETS);
+    if (valid === null) throw new Error("expected a valid draft");
+    return buildVersionPlan({ valid, target: versionTarget(CREATOR, REGISTRY), creator: CREATOR });
+  }
+  const p = versionPlan();
+  const other = `0x${"cd".repeat(32)}` as const;
+
+  function versionLogs(changed: { indexId?: Hex; version?: number; specHash?: Hex; publisher?: Address } = {}): Log {
+    return log(
+      REGISTRY,
+      encodeEventTopics({
+        abi: indexRegistryAbi,
+        eventName: "VersionPublished",
+        args: {
+          indexId: changed.indexId ?? p.indexId,
+          version: changed.version ?? 2,
+          specHash: changed.specHash ?? p.specHash,
+        },
+      }) as Hex[],
+      encodeAbiParameters(
+        [{ type: "address" }, { type: "uint8" }, { type: "uint32" }, { type: "uint16" }],
+        [changed.publisher ?? CREATOR, 2, p.specBytes.length, p.constituents.length],
+      ),
+    );
+  }
+
+  test("the plan calls publishVersion on the index with the bytes shown and the base version plus one", () => {
+    expect(p).toMatchObject({ functionName: "publishVersion", indexId: INDEX_ID, version: 2, baseVersion: 1 });
+    const data = encodeFunctionData({ abi: indexRegistryAbi, functionName: p.functionName, args: p.args });
+    const decoded = decodeFunctionData({ abi: indexRegistryAbi, data });
+    expect(decoded.functionName).toBe("publishVersion");
+    if (decoded.functionName !== "publishVersion") throw new Error(decoded.functionName);
+    const [indexId, expectedVersion, spec, tokens, weightsBps] = decoded.args;
+    expect([indexId, expectedVersion, spec, weightsBps]).toEqual([INDEX_ID, 2, p.specHex, [3334, 3333, 3333]]);
+    expect(tokens.map((token) => token.toLowerCase())).toEqual(p.constituents.map(({ token }) => token));
+    expect(spec).toBe(stringToHex(p.canonicalText));
+  });
+
+  test("the receipt must carry one VersionPublished with the index, version, hash and publisher of the plan", () => {
+    expect(checkVersionReceipt(p, [versionLogs()])).toEqual({ ok: true, result: null });
+    expect(checkVersionReceipt(p, [versionLogs({ indexId: other })]).ok).toBe(false);
+    expect(checkVersionReceipt(p, [versionLogs({ version: 3 })])).toEqual({
+      ok: false,
+      reason: "The registry published version 3, expected 2.",
+    });
+    expect(checkVersionReceipt(p, [versionLogs({ specHash: other })]).ok).toBe(false);
+    expect(checkVersionReceipt(p, [versionLogs({ publisher: OTHER })])).toEqual({
+      ok: false,
+      reason: `The registry records ${OTHER} as the publisher, not ${CREATOR}.`,
+    });
+    expect(checkVersionReceipt(p, []).ok).toBe(false);
+    expect(checkVersionReceipt(p, [versionLogs(), versionLogs()]).ok).toBe(false);
+  });
+
+  test("an event of another contract does not count, and an IndexCreated is not expected", () => {
+    expect(checkVersionReceipt(p, [{ ...versionLogs(), address: OTHER }]).ok).toBe(false);
+    const created = log(
+      REGISTRY,
+      encodeEventTopics({
+        abi: indexRegistryAbi,
+        eventName: "IndexCreated",
+        args: { indexId: p.indexId, creator: CREATOR },
+      }) as Hex[],
+      encodeAbiParameters([{ type: "bytes32" }], [SALT]),
+    );
+    expect(checkVersionReceipt(p, [created, versionLogs()]).ok).toBe(false);
+  });
+
+  test("success needs the version events and the version read back, verified", async () => {
+    const reads: number[] = [];
+    const chain = (version: OnchainVersion) => ({
+      version: async (_: Hex, number: number) => {
+        reads.push(number);
+        return version;
+      },
+      indexIds: async () => [p.indexId],
+    });
+    const good = { creator: CREATOR, specHash: p.specHash, spec: p.specHex, constituents: p.constituents };
+    const result = await verifyPublication(p, { logs: [versionLogs()], blockNumber: 9n }, chain(good));
+    expect(result).toMatchObject({ ok: true, result: { plan: p, identifier: `test-index-${INDEX_ID.slice(2, 10)}` } });
+    expect(reads).toEqual([2]);
+    // The events of a new index are not the events of a version.
+    expect((await verifyPublication(p, { logs: receiptLogs(plan()), blockNumber: 9n }, chain(good))).ok).toBe(false);
+    const previous = versionPlan("Test Index");
+    const stale = { ...good, spec: previous.specHex, specHash: previous.specHash };
+    expect((await verifyPublication(p, { logs: [versionLogs()], blockNumber: 9n }, chain(stale))).ok).toBe(false);
   });
 });

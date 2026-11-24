@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Shape of the Studio while its code loads: the editor column and the preview column. */
@@ -26,10 +28,21 @@ const Studio = dynamic(() => import("@/components/studio/studio").then((module) 
   loading: StudioLoading,
 });
 
+/** The Studio for `?index=<identifier>`, a new version of that index, or for a new index without it. */
+function StudioForQuery() {
+  const index = useSearchParams().get("index");
+  // Another index is another Studio: nothing of one carries over to the other.
+  return <Studio key={index ?? ""} index={index} />;
+}
+
 /**
  * The Studio region of the page. The draft lives in browser storage and publishing uses the wallet libraries,
  * so the region is loaded in the browser only and the page around it stays static.
  */
 export function StudioSlot() {
-  return <Studio />;
+  return (
+    <Suspense fallback={<StudioLoading />}>
+      <StudioForQuery />
+    </Suspense>
+  );
 }
