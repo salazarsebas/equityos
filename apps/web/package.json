@@ -19,6 +19,8 @@
     "@base-org/account": "2.6.0",
     "@equityos/contracts-abi": "workspace:*",
     "@equityos/core": "workspace:*",
+    "@fontsource-variable/ibm-plex-sans": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@tanstack/react-query": "5.108.2",
     "@wagmi/core": "3.6.9",
     "@walletconnect/ethereum-provider": "2.26.0",
