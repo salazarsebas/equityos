@@ -131,7 +131,9 @@ A read served from cache after a failed refresh is never `live`: a newer round m
   both years.
 
 The table covers 2026-01-01 to 2027-12-31. Outside it the phase is `unknown` and rule 2 applies. The table must
-be extended before the end of 2027. Unscheduled halts and closures are not modelled: during one, a price shows
+be extended before the end of 2027, and a test makes sure it is: `packages/core/test/market-calendar-coverage.test.ts`
+reads the clock and, from October 1 of any year, fails unless the table covers the whole of the next year. With
+the current table it starts failing on 2027-10-01, with a message that says what to add. Unscheduled halts and closures are not modelled: during one, a price shows
 as `delayed` and then `unavailable` once the heartbeat is missed. Whether the overnight session runs on the
 evening before a holiday is an assumption of the model, not a verified fact.
 
@@ -196,7 +198,8 @@ the account address, so the balances of one address are never returned for anoth
 - A cached value keeps the time it was loaded (`fetchedAt`). Serving it again, fresh or stale, never changes
   that time.
 - When a reload fails and a value within the stale window exists, it is served with `servedStale: true` and
-  the code of the failure. Past the window the failure is thrown.
+  the code of the failure. Past the window the failure is thrown. A policy whose stale window is zero, such as
+  the balances, never serves stale: a failed reload is thrown even for a value exactly at its TTL.
 - Staleness classes are not cached. They are recomputed on every call from the round's `updatedAt` and the
   current time, so a cached price ages correctly.
 - Concurrent callers share one load. A failed load is not cached.
@@ -250,12 +253,36 @@ The balance read and the snapshot are two reads, each at its own block. A consum
 When `MARKET_REPLAY_DIR` names a directory, the process-wide service does not read the API or the chain. It
 serves the recording in that directory (`asset-list.json` and `onchain.json`, in the format of
 `apps/web/test/fixtures/market`) through the same parsing, decoding, eligibility and pricing code, with the clock
-fixed at the time of the recorded block. The staleness classes are therefore those of that moment, on every run.
+fixed at the time of the recorded block. The staleness classes are computed for that moment, on every run, and
+then capped: a usable recorded price is always `last_close`, never `live` or `delayed`, whatever its age at the
+recorded block. A recorded value is the value held since the recording, and the status says no more than that.
+An unusable round stays `unavailable`.
 
 This exists for the browser smoke tests, which run the production build without network access. It is not a way
 to serve users: a replayed snapshot is real data of a past block, not current data. `marketDataMode()` returns
-`replay`, the assets page shows a warning that names the recorded block, and `GET /api/v1/status` reports
-`marketData.mode: "replay"`. Never set the variable on a deployment.
+`replay`, the assets page shows a warning that names the recorded block, every API response built from it reports
+`meta.mode: "replay"`, and `GET /api/v1/status` reports `marketData.mode: "replay"`.
+
+### Where a replay is refused
+
+`replayRefusal` in `apps/web/src/server/data-mode.ts` decides, for `MARKET_REPLAY_DIR` and for the registry's
+`REGISTRY_REPLAY_DIR` alike:
+
+| Environment                                                 | Replay  |
+| ----------------------------------------------------------- | ------- |
+| `VERCEL_ENV` set to any value (a Vercel deployment)         | Refused |
+| `NODE_ENV=production` without `EQUITYOS_REPLAY_FOR_TESTS=1` | Refused |
+| `NODE_ENV=production` with `EQUITYOS_REPLAY_FOR_TESTS=1`    | Allowed |
+| Any other `NODE_ENV` (development, unit tests)              | Allowed |
+
+`EQUITYOS_REPLAY_FOR_TESTS` is a test-only flag: only `apps/web/playwright.config.ts` sets it, for the smoke
+tests that run `next start` on a production build. It has no effect on a deployment.
+
+A refused variable fails loudly. `marketDataMode()` and `getMarketData()` throw `MissingConfigurationError` naming
+`MARKET_REPLAY_DIR`. The server's startup hook (`apps/web/src/instrumentation.ts`) calls both mode functions, so
+the error is logged when the server starts and Next.js then answers every request, page or API, with a 500: no
+replayed byte is served. A route reached without the hook, such as a handler in a test, answers
+`500 service_misconfigured`.
 
 A recording can also hold `balances.json`: balances for a few fixed accounts, constructed for the tests and not
 read from any chain. The replay answers `balanceOf` of those accounts from it, a token an account does not list at

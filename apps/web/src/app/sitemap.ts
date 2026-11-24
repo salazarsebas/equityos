@@ -16,6 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/developers",
     "/developers/api",
     "/developers/spec",
+    "/network",
   ].map((path) => ({
     url: new URL(path, site.url).toString(),
   }));

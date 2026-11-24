@@ -19,7 +19,7 @@ describe("registry replay", () => {
   test("serves the recorded local chain through the reader: the seed, verified as on the chain", async () => {
     const replay = loadRegistryReplay(FIXTURE);
     expect(replay.config).toMatchObject({ chainId: 31_337, confirmations: 0n });
-    expect(replay.blockNumber).toBe(9n);
+    expect(replay.blockNumber).toBe(29n);
     const reader = createRegistryReader({ config: replay.config, client: replay.client });
     const page = await reader.listIndexes();
     if (page.status !== "ok") throw new Error(page.status);
@@ -34,8 +34,19 @@ describe("registry replay", () => {
     expect(versions).toMatchObject({ status: "ok", total: 2 });
   });
 
-  test("a read the recording does not hold fails as an upstream failure, never as an empty answer", async () => {
+  test("the recorded requests answer the event scan, through the same decoding as a chain", async () => {
     const { config, client } = loadRegistryReplay(FIXTURE);
+    const scan = await createRegistryReader({ config, client }).getEvents();
+    if (scan.status !== "ok") throw new Error(scan.status);
+    expect(scan).toMatchObject({ fromBlock: 0n, scannedToBlock: 29n, complete: true });
+    expect(scan.events.filter(({ type }) => type === "version_published")).toHaveLength(6);
+    expect(scan.events.filter(({ type }) => type === "rebalance_recorded")).toHaveLength(6);
+  });
+
+  test("a read the recording does not hold fails as an upstream failure, never as an empty answer", async () => {
+    const { config, client } = loadRegistryReplay(
+      directoryWith('{"chainId":31337,"blockNumber":"1","blockTimestamp":1,"calls":[]}'),
+    );
     const reader = createRegistryReader({ config, client });
     await expect(reader.getEvents()).rejects.toBeInstanceOf(RegistryUpstreamError);
   });
@@ -49,6 +60,8 @@ describe("registry replay", () => {
       '{"chainId":31337,"blockNumber":"1","blockTimestamp":"1","calls":[]}',
       '{"chainId":31337,"blockNumber":"1","blockTimestamp":1,"calls":{}}',
       '{"chainId":31337,"blockNumber":"1","blockTimestamp":1,"calls":[{"callData":"0x00"}]}',
+      '{"chainId":31337,"blockNumber":"1","blockTimestamp":1,"calls":[],"requests":{}}',
+      '{"chainId":31337,"blockNumber":"1","blockTimestamp":1,"calls":[],"requests":[{"method":"eth_getLogs"}]}',
     ];
     for (const content of cases) {
       expect(() => loadRegistryReplay(directoryWith(content))).toThrow("REGISTRY_REPLAY_DIR holds an unusable");
@@ -59,5 +72,17 @@ describe("registry replay", () => {
     expect(registryMode({ NODE_ENV: "test" })).toBe("live");
     expect(registryMode({ NODE_ENV: "test", REGISTRY_REPLAY_DIR: "  " })).toBe("live");
     expect(registryMode({ NODE_ENV: "test", REGISTRY_REPLAY_DIR: "test/fixtures/registry" })).toBe("replay");
+  });
+
+  test("a deployment, or a production build without the test flag, refuses the replay", () => {
+    const production = { NODE_ENV: "production", REGISTRY_REPLAY_DIR: "test/fixtures/registry" };
+    expect(() => registryMode(production)).toThrow(RegistryConfigurationError);
+    expect(() => registryMode(production)).toThrow(/REGISTRY_REPLAY_DIR is set in a production build/);
+    expect(registryMode({ ...production, EQUITYOS_REPLAY_FOR_TESTS: "1" })).toBe("replay");
+    for (const VERCEL_ENV of ["production", "preview", "development"]) {
+      const deployed = { ...production, VERCEL_ENV, EQUITYOS_REPLAY_FOR_TESTS: "1" };
+      expect(() => registryMode(deployed)).toThrow(/REGISTRY_REPLAY_DIR is set on a deployment/);
+      expect(() => registryMode({ ...deployed, NODE_ENV: "development" })).toThrow(RegistryConfigurationError);
+    }
   });
 });

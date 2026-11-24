@@ -267,7 +267,9 @@ States a caller renders are results, not errors: `registry_not_deployed`, `inval
 When `REGISTRY_REPLAY_DIR` names a directory, the process-wide reader does not read a chain. It serves the
 recording in that directory (`registry.json`, in the format of `apps/web/test/fixtures/registry`): the answer of
 every read call of the registry of a local chain at one block. The recording goes through the same decoding,
-verification, identifier and caching code as a live chain. A call it does not hold, such as the event scan, is an
+verification, identifier and caching code as a live chain. The optional `requests` list holds other recorded
+requests with their results, matched by method and parameters: the event scan, receipts and reads at past
+blocks of the [network metrics](../product/network-metrics.md). A call it does not hold is an
 `upstream_failure`, never an empty answer.
 
 `bun run --filter @equityos/web record:registry <directory>` writes a recording from a running Anvil node. It
@@ -275,8 +277,13 @@ reads only, and refuses any chain other than 31337.
 
 This exists for the browser tests, which run the production build without a chain. A replayed registry is a past
 state of a development chain: `registryMode()` returns `replay`, the index pages show a warning that says so,
-and the API reports `mode: "replay"` in `meta.registry` and in `GET /api/v1/status`. Never set the variable on a
-deployment.
+and the API reports `mode: "replay"` in `meta`, in `meta.registry` and in `GET /api/v1/status`.
+
+The variable is refused where it could reach people, with the rule of the market data replay
+([Market data](./market-data.md#replay-of-a-recording)): on a Vercel deployment, and in a production build
+without `EQUITYOS_REPLAY_FOR_TESTS=1`, `registryMode()`, `getRegistryReplay()` and `getRegistryReader()` throw a
+`RegistryConfigurationError` that names `REGISTRY_REPLAY_DIR`; the startup hook logs it and every request answers
+500.
 
 ## Tests
 

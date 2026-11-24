@@ -7,6 +7,7 @@ The endpoints are described in:
 - [Indexes](./indexes.md): the published indexes, their versions, their verification and their composition.
 - [Portfolio](./portfolio.md): any address compared with a published index, and a reference-price plan.
 - [Execution plan](./execution.md): the plan quoted and checked for execution on Base mainnet. Nothing is sent.
+- [Network](./network.md): registry and usage metrics computed from chain events only.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
 - [TypeScript SDK](./sdk.md): `@equityos/sdk`, a typed client of these endpoints and the verification of a
   version from the registry contract.
@@ -36,12 +37,28 @@ https://<deployment>/api/v1
 A successful response is always an object with `data` and `meta`:
 
 ```json
-{ "data": {}, "meta": { "asOf": "2026-11-21T23:30:42Z" } }
+{ "data": {}, "meta": { "mode": "live", "asOf": "2026-11-21T23:30:42Z" } }
 ```
 
 - `data` is the resource, or an array of resources.
-- `meta` says what the data was built from: the time it describes (`asOf`), the market phase, the source of
-  reference prices and, per cached dataset, when it was loaded and whether it is served past its TTL.
+- `meta` says what the data was built from: whether it is current (`mode`), the time it describes (`asOf`), the
+  market phase, the source of reference prices and, per cached dataset, when it was loaded and whether it is
+  served past its TTL.
+
+### Data mode
+
+Every successful response carries `meta.mode`:
+
+- `live`: every source of the response (the asset list, Base mainnet, the index registry) is read as it is now.
+- `replay`: at least one source is a recording of a past block, served by a test build. The data is real data of
+  that past block, never current data, and no reference price of a replayed snapshot is `live` or `delayed`: a
+  usable recorded price is always `last_close`.
+
+`meta.registry.mode`, `meta.balances.mode` and the modes of `GET /api/v1/status` say which source is replayed.
+A deployment never serves a replay: a server on Vercel (`VERCEL_ENV` set), or a production build without the
+test flag `EQUITYOS_REPLAY_FOR_TESTS=1`, fails its startup hook when `MARKET_REPLAY_DIR` or
+`REGISTRY_REPLAY_DIR` is set, and every request then answers 500 instead of data. See
+[Market data](../architecture/market-data.md#replay-of-a-recording).
 
 A failed response is always an object with `error`:
 
@@ -127,16 +144,21 @@ guaranteed at it.
 
 `Cache-Control` states how long a response stays current at its source of truth.
 
-| Response                                   | `Cache-Control`                                        |
-| ------------------------------------------ | ------------------------------------------------------ |
-| Assets, built from a fresh snapshot        | `public, max-age=N`: what is left of the 15 second TTL |
-| Assets, built from a snapshot served stale | `no-store`                                             |
-| Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
-| Portfolio and plan                         | `public, max-age=N`: at most 15 s, keyed by the URL    |
-| Execution plan                             | `no-store`: per request, and it expires within 120 s   |
-| Status                                     | `no-store`: it depends on where the request comes from |
-| OpenAPI document                           | `public, max-age=3600`                                 |
-| Any error                                  | `no-store`                                             |
+| Response                                  | `Cache-Control`                                        |
+| ----------------------------------------- | ------------------------------------------------------ |
+| Assets, built from a fresh snapshot       | `public, max-age=N`: what is left of the 15 second TTL |
+| Any response built from data served stale | `no-store`                                             |
+| Indexes, built from the registry          | `public, max-age=10`: the lifetime of the reader cache |
+| Composition, built from a fresh snapshot  | `public, max-age=N`: as the assets                     |
+| Portfolio and plan, from fresh inputs     | `public, max-age=N`: at most 15 s, keyed by the URL    |
+| Execution plan                            | `no-store`: per request, and it expires within 120 s   |
+| Status                                    | `no-store`: it depends on where the request comes from |
+| OpenAPI document                          | `public, max-age=3600`                                 |
+| Any error                                 | `no-store`                                             |
+
+A response is cacheable only while every input it is built from is within its TTL: the asset list, the onchain
+read and, for the portfolio and the plan, the balances. Registry reads and balances are never served stale: a
+failed reload is an error, even for a value exactly at its TTL.
 
 The server reads the chain at most once every 15 seconds and the asset list at most once every 10 minutes. A
 client that polls faster receives the same snapshot again, with a growing `ageSeconds`. The staleness class of a
@@ -150,9 +172,12 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.3.0`, which
-  added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.5.0`, which
+  added `meta.mode` to every successful response and `transferWarnings` to the portfolio and the plan. `1.4.0`
+  added the network endpoint. `1.3.0` added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0`
+  added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
+- The examples in these pages are recorded responses. An example recorded before `1.5.0` has no `meta.mode`.
 
 ## The OpenAPI document is the contract
 

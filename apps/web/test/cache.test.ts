@@ -81,6 +81,31 @@ describe("createCache", () => {
     await expect(cache.get()).rejects.toThrow("load 3 failed");
   });
 
+  test("a stale window of zero never serves stale, not even a value exactly at its TTL", async () => {
+    const state = { now: 1_000, loads: 0 };
+    const policy = { ttlSeconds: 15, staleIfErrorSeconds: 0 };
+    const cache = createCache(
+      policy,
+      async () => {
+        state.loads += 1;
+        if (state.loads > 1) throw new Error(`load ${state.loads} failed`);
+        return "value-1";
+      },
+      () => state.now,
+    );
+    await cache.get();
+    state.now = 1_015;
+    await expect(cache.get()).rejects.toThrow("load 2 failed");
+    const keyed = createKeyedCache<string>(policy, () => state.now);
+    state.now = 2_000;
+    await keyed.getMany(["a"], async () => new Map([["a", "first"]]));
+    state.now = 2_015;
+    const failing = async (): Promise<Map<string, string>> => {
+      throw new Error("reload failed");
+    };
+    await expect(keyed.getMany(["a"], failing)).rejects.toThrow("reload failed");
+  });
+
   test("throws when the first load fails, and tries again on the next call", async () => {
     const { state, cache } = harness();
     state.fail = true;

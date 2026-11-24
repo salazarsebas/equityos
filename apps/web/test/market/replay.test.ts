@@ -13,7 +13,7 @@ import {
   marketDataMode,
 } from "../../src/server/market/index";
 import { loadReplay } from "../../src/server/market/replay";
-import { fixtureFetch, fixtureTransport, onchainFixture } from "./support";
+import { fixtureFetch, fixtureTransport, onchainFixture, TOKENS } from "./support";
 
 const FIXTURES = fileURLToPath(new URL("../fixtures/market", import.meta.url));
 
@@ -25,6 +25,7 @@ describe("replay of a recording", () => {
       { value: assetList, fetchedAt: at, servedStale: false, error: null },
       { value: onchain, fetchedAt: at, servedStale: false, error: null },
       at,
+      "replay",
     );
     const live = await createMarketData({
       fetch: fixtureFetch().fetch,
@@ -51,7 +52,55 @@ describe("replay of a recording", () => {
   test("the mode is replay exactly when the variable names a directory", () => {
     expect(marketDataMode({ NODE_ENV: "test" })).toBe("live");
     expect(marketDataMode({ NODE_ENV: "test", MARKET_REPLAY_DIR: "  " })).toBe("live");
-    expect(marketDataMode({ NODE_ENV: "production", MARKET_REPLAY_DIR: "test/fixtures/market" })).toBe("replay");
+    expect(marketDataMode({ NODE_ENV: "test", MARKET_REPLAY_DIR: "test/fixtures/market" })).toBe("replay");
+    expect(marketDataMode({ NODE_ENV: "development", MARKET_REPLAY_DIR: "test/fixtures/market" })).toBe("replay");
+  });
+
+  test("a production build refuses the replay unless the browser tests set their flag", () => {
+    const production = { NODE_ENV: "production", MARKET_REPLAY_DIR: "test/fixtures/market" };
+    expect(() => marketDataMode(production)).toThrow(MissingConfigurationError);
+    expect(() => marketDataMode(production)).toThrow(/MARKET_REPLAY_DIR is set in a production build/);
+    expect(() => marketDataMode({ ...production, EQUITYOS_REPLAY_FOR_TESTS: "true" })).toThrow(
+      MissingConfigurationError,
+    );
+    expect(marketDataMode({ ...production, EQUITYOS_REPLAY_FOR_TESTS: "1" })).toBe("replay");
+    // Without a recording to replay there is nothing to refuse.
+    expect(marketDataMode({ NODE_ENV: "production" })).toBe("live");
+  });
+
+  test("a deployment refuses the replay in every environment, with or without the test flag", () => {
+    for (const VERCEL_ENV of ["production", "preview", "development"]) {
+      for (const NODE_ENV of ["production", "development", "test"]) {
+        const env = { NODE_ENV, VERCEL_ENV, MARKET_REPLAY_DIR: "test/fixtures/market", EQUITYOS_REPLAY_FOR_TESTS: "1" };
+        expect(() => marketDataMode(env)).toThrow(/MARKET_REPLAY_DIR is set on a deployment/);
+      }
+      expect(marketDataMode({ NODE_ENV: "production", VERCEL_ENV })).toBe("live");
+    }
+  });
+
+  test("the replayed service never labels a price live or delayed", async () => {
+    // The recorded NVDA round was published at 23:42:40 UTC on the Friday, in the post-market session. Moving the
+    // recorded clock to one minute after it would make the price live on the live path.
+    const at = onchainFixture.blockTimestamp;
+    const { assetList, onchain } = await loadReplay(FIXTURES);
+    const updatedAt = 1_795_218_160;
+    const fresh = (mode: "live" | "replay") =>
+      buildMarketSnapshot(
+        { value: assetList, fetchedAt: at, servedStale: false, error: null },
+        {
+          value: { ...onchain, blockTimestamp: updatedAt + 60 },
+          fetchedAt: updatedAt + 60,
+          servedStale: false,
+          error: null,
+        },
+        updatedAt + 60,
+        mode,
+      );
+    expect(fresh("live").assets.get(TOKENS.NVDA)?.referencePrice?.status).toBe("live");
+    expect(fresh("replay").assets.get(TOKENS.NVDA)?.referencePrice?.status).toBe("last_close");
+    for (const { referencePrice } of fresh("replay").assets.values()) {
+      expect(["last_close", "unavailable", undefined]).toContain(referencePrice?.status);
+    }
   });
 });
 
@@ -63,6 +112,7 @@ describe("listAssets", () => {
       { value: assetList, fetchedAt: at, servedStale: false, error: null },
       { value: onchain, fetchedAt: at, servedStale: false, error: null },
       at,
+      "replay",
     );
     const all = listAssets(snapshot).map((entry) => entry.asset.symbol);
     expect(all).toHaveLength(17);

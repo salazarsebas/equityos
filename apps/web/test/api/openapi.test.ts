@@ -9,12 +9,15 @@ import {
   indexHandler,
   indexVersionHandler,
 } from "../../src/server/api/indexes";
+import { networkHandler } from "../../src/server/api/network";
 import { openApiDocument, operationOf, type Schema } from "../../src/server/api/openapi";
 import { portfolioHandler, portfolioPlanHandler } from "../../src/server/api/portfolio";
 import { statusHandler } from "../../src/server/api/status";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
+import { RegistryUpstreamError } from "../../src/server/registry/errors";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
+import { constructedRead, recordedNetwork, stubNetwork } from "../network/support";
 import { buildSpec, FakeChain } from "../registry/support";
 import { executionResponses } from "./execution-support";
 import {
@@ -34,7 +37,12 @@ const MISMATCHED = "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb
 const UNKNOWN = `0x${"1".repeat(64)}`;
 
 function registryOptions(registry: RegistryReader = recordedRegistry(), service = fixtureService()) {
-  return { registry: () => registry, mode: () => "replay" as const, marketData: service.marketData };
+  return {
+    registry: () => registry,
+    mode: () => "replay" as const,
+    marketData: service.marketData,
+    marketMode: () => "live" as const,
+  };
 }
 
 /** Base mainnet, where the registry is not deployed. */
@@ -147,19 +155,36 @@ describe("handler output validates against the document", () => {
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
       const responses = [
-        await assetsHandler(fixtureService().marketData)(get("/api/v1/assets"), undefined),
-        await assetsHandler(fixtureService().marketData)(get("/api/v1/assets?eligible=false"), undefined),
-        await assetsHandler(fixtureService(RECORDED_AT + 198_000).marketData)(get("/api/v1/assets"), undefined),
-        await assetsHandler(fixtureService().marketData)(get("/api/v1/assets?limit=1"), undefined),
-        await assetsHandler(fixtureService(RECORDED_AT, { apiBody: [] }).marketData)(get("/api/v1/assets"), undefined),
-        await assetsHandler(fixtureService(RECORDED_AT, { override: wrongChain }).marketData)(
+        await assetsHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
           get("/api/v1/assets"),
           undefined,
         ),
+        await assetsHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
+          get("/api/v1/assets?eligible=false"),
+          undefined,
+        ),
+        await assetsHandler({ marketData: fixtureService(RECORDED_AT + 198_000).marketData, mode: () => "live" })(
+          get("/api/v1/assets"),
+          undefined,
+        ),
+        await assetsHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
+          get("/api/v1/assets?limit=1"),
+          undefined,
+        ),
+        await assetsHandler({
+          marketData: fixtureService(RECORDED_AT, { apiBody: [] }).marketData,
+          mode: () => "live",
+        })(get("/api/v1/assets"), undefined),
+        await assetsHandler({
+          marketData: fixtureService(RECORDED_AT, { override: wrongChain }).marketData,
+          mode: () => "live",
+        })(get("/api/v1/assets"), undefined),
       ];
       const down = fixtureService();
       down.outage.rpc = true;
-      responses.push(await assetsHandler(down.marketData)(get("/api/v1/assets"), undefined));
+      responses.push(
+        await assetsHandler({ marketData: down.marketData, mode: () => "live" })(get("/api/v1/assets"), undefined),
+      );
       expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 502, 500, 503]);
       for (const response of responses) await expectDocumented("/assets", response);
     } finally {
@@ -168,7 +193,7 @@ describe("handler output validates against the document", () => {
   });
 
   test("GET /assets/{address}: found, not eligible, malformed address, unknown address and a source down", async () => {
-    const handler = assetHandler(fixtureService().marketData);
+    const handler = assetHandler({ marketData: fixtureService().marketData, mode: () => "live" });
     const down = fixtureService();
     down.outage.api = true;
     const responses = [
@@ -176,7 +201,7 @@ describe("handler output validates against the document", () => {
       await handler(get("/"), addressContext(TOKENS.RKT)),
       await handler(get("/"), addressContext("0x12")),
       await handler(get("/"), addressContext(`0x${"0".repeat(40)}`)),
-      await assetHandler(down.marketData)(get("/"), addressContext(TOKENS.NVDA)),
+      await assetHandler({ marketData: down.marketData, mode: () => "live" })(get("/"), addressContext(TOKENS.NVDA)),
     ];
     expect(responses.map((response) => response.status)).toEqual([200, 200, 400, 404, 503]);
     for (const response of responses) await expectDocumented("/assets/{address}", response);
@@ -269,6 +294,32 @@ describe("handler output validates against the document", () => {
     ];
     expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 404, 409, 409, 503]);
     for (const response of responses) await expectDocumented("/indexes/{identifier}/composition", response);
+  });
+
+  test("GET /network: constructed and recorded activity, an empty registry, bad parameter, not deployed and registry down", async () => {
+    const mode = () => "replay" as const;
+    const read = constructedRead();
+    const responses = [
+      await networkHandler({ network: stubNetwork(read), mode })(get("/api/v1/network"), undefined),
+      await recordedNetwork()(get("/api/v1/network"), undefined),
+      await recordedNetwork("registry-empty")(get("/api/v1/network"), undefined),
+      await networkHandler({ network: stubNetwork(read), mode })(get("/api/v1/network?x=1"), undefined),
+      await networkHandler({
+        network: stubNetwork({
+          status: "registry_not_deployed",
+          chainId: 8453,
+          registry: "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+          reason: "not_configured",
+        }),
+        mode,
+      })(get("/api/v1/network"), undefined),
+      await networkHandler({ network: stubNetwork(new RegistryUpstreamError("down")), mode })(
+        get("/api/v1/network"),
+        undefined,
+      ),
+    ];
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 409, 503]);
+    for (const response of responses) await expectDocumented("/network", response);
   });
 
   test("GET /portfolio and /portfolio/plan: every state, each error and a source down", async () => {

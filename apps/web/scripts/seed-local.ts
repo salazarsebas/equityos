@@ -1,5 +1,6 @@
 /**
- * Publishes the example indexes to the IndexRegistry of a local Anvil node.
+ * Publishes the example indexes to the IndexRegistry of a local Anvil node, then the example usage of
+ * `seed/usage.ts`, which needs the mock contracts built (`bun run contracts:build`).
  *
  *   bun run seed:local
  *
@@ -26,6 +27,7 @@ import {
   resolveRegistryConfig,
 } from "../src/server/registry";
 import { buildSeedIndexes } from "./seed/indexes";
+import { seedUsage } from "./seed/usage";
 
 /** The endpoint is not a local development chain. Nothing was sent. */
 export class SeedRefusedError extends Error {
@@ -161,6 +163,8 @@ if (import.meta.main) {
         console.log(`  version ${i + 1}:   ${hash} (${note})`);
       });
     }
+    const usage = await seedUsage(rpcUrl);
+    console.log(usage.sent ? `usage: ${usage.transactions.length} transactions sent` : "usage: already seeded");
   } catch (error) {
     console.error(`seed-local: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;

@@ -81,6 +81,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent. Rate limited per address
   and per instance, with a 20 second deadline. The calldata verification is a browser-safe module.
 - `@equityos/sdk`: `executionPlan` for the new endpoint.
+- Network metrics at `/network` and `GET /api/v1/network`, computed from chain events only: published indexes,
+  versions, creators and deprecations, rebalance attestations by tier (A: matching constituent flows in the same
+  transaction, B: linked within 900 seconds, unmatched), distinct accounts, accounts within tolerance and the
+  reference value moved, each with its definition and block range. Excluded accounts are set with
+  `EQUITYOS_EXCLUDED_ACCOUNTS` and shown apart. Public API v1.4.0, and `getNetworkMetrics` in `@equityos/sdk`.
+  Linked from the current state on the landing page.
+- The local seed records example usage with mock tokens and feeds, and the registry replay carries the
+  requests of the network metrics.
+- Public API v1.5.0: every successful response carries `meta.mode`, `live` or `replay`, which is `replay` as soon
+  as one source of the response is a replayed recording. The SDK decodes it.
+- `transferWarnings` on `GET /api/v1/portfolio` and `GET /api/v1/portfolio/plan`: a typed `transfers_paused`
+  warning for each constituent whose issuer paused transfers, and a line in the plan statement of the page.
 
 ### Changed
 
@@ -88,3 +100,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The home page states that indexes can be browsed and verified, and what a network without the registry shows.
 - IBM Plex Sans and IBM Plex Mono load from pinned Fontsource packages with `next/font/local`, so the build
   makes no network request.
+
+### Fixed
+
+- A deployment can no longer serve a replayed recording: `MARKET_REPLAY_DIR` and `REGISTRY_REPLAY_DIR` are
+  refused on Vercel (`VERCEL_ENV` set) and in a production build without the test-only flag
+  `EQUITYOS_REPLAY_FOR_TESTS=1`, with a typed configuration error at startup and on every request. A replayed
+  reference price is never `live` or `delayed`: it is reported as `last_close`.
+- Balances are never served stale: a cache with a stale window of zero no longer serves a value that is exactly
+  at its TTL when its reload fails, and the portfolio endpoints refuse a balance read served stale with `503`. Any
+  response built from an input served stale is `no-store`, on every caching route.
+- A constituent missing from the balance read (the asset list changed between the snapshot and the balance read)
+  answers `502 upstream_malformed` instead of being valued at zero, so a plan can no longer propose buying a
+  position whose balance is unknown.
+- The home page no longer says "None yet" for the newest index of a registry that holds indexes when the read of
+  the newest one fails: it says that the registry cannot be read right now.
+- `@equityos/core`: when the capped candidate of a rebalance is chosen, its sells are scaled again to what its
+  own buys spend, so a plan no longer sells a constituent only to leave the proceeds uninvested. A deposit that
+  adds less than one quote base unit no longer counts as a deposit in the tie between the two candidates.
+- The deposit field of the portfolio plan accepts at most 6 decimals, the precision of USDC, and says so,
+  instead of 8 decimals that could not be deposited.
+- A test fails from October 1 of any year unless the market calendar covers the whole of the next year, so the
+  end of the holiday table on 2027-12-31 cannot pass unnoticed.

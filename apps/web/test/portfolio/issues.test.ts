@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { ApiIssue } from "../../src/lib/portfolio/api";
-import { describeIssues, ISSUE_TEXT } from "../../src/lib/portfolio/issues";
+import { describeIssues, ISSUE_TEXT, transferWarningLines } from "../../src/lib/portfolio/issues";
 
 /** Every finding code of the calculation specification, from its table of blockers and warnings. */
 function specifiedCodes(): string[] {
@@ -67,5 +67,20 @@ describe("plain-language findings", () => {
     );
     expect(lines.map(({ code }) => code)).toEqual(["price_unavailable", "market_closed"]);
     expect(lines[1]?.text).toStartWith("Market closed for AAPLc and NVDAc:");
+  });
+});
+
+describe("transferWarningLines", () => {
+  test("adds one line to the plan statement per constituent whose transfers are paused", () => {
+    expect(transferWarningLines([])).toEqual([]);
+    expect(
+      transferWarningLines([
+        { code: "transfers_paused", token: "0xb20000000000000000000078ee7ce2fe4908108c", symbol: "NVDAc" },
+        { code: "transfers_paused", token: "0xb200000000000000000000000000000000000001", symbol: null },
+      ]),
+    ).toEqual([
+      "Transfers of NVDAc are paused by its issuer: a leg in it cannot be executed while the pause lasts.",
+      "Transfers of 0xb200000000000000000000000000000000000001 are paused by its issuer: a leg in it cannot be executed while the pause lasts.",
+    ]);
   });
 });

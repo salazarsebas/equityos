@@ -1,7 +1,8 @@
 import "server-only";
 import { hexToBytes } from "viem";
+import { combinedMode } from "@/server/data-mode";
 import { constituentStatus, joinComposition, loadIndexProfile } from "@/server/indexes";
-import type { MarketData } from "@/server/market";
+import type { MarketData, MarketDataMode } from "@/server/market";
 import {
   DEFAULT_PAGE_SIZE,
   HEADS_CACHE,
@@ -38,7 +39,7 @@ const REGISTRY_CACHE = publicCache(HEADS_CACHE.ttlSeconds);
  * see a list without indexes, not a 404, which says that one identifier is unknown, and not a 5xx, because
  * nothing failed and retrying does not help.
  */
-function notDeployed({ chainId, registry, reason }: RegistryNotDeployed): ApiError {
+export function notDeployed({ chainId, registry, reason }: RegistryNotDeployed): ApiError {
   return new ApiError(409, "registry_not_deployed", "The index registry is not deployed on the configured chain.", {
     chainId,
     registry: registry.toLowerCase(),
@@ -57,12 +58,17 @@ const NOT_FOUND = {
   version_not_found: new ApiError(404, "version_not_found", "The index has no version with this number."),
 } as const;
 
-/** The registry facts every index response carries in `meta`. */
+/**
+ * The registry facts every index response carries in `meta`. `mode` is the mode of the whole response, which
+ * draws on the registry only.
+ */
 export function registryMeta({ registry, mode, now = systemClock }: IndexApiOptions) {
   const reader = registry();
+  const registryMode = mode();
   return {
+    mode: registryMode,
     asOf: isoTimestamp(now()),
-    registry: { chainId: reader.chainId, address: reader.registry, mode: mode() },
+    registry: { chainId: reader.chainId, address: reader.registry, mode: registryMode },
   };
 }
 
@@ -242,7 +248,9 @@ export function indexVersionHandler(options: IndexApiOptions) {
  * `GET /api/v1/indexes/{identifier}/composition`: the constituents of a verified version joined with the asset
  * universe as it is now. A version that fails verification has no composition to compute from: 409.
  */
-export function indexCompositionHandler(options: IndexApiOptions & { readonly marketData: () => MarketData }) {
+export function indexCompositionHandler(
+  options: IndexApiOptions & { readonly marketData: () => MarketData; readonly marketMode: () => MarketDataMode },
+) {
   return route(async (request: Request, context: IdentifierContext) => {
     const requested = parseQuery(request, ["version"]).get("version");
     const { index, version: view } = await requireProfile(
@@ -272,6 +280,7 @@ export function indexCompositionHandler(options: IndexApiOptions & { readonly ma
       constituents,
     };
     const { registry } = registryMeta(options);
-    return ok(data, { ...snapshotMeta(snapshot), registry }, snapshotCache(snapshot));
+    const mode = combinedMode(options.marketMode(), registry.mode);
+    return ok(data, { ...snapshotMeta(snapshot, mode), registry }, snapshotCache(snapshot));
   });
 }

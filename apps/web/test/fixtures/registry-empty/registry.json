@@ -8,5 +8,26 @@
       "callData": "0x19a0bc4a",
       "returnData": "0x0000000000000000000000000000000000000000000000000000000000000000"
     }
+  ],
+  "requests": [
+    {
+      "method": "eth_getLogs",
+      "params": [
+        {
+          "address": ["0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "0x593449aef0efc05528d3bc7be9eb8d99e39aa41c"],
+          "topics": [
+            [
+              "0x87c0da1c9a57dddb4e37e6d1e6c05fc946b2d91c829ebbaf71c5d3c97b004331",
+              "0x7c8fc21bae37d7e381a8a2a715ac07e013b66e40fab5ea84124031e4d9aa2aab",
+              "0x9a6689352f2549a3e43ad6e52fe25cff6740436f66a0f3bd1fd5ea7fb2f3d5f5",
+              "0xd7335e1ce38adaa7e1731a8c3fcb1519504b9b7c8ba988d845fb1c76b8e7c845"
+            ]
+          ],
+          "fromBlock": "0x0",
+          "toBlock": "0x2"
+        }
+      ],
+      "result": []
+    }
   ]
 }

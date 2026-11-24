@@ -64,6 +64,26 @@ Properties of the seed:
 - Each spec declares `chainId: 31337`, because verification rejects a spec read from a chain other than the one
   it names. The hashes therefore differ from what the same methodology would have on Base.
 
+### Example usage
+
+After the indexes, the seed records example usage for the [network metrics](../product/network-metrics.md). It
+needs the mock contracts built: `bun run contracts:build`. With `anvil_setCode` it installs the mocks of
+`contracts/test/mocks/UsageMocks.sol`: a token at the address of every feed-covered token, a reference feed at
+every feed proxy (each answers 100.00 USD, dated at the block it is read in), and a minimal smart account at
+four `0x5eed...` addresses. Then it sends:
+
+| Account                         | Transactions                                                             | Result                          |
+| ------------------------------- | ------------------------------------------------------------------------ | ------------------------------- |
+| `0x5eed...000a` (smart account) | Mints 1,000.00 USD of Semiconductors at its weights and attests, at once | Tier A, within tolerance        |
+| `0x5eed...000b` (smart account) | Mints two of the five Large Technology constituents and attests          | Tier A, outside tolerance       |
+| Anvil account 1                 | Mints one constituent, then attests in a second transaction              | Tier B                          |
+| `0x5eed...000d` (smart account) | Mints 0.50 USD of a constituent and attests                              | Unmatched, below 1.00 USD       |
+| Anvil account 2                 | Attests without moving any token                                         | Unmatched, no constituent flows |
+| `0x5eed...000e` (smart account) | As `000a`. Meant to be listed in `EQUITYOS_EXCLUDED_ACCOUNTS`            | Tier A, shown apart when listed |
+
+The smart account calls run in a transaction Anvil account 0 sends, as a bundler would. Nothing of it exists on
+a public network. A second run sends nothing.
+
 To seed a node on another port, set `EQUITYOS_RPC_URL`:
 
 ```sh
@@ -91,6 +111,21 @@ constituents are real Base mainnet tokens, so their reference prices apply.
 
 Without `EQUITYOS_CHAIN_ID` the app reads Base mainnet, where the registry is not deployed.
 
+## Recording the replay of the browser tests
+
+The browser tests replay `apps/web/test/fixtures/registry` (after the seed) and
+`apps/web/test/fixtures/registry-empty` (after the deployment only). `record:registry` writes every registry
+read call at the latest block and every request the network metrics make there. With a fixed clock the
+recordings are the same on every run:
+
+```sh
+anvil --timestamp 1794837605 &   # 1794837604 for registry-empty
+cast rpc anvil_setBlockTimestampInterval 0
+bun run contracts:build && bun run contracts:deploy:local
+bun run seed:local               # skipped for registry-empty
+bun run --filter @equityos/web record:registry test/fixtures/registry
+```
+
 ## Integration test
 
 ```sh
@@ -99,7 +134,8 @@ bun run test:integration
 
 This builds the contracts, checks the committed ABI modules against the build artifacts, then starts its own
 Anvil on port 8565 (override with `ANVIL_PORT`), runs the deployment script and the seed, and reads everything
-back through the registry reader, asserting hashes, identifiers, verification reports and events. It does not
+back through the registry reader, asserting hashes, identifiers, verification reports and events. It then
+runs the usage seed and checks the tier of every attestation with the network metrics service. It does not
 use a node you started yourself. CI runs it in the `integration` job.
 
 It then runs the browser test of the publish flow (`apps/web/e2e-chain`), which starts another Anvil on port

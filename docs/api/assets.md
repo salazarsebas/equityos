@@ -45,6 +45,7 @@ since Friday. Long lists are cut where marked.
 
 | Field                  | Meaning                                                                                      |
 | ---------------------- | -------------------------------------------------------------------------------------------- |
+| `mode`                 | `live`, or `replay` for a recorded block served by a test build: see [Data mode][mode]       |
 | `asOf`                 | Time the staleness classes were computed for                                                 |
 | `marketPhase`          | `regular`, `extended`, `closed`, or `unknown` outside the covered calendar. One per response |
 | `referencePriceSource` | `chainlink`                                                                                  |
@@ -340,3 +341,5 @@ curl "http://localhost:3000/api/v1/openapi.json"
 
 `/assets` in the web app renders the same snapshot as a table. It calls the market data layer directly, not this
 API. The "JSON" link in the table caption is the API request that returns the rows on screen.
+
+[mode]: ./README.md#data-mode

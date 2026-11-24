@@ -1,5 +1,5 @@
 {
-  "description": "A response of POST /api/v1/portfolio/execution-plan recorded on 2026-11-24 from a local server reading Base mainnet and the live KyberSwap API, with the recorded local registry of the web app tests. Unchanged.",
+  "description": "A response of POST /api/v1/portfolio/execution-plan recorded on 2026-11-24 from a local server reading Base mainnet and the live KyberSwap API, with the recorded local registry of the web app tests. Unchanged, except for meta.mode, added by hand when API 1.4.0 introduced the field: replay, because the registry the server read was that recording.",
   "request": {
     "address": "0x9696f59e4d72e237be84ffd425dcad154bf96976",
     "index": "diversified-equity-d622e2a5",
@@ -614,6 +614,7 @@
       "planHash": "0x9996eed2d36c99858bb540b4e13d56a5f70da2cd7cd3a5543b51eac66f5a74b8"
     },
     "meta": {
+      "mode": "replay",
       "asOf": "2026-11-24T07:19:57Z",
       "marketPhase": "extended",
       "referencePriceSource": "chainlink",

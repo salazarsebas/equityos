@@ -3,13 +3,15 @@ import { readFileSync } from "node:fs";
 import {
   CALCULATION_ISSUE_CODES,
   PLAN_STATEMENT,
+  type PortfolioApiOptions,
   portfolioHandler,
   portfolioPlanHandler,
 } from "../../src/server/api/portfolio";
+import type { MarketData } from "../../src/server/market";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
-import { body, fixtureService, get, RECORDED_AT, recordedRegistry } from "./support";
+import { body, fixtureService, get, pausedTransfers, RECORDED_AT, recordedRegistry } from "./support";
 
 const INDEX = "diversified-equity-d622e2a5";
 const MISMATCHED = "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759";
@@ -21,7 +23,7 @@ const ONLY_USDC = "0x0000000000000000000000000000000000001004";
 const META = "0xb2000000000000000000008bc8786b856e61707c";
 const MSFT = "0xb200000000000000000000ab99cfa739e253872b";
 
-function options(registry: RegistryReader = recordedRegistry(), service = fixtureService()) {
+function options(registry: RegistryReader = recordedRegistry(), service = fixtureService()): PortfolioApiOptions {
   return {
     registry: () => registry,
     mode: () => "replay" as const,
@@ -93,6 +95,7 @@ describe("GET /api/v1/portfolio", () => {
       new Set(["market_closed:warning"]),
     );
     expect(meta).toMatchObject({
+      mode: "replay",
       registry: { chainId: 31_337, mode: "replay" },
       balances: { chainId: 8453, blockNumber: "60489401", blockTimestamp: "2026-11-21T19:10:55Z", mode: "replay" },
       marketPhase: "closed",
@@ -189,6 +192,75 @@ describe("GET /api/v1/portfolio", () => {
       expect(error).toMatchObject({ code: "upstream_unavailable", details: { source: "base_rpc" } });
     } finally {
       log.mockRestore();
+    }
+  });
+});
+
+describe("a constituent whose transfers are paused", () => {
+  test("is a typed warning of the comparison and of the plan, which still states its arithmetic", async () => {
+    const paused = {
+      ...options(),
+      marketData: fixtureService(RECORDED_AT, { override: pausedTransfers(TOKENS.NVDA) }).marketData,
+    };
+    const query = `address=${ABOVE}&index=${INDEX}`;
+    const compared = await portfolio(query, paused);
+    expect(compared.response.status).toBe(200);
+    const warning = { code: "transfers_paused", token: TOKENS.NVDA, symbol: "NVDAc" };
+    expect((compared.data as unknown as { transferWarnings: unknown }).transferWarnings).toEqual([warning]);
+    const planned = await plan(`${query}&mode=rebalance`, paused);
+    expect(planned.data.transferWarnings).toEqual([warning]);
+    expect(planned.data.plan.status).toBe("ready");
+    // Without a pause there is no warning.
+    expect((await plan(`${query}&mode=rebalance`)).data.transferWarnings).toEqual([]);
+    expect(((await portfolio(query)).data as unknown as { transferWarnings: unknown }).transferWarnings).toEqual([]);
+  });
+});
+
+describe("a balance read that does not cover the snapshot", () => {
+  test("a constituent missing from the balance read answers 502, never a zero balance or a plan to buy it", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const inner = fixtureService().marketData();
+      // The balance read was made for an older asset list that did not hold NVDAc yet.
+      const partial: MarketData = {
+        getSnapshot: () => inner.getSnapshot(),
+        getBalances: async (account) => {
+          const read = await inner.getBalances(account);
+          const balances = new Map(read.value.balances);
+          balances.delete(TOKENS.NVDA);
+          return { ...read, value: { ...read.value, balances } };
+        },
+      };
+      const opts = { ...options(), marketData: () => partial };
+      const compared = await portfolio(`address=${ABOVE}&index=${INDEX}`, opts);
+      expect(compared.response.status).toBe(502);
+      expect(compared.error).toMatchObject({ code: "upstream_malformed", details: { source: "base_rpc" } });
+      const planned = await plan(`address=${ABOVE}&index=${INDEX}&mode=rebalance`, opts);
+      expect(planned.response.status).toBe(502);
+      expect(planned.error?.code).toBe("upstream_malformed");
+      // The same read with NVDAc present is a valid comparison.
+      expect((await portfolio(`address=${ABOVE}&index=${INDEX}`)).response.status).toBe(200);
+    } finally {
+      log.mockRestore();
+    }
+  });
+});
+
+describe("meta.mode of the portfolio and the plan", () => {
+  test("is replay as soon as the registry or the market data is replayed, live only when neither is", async () => {
+    const query = `address=${ABOVE}&index=${INDEX}`;
+    for (const [registry, market, expected] of [
+      ["live", "live", "live"],
+      ["replay", "live", "replay"],
+      ["live", "replay", "replay"],
+    ] as const) {
+      const opts = { ...options(), mode: () => registry, marketMode: () => market };
+      expect((await portfolio(query, opts)).meta).toMatchObject({ mode: expected, balances: { mode: market } });
+      const response = await portfolioPlanHandler(opts)(
+        get(`/api/v1/portfolio/plan?${query}&mode=rebalance`),
+        undefined,
+      );
+      expect((await body(response)).meta).toMatchObject({ mode: expected, registry: { mode: registry } });
     }
   });
 });

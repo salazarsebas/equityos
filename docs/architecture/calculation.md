@@ -197,9 +197,9 @@ later step has to round them.
    `needed = ceil(spent * 10000 / (10000 - reserveBps)) - availableQuote - exit proceeds`. When `needed` is
    zero or less, no constituent is sold (`not_needed`). When it is below the proceeds of the full sells, each
    sell is scaled: see [Sells follow the buys](#sells-follow-the-buys). Tokens to exit are always sold in full.
-   The sells are final after this step.
 8. **Two candidates.** When a buy was skipped in step 6, a second set of buys is derived in which no bought
-   constituent ends above its target weight, and the set with the lower projected maximum drift is used: see
+   constituent ends above its target weight, its sells are derived again from what those buys spend by the
+   rule of step 7, and the candidate with the lower projected maximum drift is used: see
    [A skipped buy](#a-skipped-buy).
 9. **Minimum**: a leg whose token quantity or quote amount is zero is skipped as `zero_quantity`. A remaining
    leg whose value is below `minLegValueUsdE8` is skipped as `below_minimum`. A leg worth exactly the minimum is
@@ -276,13 +276,15 @@ the buy of the smaller constituent is 0.995 USD and is skipped; buying only the 
 wallet from 9000/1000 to 9472/528. Holding the other buys back is not always right either: it can leave a
 wallet far from target when the buys would have brought it close.
 
-**So when at least one buy is skipped, the plan is computed twice, with the same sells, and the candidate with
-the lower projected maximum drift is returned. On a tie, a call that carries a deposit returns the candidate
-that leaves less quote asset uninvested, any other call returns the candidate that trades less, and if they
-are still tied the capped one is returned.**
+**So when at least one buy is skipped, the plan is computed twice, each time with the sells its own buys need,
+and the candidate with the lower projected maximum drift is returned. On a tie, a call that carries a deposit
+returns the candidate that leaves less quote asset uninvested, any other call returns the candidate that
+trades less, and if they are still tied the capped one is returned.**
 
 A deposit is made to be invested, so with equal drift it is. Without a deposit, trading for no gain in drift
-is not proposed.
+is not proposed. A call carries a deposit for this rule when the deposit adds at least one quote base unit to
+the funds: `floor(depositUsdE8 / 100) >= 1`, the conversion of step 1, rounded down. A `depositUsdE8` from 1 to
+99 adds nothing to the available quote, and the plan is exactly the plan without a deposit.
 
 - **Uncapped**: every buy that passes the minimum spends its share.
 - **Capped**: no bought constituent may end above its target weight of the projected invested value. With
@@ -294,9 +296,19 @@ is not proposed.
   are derived again from the buys that remain. The set of buys only shrinks, so this ends after at most one
   round per buy.
 
+The caps are derived from the sells of step 7, the sells of the uncapped candidate. The capped candidate then
+gets its own sells: the rule of step 7 is applied again to the sum its capped buys spend, from the same full
+sells. A cap only lowers a buy, so that sum is never larger and neither is any of its sells. A constituent sold
+less keeps more value, which only raises the projected invested value, so no capped buy ends above the share
+its cap allows. The capped candidate is projected with these sells, and the sells it returns are these. Without
+them the capped candidate would keep sells sized for buys it does not make, and their proceeds would stay in
+the quote asset. When the capped buys need no proceeds, the capped candidate sells no constituent and lists
+each full sell as `not_needed`. A consequence is accepted on purpose: where selling into cash beyond what the
+buys spend would have lowered the projected drift further, the capped candidate does not do it, because a sell
+is proposed only to fund a buy.
+
 A cap only lowers a buy, so the capped candidate never trades more than the uncapped one: on a tie without a
-deposit it is the one returned, and on a tie with a deposit it is returned only when it spends as much. The caps are derived
-from the sells of step 7, which are the sells of the plan, never from sells that are later changed.
+deposit it is the one returned, and on a tie with a deposit it is returned only when it spends as much.
 
 The result states which candidate it is (`candidate`) and the projected maximum drift of the other one
 (`otherCandidateMaxAbsDriftBps`, `null` when no buy was skipped and there is one candidate). In the 90/10
@@ -316,6 +328,20 @@ with the warning `projected_drift_increase`.
 asset on top of the reserve. When it is worth more than `minLegValueUsdE8`, the plan carries the warning
 `uninvested_quote` with that amount in quote base units. It appears when buys were skipped or capped, when a
 coarse token cannot absorb its share, or when a sell was raised to the minimum.
+
+A plan that sells a constituent never sells it only to leave the proceeds idle. Sells are proposed only when
+the buys need more than the quote available and the proceeds of the tokens to exit, so that quote is spent
+first, and what is left on top of the reserve comes only from the rounding of the sells:
+
+```
+uninvestedQuote <= sum over the constituents sold of (floor((minLegValueUsdE8 + unit(t)) / 100) + 3)
+```
+
+with `unit(t)` the value of one base unit of the token (see [Bounds on drift](#bounds-on-drift)). For one sell
+of a fine-grained token that is the minimum leg value and a few quote base units. The bound does not apply to
+a plan that sells no constituent: there the uninvested amount is quote asset that was already in the wallet
+(the quote balance, a deposit) or the proceeds of tokens to exit, which are sold in full whatever the buys
+spend, and that skipped or capped buys leave unspent.
 
 A ready plan without a leg always carries a reason: `uninvested_quote` when it leaves such an amount, and
 otherwise `nothing_to_do`, which means every difference to the target is below the minimum leg value or there
@@ -364,9 +390,8 @@ Rounding a scaled sell down to quote base units loses less than one unit, so `k`
 sell, so no constituent is sold below its target value, and never below the minimum, so it remains a leg worth
 proposing. Raising a sell to the minimum can leave up to one minimum leg value per sell in the quote asset.
 
-`buyBudgetQuote` in the result is computed from the sells that are proposed, and the buys never exceed it. When
-the capped candidate is returned its buys spend less than the sells were sized for; the difference is part of
-the uninvested amount and is reported.
+Each candidate has its own sells, scaled to what its own buys spend (see [A skipped buy](#a-skipped-buy)).
+`buyBudgetQuote` in the result is computed from the sells that are proposed, and the buys never exceed it.
 
 ### Buy only
 
@@ -481,9 +506,13 @@ portfolios: first replications, wallets on target and arbitrary wallets, in both
   higher projected maximum drift than the other one.
 - **Capped buys**: when the capped candidate is returned, no bought constituent ends above its target weight,
   up to the rounding `E` below.
-- **Sells follow buys**: when the uncapped candidate is returned, the constituents sold raise at most what the
-  buys need, plus per sell one base unit of its token, the minimum leg value and three quote base units. When
-  no buy passes the minimum no constituent is sold.
+- **Sells follow buys**: whichever candidate is returned, the constituents sold raise at most what its buys
+  need, plus per sell one base unit of its token, the minimum leg value and three quote base units. When no buy
+  passes the minimum no constituent is sold.
+- **No idle proceeds**: when a plan sells a constituent, the amount left on top of the reserve is within the
+  bound of [What is left uninvested](#what-is-left-uninvested). A separate seeded test of 10,000 portfolios of
+  7 constituents in `rebalance` mode without a deposit, with tokens of 0 to 18 decimals, checks it on plans
+  where the capped candidate is often returned.
 - **Nothing silent**: the amount left on top of the reserve is reported exactly when it is above the minimum
   leg value, and a plan without a leg carries `uninvested_quote` or `nothing_to_do`.
 - **First replication**: a first replication either buys every constituent or is blocked, and the stated
@@ -598,16 +627,22 @@ points, decimals and booleans are JSON numbers and booleans. A value that is not
 carry a price whose `status` is absent or not a known class.
 
 The vectors cover both modes, the defaults, every blocker, warning and skip reason, a token to exit, tokens of
-0, 6, 8 and 18 decimals, prices from 0.07 USD to 4,321.00 USD, an index of one constituent and one of 64, and
+0, 2, 6, 8 and 18 decimals, prices from 0.07 USD to 4,321.00 USD, an index of one constituent and one of 64, and
 portfolios from 9 USD to 10 million USD, and the three outcomes of two candidates: the capped one closer to
-target, the uncapped one closer, and a tie.
+target, the uncapped one closer, and a tie. `capped-candidate-sells-for-its-own-buys` is a capped candidate
+whose sells are scaled again to its own buys, and `tie-in-drift-with-a-deposit-below-one-quote-unit` a deposit
+of 99 in USD scaled by 1e8 that is no deposit for the tie.
 
-The expected output of every vector was produced by `@equityos/core` and checked against an independent
-implementation of this page written in another language, which is not part of the repository: blockers,
-warnings, targets, legs, skipped legs and projection agree on all of them.
+The expected output of every vector was produced by `@equityos/core`. The first 36 vectors were checked
+against an independent implementation of this page written in another language, which is not part of the
+repository: blockers, warnings, targets, legs, skipped legs and projection agree on all of them. All of them,
+the last two included, are checked by a second independent implementation written from this page alone,
+`packages/core/test/plan-vectors-independent.test.ts`. It imports nothing from `src` and recomputes the whole
+expected result of every vector.
 
 ## Tests
 
 `packages/core/test`: `portfolio.test.ts` (valuation, weights, findings, drift), `rebalance.test.ts`
 (eligibility, worked examples with hand-computed numbers, one group per rule), `rebalance-properties.test.ts`
-(the guarantees above over seeded random portfolios) and `plan-vectors.test.ts` (the published vectors).
+(the guarantees above over seeded random portfolios), `plan-vectors.test.ts` (the published vectors) and
+`plan-vectors-independent.test.ts` (the vectors recomputed by an implementation written from this page).

@@ -141,6 +141,20 @@ const REQUESTS: readonly ExampleRequest[] = [
     body: { address: ACCOUNT, index: DIVERSIFIED, mode: "rebalance" },
   },
   {
+    name: "getNetworkMetrics",
+    operationId: "getNetworkMetrics",
+    title: "Registry and usage metrics of the recorded local chain, with the attestations of the seed",
+    path: "/api/v1/network",
+    registry: "recorded",
+  },
+  {
+    name: "getNetworkMetrics.registryNotDeployed",
+    operationId: "getNetworkMetrics",
+    title: "A deployment whose chain has no registry has nothing to measure",
+    path: "/api/v1/network",
+    registry: "not_deployed",
+  },
+  {
     name: "getStatus",
     operationId: "getStatus",
     title: "The status of the API and its data",

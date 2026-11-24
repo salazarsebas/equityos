@@ -28,7 +28,7 @@ import {
   readEnvelope,
 } from "@/lib/portfolio/api";
 import { DEPOSIT_ERRORS, parseDepositUsd } from "@/lib/portfolio/deposit";
-import { describeIssues } from "@/lib/portfolio/issues";
+import { describeIssues, transferWarningLines } from "@/lib/portfolio/issues";
 import { Missing } from "./drift-table";
 import { ExecutePanel } from "./execute/execute-panel";
 
@@ -286,6 +286,13 @@ export function PlanPanel({
           This preview is arithmetic toward the published target weights at reference prices. It contains no executable
           quote, no slippage and no gas, so executable prices will differ, and it is not an instruction to trade.
         </p>
+        {result.data === undefined
+          ? null
+          : transferWarningLines(result.data.transferWarnings).map((line) => (
+              <p key={line} className="text-warning">
+                {line}
+              </p>
+            ))}
       </div>
       {result.data?.plan.status === "ready" && result.data.plan.legs.length > 0 ? (
         <ExecutePanel
