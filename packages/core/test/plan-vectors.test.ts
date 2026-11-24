@@ -46,9 +46,9 @@ function parseInput(raw: VectorInput): RebalancePlanInput {
 describe("published vectors: rebalance plans", () => {
   const { vectors } = planVectors;
 
-  test("they are for this calculation, at least 36, with unique names", () => {
+  test("they are for this calculation, at least 38, with unique names", () => {
     expect<string>(planVectors.calc).toBe(CALC_ID);
-    expect(vectors.length).toBeGreaterThanOrEqual(36);
+    expect(vectors.length).toBeGreaterThanOrEqual(38);
     expect(new Set(vectors.map(({ name }) => name)).size).toBe(vectors.length);
   });
 

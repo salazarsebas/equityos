@@ -1225,6 +1225,27 @@ describe("planRebalance: two candidates after a skipped buy", () => {
     ]);
   });
 
+  test("a deposit below one quote base unit adds nothing and is no deposit for the tie", () => {
+    // 99 in USD E8 rounds down to zero quote base units: the plan is exactly the plan without a deposit.
+    const without = planOf(tied({ quoteBalance: 5_000_000_000n, depositUsdE8: 0n }));
+    const dust = planOf(tied({ quoteBalance: 5_000_000_000n, depositUsdE8: 99n }));
+    expect(dust.availableQuote).toBe(without.availableQuote);
+    expect(dust.candidate).toBe("capped");
+    expect(dust.legs).toEqual([]);
+    expect(dust).toEqual(without);
+  });
+
+  test("a deposit of exactly one quote base unit is a deposit for the tie", () => {
+    // The same 5,000 USDC available, one base unit of it deposited: the candidate that invests it is returned.
+    const plan = planOf(tied({ quoteBalance: 4_999_999_999n, depositUsdE8: 100n }));
+    expect(plan.availableQuote).toBe(5_000_000_000n);
+    expect(plan.candidate).toBe("uncapped");
+    expect(plan.otherCandidateMaxAbsDriftBps).toBe(1);
+    expect(plan.legs.map(({ side, token, quoteAmount }) => [side, token, quoteAmount])).toEqual([
+      ["buy", A, 4_974_005_000n],
+    ]);
+  });
+
   test("on a full tie, with or without a deposit, the capped candidate is returned", () => {
     // 60.00/39.50/0.50 USD against 50/49/1 and 1 USD more: the buy of C is skipped and the cap does not bind,
     // so both candidates are the same plan.

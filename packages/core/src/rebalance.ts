@@ -251,8 +251,8 @@ export interface RebalancePlan {
   readonly currentMaxAbsDriftBps: number | null;
   /**
    * Which candidate was chosen. `uncapped`: every buy that passes the minimum gets its pro rata share.
-   * `capped`: after a skipped buy, the others are held at their target weight. Without a skipped buy there is
-   * one candidate, `uncapped`.
+   * `capped`: after a skipped buy, the others are held at their target weight. Each candidate sells what its own
+   * buys need. Without a skipped buy there is one candidate, `uncapped`.
    */
   readonly candidate: "uncapped" | "capped";
   /** Projected maximum drift of the candidate that was not chosen, or `null` when there was only one. */
@@ -511,8 +511,9 @@ function minimumDeployableValue(
  *
  * Tokens to exit are sold in full. Targets are shares of the deployable value. Buys share the budget pro rata
  * and the ones that fail the minimum are skipped. Sells are scaled to what those buys spend. When a buy was
- * skipped there is a second candidate, in which the other buys are capped at their target weight, and the
- * candidate with the lower projected maximum drift is returned. Every rounding leaves value unspent.
+ * skipped there is a second candidate, in which the other buys are capped at their target weight and the sells
+ * are scaled again to what the capped buys spend, and the candidate with the lower projected maximum drift is
+ * returned. Every rounding leaves value unspent.
  *
  * Data-quality problems are returned, not thrown: a result with any blocker has status `blocked` and no legs.
  *
@@ -611,21 +612,23 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
     ]);
   }
 
-  // Rounds up: the proceeds needed are the smallest amount whose share after the reserve covers the buys.
-  const neededFundsQuote = mulDivUp(sum(uncapped.legs.map(({ quoteAmount }) => quoteAmount)), BPS, keptBps);
-  const neededProceedsQuote = neededFundsQuote > fundsQuote ? neededFundsQuote - fundsQuote : 0n;
-  let sellLegs = fullSells.map(({ leg }) => leg);
-  if (neededProceedsQuote === 0n) {
-    for (const { leg } of fullSells) {
-      skipped.push({ side: "sell", token: leg.token, exit: false, valueUsdE8: leg.valueUsdE8, reason: "not_needed" });
+  const floorUsdE8 = larger(minLegValueUsdE8, QUOTE_UNIT_VALUE_USD_E8);
+  /** The sells of constituents that fund `buys`, and the full sells left out as `not_needed`. */
+  const sellsFor = (buys: readonly RebalanceLeg[]): { legs: RebalanceLeg[]; skips: SkippedLeg[] } => {
+    // Rounds up: the proceeds needed are the smallest amount whose share after the reserve covers the buys.
+    const neededFundsQuote = mulDivUp(sum(buys.map(({ quoteAmount }) => quoteAmount)), BPS, keptBps);
+    const neededProceedsQuote = neededFundsQuote > fundsQuote ? neededFundsQuote - fundsQuote : 0n;
+    if (neededProceedsQuote === 0n) {
+      const skips = fullSells.map(({ leg }): SkippedLeg => {
+        return { side: "sell", token: leg.token, exit: false, valueUsdE8: leg.valueUsdE8, reason: "not_needed" };
+      });
+      return { legs: [], skips };
     }
-    sellLegs = [];
-  } else if (neededProceedsQuote < fullProceedsQuote) {
+    if (neededProceedsQuote >= fullProceedsQuote) return { legs: fullSells.map(({ leg }) => leg), skips: [] };
     // Rounding a scaled sell down loses less than one quote base unit, so together the sells lose at most one
     // unit fewer than there are sells. Aiming that much higher makes them raise at least what is needed.
     const goalQuote = neededProceedsQuote + BigInt(fullSells.length) - 1n;
-    const floorUsdE8 = larger(minLegValueUsdE8, QUOTE_UNIT_VALUE_USD_E8);
-    sellLegs = fullSells.map(({ position, leg }) => {
+    const legs = fullSells.map(({ position, leg }) => {
       const { token, decimals, priceE8 } = position;
       // Both round up, and neither exceeds the full sell: together the scaled sells raise at least what the
       // buys need, and each stays a leg that passes the minimum.
@@ -633,34 +636,45 @@ export function planRebalance(input: RebalancePlanInput): RebalancePlanResult {
       const smallest = mulDivUp(floorUsdE8, 10n ** BigInt(decimals), priceE8);
       return sellLeg(token, false, smaller(larger(scaled, smallest), leg.tokenQuantity), priceE8, decimals);
     });
-  }
-  const sells = [...exitLegs, ...sellLegs];
-  const proceedsQuote = sum(sells.map(({ quoteAmount }) => quoteAmount));
-
-  // The sells are final here. The first candidate is the buys as they are. When a buy was skipped there is a
-  // second one, whose buys are capped against the values the sells leave.
-  const candidate = (name: RebalancePlan["candidate"], buys: RebalanceLeg[], skips: SkippedLeg[]) => {
-    const projection = project(positions, [...sells, ...buys]);
-    const spentQuote = sum(buys.map(({ quoteAmount }) => quoteAmount));
-    return { name, buys, skips, projection, spentQuote, driftBps: projection.maxAbsDriftBps ?? TOTAL_WEIGHT_BPS + 1 };
+    return { legs, skips: [] };
   };
+
+  // Each candidate is a set of buys with the sells that fund it.
+  const candidate = (name: RebalancePlan["candidate"], buys: RebalanceLeg[], buySkips: SkippedLeg[]) => {
+    const sold = sellsFor(buys);
+    const sells = [...exitLegs, ...sold.legs];
+    const projection = project(positions, [...sells, ...buys]);
+    const proceedsQuote = sum(sells.map(({ quoteAmount }) => quoteAmount));
+    const spentQuote = sum(buys.map(({ quoteAmount }) => quoteAmount));
+    const skips = [...sold.skips, ...buySkips];
+    const driftBps = projection.maxAbsDriftBps ?? TOTAL_WEIGHT_BPS + 1;
+    return { name, sells, buys, skips, projection, proceedsQuote, spentQuote, driftBps };
+  };
+  // The first candidate is the buys as they are, with the sells scaled to them.
   let chosen = candidate("uncapped", uncapped.legs, uncapped.skipped);
   let otherCandidateMaxAbsDriftBps: number | null = null;
   if (uncapped.skipped.length > 0) {
-    const afterSells = new Map(project(positions, sells).positions.map(({ token, valueUsdE8 }) => [token, valueUsdE8]));
+    // The second one caps its buys against the values the sells of the first leave. A cap only ever lowers a
+    // buy, so its sells, scaled again to what its own buys spend, are never larger: no constituent it buys
+    // ends above the share its cap allows.
+    const afterSells = new Map(
+      project(positions, chosen.sells).positions.map(({ token, valueUsdE8 }) => [token, valueUsdE8]),
+    );
     const capped = sizeBuys(positions, uncapped.kept, minLegValueUsdE8, afterSells);
     const other = candidate("capped", capped.legs, [...uncapped.skipped, ...capped.skipped]);
-    // The lower projected maximum drift wins. On a tie, a call that carries a deposit takes the candidate
-    // that leaves less of it uninvested, and any other call the candidate that trades less. A cap only ever
-    // lowers a buy, so the capped candidate never spends more: it is the one that trades less, and with a
-    // deposit it wins only when it spends as much as the other.
+    // The lower projected maximum drift wins. On a tie, a call whose deposit adds at least one quote base unit
+    // takes the candidate that leaves less of it uninvested, and any other call the candidate that trades
+    // less. A cap only ever lowers a buy, so the capped candidate never spends more: it is the one that
+    // trades less, and with a deposit it wins only when it spends as much as the other. The deposit is
+    // counted in whole quote base units, rounded down as in the funds: one that adds nothing is no deposit.
+    const deposited = quoteUnitsDown(depositUsdE8) > 0n;
     const tie = other.driftBps === chosen.driftBps;
     const cappedWins =
-      other.driftBps < chosen.driftBps || (tie && (depositUsdE8 === 0n || other.spentQuote >= chosen.spentQuote));
+      other.driftBps < chosen.driftBps || (tie && (!deposited || other.spentQuote >= chosen.spentQuote));
     otherCandidateMaxAbsDriftBps = (cappedWins ? chosen : other).projection.maxAbsDriftBps;
     if (cappedWins) chosen = other;
   }
-  const { spentQuote } = chosen;
+  const { sells, proceedsQuote, spentQuote } = chosen;
   const buyBudgetQuote = mulDivDown(availableQuote + proceedsQuote, keptBps, BPS);
   const legs = inExecutionOrder([...sells, ...chosen.buys]);
 
