@@ -67,7 +67,7 @@ async function review(page: Page) {
     .click();
   await page.getByRole("button", { name: "Prepare to execute" }).click();
   const shown = page.getByRole("region", { name: "Review the executable plan" });
-  await shown.getByRole("checkbox", { name: /reference_freshness: delayed for TSLAc/ }).check();
+  await shown.getByRole("checkbox", { name: /^I acknowledge this warning\. Reference price \(TSLAc\)/ }).check();
   return shown;
 }
 
