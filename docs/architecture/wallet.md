@@ -5,9 +5,10 @@ is implemented in `apps/web`: pure logic in `src/lib/wallet`, components and hoo
 page in `src/app/wallet`.
 
 This layer connects and reads. It does not send a transaction, request a signature or ask for an approval:
-no code path in it calls `sendTransaction`, `writeContract`, `sendCalls` or `signMessage`. The one transaction
-the app can send, publishing an index, is built on top of it and described in
-[Publishing from the Studio](../security/studio-publishing.md).
+no code path in it calls `sendTransaction`, `writeContract`, `sendCalls` or `signMessage`. The transactions the
+app can send are built on top of it: publishing an index, described in
+[Publishing from the Studio](../security/studio-publishing.md), and executing a plan, described in
+[Sending an execution plan](../security/execution-sending.md).
 
 ## What the app never does
 
@@ -157,12 +158,13 @@ price.
 ## Execution availability
 
 `useExecutionAvailability` reads `GET /api/v1/status` and returns `executionAvailable` with a reason:
-`restricted_jurisdiction`, `jurisdiction_unknown` or `not_released` from the endpoint, `checking` while the
+`restricted_jurisdiction` or `jurisdiction_unknown` from the endpoint, `checking` while the
 answer is being read, and `status_unavailable` when it cannot be read or understood. The last two are
 unavailable, because the gate fails closed. `EXECUTION_UNAVAILABLE_MESSAGES` has one sentence per reason.
 
-Future actions that send a transaction are disabled with that sentence. Today it is shown as one line in the
-connect dialog and in the account menu. It never gates connecting or reading.
+Executing a plan is not offered where it is unavailable: the portfolio page shows that sentence instead of the
+action that prepares a plan. The sentence is also one line in the connect dialog and in the account menu. It never
+gates connecting or reading.
 
 ## The wallet page
 

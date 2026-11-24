@@ -1,7 +1,8 @@
 # Publishing from the Studio
 
-The Studio sends the only transaction the web app can send: `createIndex` on `IndexRegistry`. This page describes
-that write path and what protects each step. The user-facing behavior is in
+The Studio sends `createIndex` on `IndexRegistry`. This page describes that write path and what protects each
+step. The other write path of the web app, executing a plan from the portfolio page, is described in
+[Sending an execution plan](execution-sending.md). The user-facing behavior is in
 [Index Studio](../product/index-studio.md), the contract in [Index registry](../architecture/index-registry.md).
 
 ## What is at stake

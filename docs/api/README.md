@@ -213,14 +213,17 @@ and say so. The commands use `NEXT_PUBLIC_SITE_URL`, the origin of the deploymen
 ## Execution availability and the jurisdiction gate
 
 No endpoint executes a trade. `POST /portfolio/execution-plan` prepares calls and applies the gate below as its
-first check, but nothing is signed or sent. `GET /api/v1/status` reports `executionAvailable`, which is `false`
-for every request in this version, with a reason:
+first check; the calls are signed, if at all, by the user's own wallet in the browser. `GET /api/v1/status`
+reports `executionAvailable`, which is `true` for every request the gate lets through, and otherwise `false` with a
+reason:
 
-| `executionUnavailableReason` | Meaning                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| `restricted_jurisdiction`    | The request is located in the United States or one of its territories     |
-| `jurisdiction_unknown`       | The location of the request could not be established                      |
-| `not_released`               | The gate would let the request through. This version sends no transaction |
+| `executionUnavailableReason` | Meaning                                                               |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `restricted_jurisdiction`    | The request is located in the United States or one of its territories |
+| `jurisdiction_unknown`       | The location of the request could not be established                  |
+
+Earlier versions answered `false` with `not_released` for every request the gate let through. A client that still
+receives that value treats execution as unavailable.
 
 The gate is `classifyJurisdiction` in `apps/web/src/server/jurisdiction.ts`. It reads the country the hosting
 platform reports in the `x-vercel-ip-country` header.
