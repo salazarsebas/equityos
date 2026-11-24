@@ -7,22 +7,29 @@ export type Verification<Result> =
   | { readonly ok: true; readonly result: Result }
   | { readonly ok: false; readonly reason: string };
 
-export interface Replacement {
+export interface Replacement<Id extends string = Hex> {
   /** `repriced`: the same transaction with another fee. Otherwise a different transaction took the nonce. */
   readonly reason: "repriced" | "cancelled" | "replaced";
-  readonly hash: Hex;
+  readonly hash: Id;
 }
 
-/** Everything a transaction needs from the outside world. The hook wires these to the wallet and the chain. */
-export interface TxDriver<Receipt extends { readonly status: "success" | "reverted" }, Result> {
-  /** Asks the wallet to sign and broadcast. Resolves with the transaction hash. */
-  send(): Promise<Hex>;
+/**
+ * Everything a transaction needs from the outside world. The hook wires these to the wallet and the chain.
+ * `Id` is the transaction hash, or the identifier of a batch sent with `wallet_sendCalls`.
+ */
+export interface TxDriver<
+  Receipt extends { readonly status: "success" | "reverted" },
+  Result,
+  Id extends string = Hex,
+> {
+  /** Asks the wallet to sign and broadcast. Resolves with the transaction hash or the batch identifier. */
+  send(): Promise<Id>;
   /**
    * Waits for the receipt. Calls `onReplaced` when the nonce was used by another transaction.
    *
    * @returns the receipt, or `null` when none was found in time
    */
-  wait(hash: Hex, onReplaced: (replacement: Replacement) => void): Promise<Receipt | null>;
+  wait(hash: Id, onReplaced: (replacement: Replacement<Id>) => void): Promise<Receipt | null>;
   /** Establishes the effect of a successful receipt by reading the chain. */
   verify(receipt: Receipt): Promise<Verification<Result>>;
   /** Classifies an error thrown by `send`. */
@@ -32,10 +39,14 @@ export interface TxDriver<Receipt extends { readonly status: "success" | "revert
 const UNREADABLE = "The chain could not be read to check the result. The transaction itself was mined.";
 
 /** Runs `verify` and reports its outcome. A check that throws is a failed check, never a pass. */
-export async function runVerification<Receipt extends { readonly status: "success" | "reverted" }, Result>(
-  driver: Pick<TxDriver<Receipt, Result>, "verify">,
+export async function runVerification<
+  Receipt extends { readonly status: "success" | "reverted" },
+  Result,
+  Id extends string = Hex,
+>(
+  driver: Pick<TxDriver<Receipt, Result, Id>, "verify">,
   receipt: Receipt,
-  dispatch: (event: TxEvent<Result>) => void,
+  dispatch: (event: TxEvent<Result, Id>) => void,
 ): Promise<void> {
   const outcome = await driver.verify(receipt).catch((): Verification<Result> => ({ ok: false, reason: UNREADABLE }));
   dispatch(
@@ -49,12 +60,13 @@ export async function runVerification<Receipt extends { readonly status: "succes
  *
  * @returns the successful receipt, kept by the caller for a later recheck, or `null`
  */
-export async function runTransaction<Receipt extends { readonly status: "success" | "reverted" }, Result>(
-  driver: TxDriver<Receipt, Result>,
-  dispatch: (event: TxEvent<Result>) => void,
-): Promise<Receipt | null> {
+export async function runTransaction<
+  Receipt extends { readonly status: "success" | "reverted" },
+  Result,
+  Id extends string = Hex,
+>(driver: TxDriver<Receipt, Result, Id>, dispatch: (event: TxEvent<Result, Id>) => void): Promise<Receipt | null> {
   dispatch({ type: "request" });
-  let hash: Hex;
+  let hash: Id;
   try {
     hash = await driver.send();
   } catch (error) {
