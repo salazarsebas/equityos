@@ -63,6 +63,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `@equityos/core`, the commands that verify a published version, the asset universe and registry state with
   their sources and times, the portfolio comparison, the keyless API and the current limitations. Rendered on
   request. Open Graph image at `/opengraph-image`.
+- Network metrics at `/network` and `GET /api/v1/network`, computed from chain events only: published indexes,
+  versions, creators and deprecations, rebalance attestations by tier (A: matching constituent flows in the same
+  transaction, B: linked within 900 seconds, unmatched), distinct accounts, accounts within tolerance and the
+  reference value moved, each with its definition and block range. Excluded accounts are set with
+  `EQUITYOS_EXCLUDED_ACCOUNTS` and shown apart. API version 1.3.0.
+- The local seed records example usage with mock tokens and feeds, and the registry replay carries the
+  requests of the network metrics.
 
 ### Changed
 
