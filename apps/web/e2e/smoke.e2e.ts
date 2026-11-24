@@ -33,9 +33,10 @@ for (const route of routes) {
 }
 
 // A layout that reads the request (cookies, headers) stops every page under it from being prerendered. This
-// fails when that happens to a static page, or when a page that must render on request becomes static.
+// fails when that happens to a static page, or when a page that must render on request becomes static. The home
+// page renders on request: it shows figures counted from the market data and the registry at that moment.
 for (const [route, prerendered] of [
-  ["/", true],
+  ["/", false],
   ["/dev/components", true],
   ["/studio", true],
   ["/assets", false],

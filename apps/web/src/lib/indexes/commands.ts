@@ -4,8 +4,10 @@ export interface VerificationTarget {
   readonly chainId: number;
   /** Address of the IndexRegistry on that chain. */
   readonly registry: string;
+  /** The index id, or a shell variable such as `$INDEX_ID` where no index is published yet. */
   readonly indexId: string;
-  readonly version: number;
+  /** The version, or a shell variable such as `$VERSION` where no index is published yet. */
+  readonly version: number | string;
   /** Public origin of this deployment, without a trailing slash. */
   readonly siteUrl: string;
 }

@@ -1,0 +1,1574 @@
+{
+  "description": "Responses of API v1 recorded from the test fixtures, not from a live network: market data of Base mainnet block 60489401 (2026-11-21T19:10:55Z), constructed balances, and an index registry on a local development chain (chain id 31337) after the seed.",
+  "examples": [
+    {
+      "name": "listAssets",
+      "operationId": "listAssets",
+      "title": "The index-eligible assets",
+      "path": "/api/v1/assets?eligible=true",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": [
+          {
+            "address": "0xb200000000000000000000c2e324d24d7eecd1fb",
+            "symbol": "AAPLc",
+            "name": "Apple Inc.",
+            "decimals": 8,
+            "isin": "US0378331005",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "610312108319",
+              "multiplierWad": "1000500389301980219",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "34529769685",
+              "updatedAt": "2026-11-20T23:12:02Z",
+              "roundId": "36893488147419103834",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x787f13dea48db0897cbcdd985de77809d837f988"
+            }
+          },
+          {
+            "address": "0xb200000000000000000000d9192b6b456483c2e8",
+            "symbol": "AMZNc",
+            "name": "Amazon.com Inc.",
+            "decimals": 8,
+            "isin": "US0231351067",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "1019850295316",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "25087900000",
+              "updatedAt": "2026-11-21T00:23:57Z",
+              "roundId": "36893488147419104175",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x06a8e4b3abb3b7543d8396fb2b763d22820cb295"
+            }
+          },
+          {
+            "address": "0xb20000000000000000000016e38fd364d271ba28",
+            "symbol": "ANTc",
+            "name": "Anthropic, PBC",
+            "decimals": 8,
+            "isin": "US03703U1079",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "1493596406155",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "8759500000",
+              "updatedAt": "2026-11-21T00:56:41Z",
+              "roundId": "18446744073709551997",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0xeedc7412e991a3f2bd693eb2ac7fb0f27d4660da"
+            }
+          },
+          {
+            "address": "0xb20000000000000000000019f6e7c675b73c2e4d",
+            "symbol": "CRCLc",
+            "name": "Circle Internet Group Inc.",
+            "decimals": 8,
+            "isin": "US1725731079",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "321589041742",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "4879500000",
+              "updatedAt": "2026-11-21T00:12:04Z",
+              "roundId": "36893488147419107711",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x0231cf2635d1e17bb5c2462cc7504ba1fbd61f33"
+            }
+          },
+          {
+            "address": "0xb2000000000000000000002d0ba3164cc74f58b7",
+            "symbol": "GOOGLc",
+            "name": "Alphabet Inc.",
+            "decimals": 8,
+            "isin": "US02079K3059",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "3724830223607",
+              "multiplierWad": "1000377118676784179",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "26971567647",
+              "updatedAt": "2026-11-20T21:42:19Z",
+              "roundId": "36893488147419104148",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x5bf49e0ffa937ce2fff033c739ad7c634c4d34f2"
+            }
+          },
+          {
+            "address": "0xb2000000000000000000004aff16039ba04bdfbc",
+            "symbol": "INTCc",
+            "name": "Intel Corporation",
+            "decimals": 8,
+            "isin": "US4581401001",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "299036000780",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "5291500000",
+              "updatedAt": "2026-11-20T23:50:55Z",
+              "roundId": "36893488147419107084",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0xab657c39bac0d5886250d70849e2e3e008f2eecb"
+            }
+          },
+          {
+            "address": "0xb2000000000000000000008bc8786b856e61707c",
+            "symbol": "METAc",
+            "name": "Meta Platforms Inc.",
+            "decimals": 8,
+            "isin": "US30303M1027",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "903750744454",
+              "multiplierWad": "1000313792289598084",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "56717792022",
+              "updatedAt": "2026-11-20T21:15:17Z",
+              "roundId": "36893488147419104702",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x6526ae6797a76123638b863aee4dd27ba4e4b27d"
+            }
+          },
+          {
+            "address": "0xb200000000000000000000ab99cfa739e253872b",
+            "symbol": "MSFTc",
+            "name": "Microsoft Corporation",
+            "decimals": 8,
+            "isin": "US5949181045",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "270270741505",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "48919900000",
+              "updatedAt": "2026-11-21T00:11:11Z",
+              "roundId": "36893488147419104059",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0xeb10a6c9aa7e537aed766c08c35dae35b321b18c"
+            }
+          },
+          {
+            "address": "0xb2000000000000000000004884b426556b92883d",
+            "symbol": "MSTRc",
+            "name": "Strategy Inc.",
+            "decimals": 8,
+            "isin": "US5949724083",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "2308097804302",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "7937000000",
+              "updatedAt": "2026-11-21T00:08:11Z",
+              "roundId": "36893488147419107811",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0xb3ce282cd188b35da0e38d8bc7d58e33173d202a"
+            }
+          },
+          {
+            "address": "0xb20000000000000000000078ee7ce2fe4908108c",
+            "symbol": "NVDAc",
+            "name": "NVIDIA Corporation",
+            "decimals": 8,
+            "isin": "US67066G1040",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "6201973777574",
+              "multiplierWad": "1000537939576369481",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "12982480034",
+              "updatedAt": "2026-11-20T23:42:40Z",
+              "roundId": "36893488147419104856",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x04689a41629776563e6822f76f2e57d148d28513"
+            }
+          },
+          {
+            "address": "0xb200000000000000000000397293cb8cda9a10c5",
+            "symbol": "SNDKc",
+            "name": "Sandisk Corporation",
+            "decimals": 8,
+            "isin": "US80004C2008",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "333003853669",
+              "multiplierWad": "8000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "64944000000",
+              "updatedAt": "2026-11-20T23:38:55Z",
+              "roundId": "36893488147419108543",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x388b0dc46c0fb05a74bee0994fa5b02c6fcca2ea"
+            }
+          },
+          {
+            "address": "0xb2000000000000000000007b9fcbd005511acbd5",
+            "symbol": "SPCXc",
+            "name": "Space Exploration Technologies Corp.",
+            "decimals": 8,
+            "isin": "US84615Q1031",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "3011660889535",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "12934000000",
+              "updatedAt": "2026-11-20T21:52:02Z",
+              "roundId": "36893488147419106081",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0x6a634b235903c4ad6376892180d6ff8612e3fa68"
+            }
+          },
+          {
+            "address": "0xb2000000000000000000001e800a7f5189430cd0",
+            "symbol": "TSLAc",
+            "name": "Tesla Inc.",
+            "decimals": 8,
+            "isin": "US88160R1014",
+            "onchain": {
+              "status": "ok",
+              "decimals": 8,
+              "totalSupply": "652732389899",
+              "multiplierWad": "1000000000000000000",
+              "pendingMultiplier": null,
+              "transfersPaused": false
+            },
+            "eligibility": { "eligible": true, "reasons": [] },
+            "referencePrice": {
+              "status": "last_close",
+              "priceE8": "35045000000",
+              "updatedAt": "2026-11-20T22:43:49Z",
+              "roundId": "36893488147419104789",
+              "unavailableReason": null,
+              "lastObserved": null,
+              "feedProxy": "0xfaf869185383a24f8cb00e27bda6b63b9905dcb4"
+            }
+          }
+        ],
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "marketPhase": "closed",
+          "referencePriceSource": "chainlink",
+          "datasets": {
+            "assetList": {
+              "source": "coinbase_api",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null
+            },
+            "onchain": {
+              "source": "base_rpc",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null,
+              "blockNumber": "60489401",
+              "blockTimestamp": "2026-11-21T19:10:55Z"
+            }
+          },
+          "count": 13,
+          "total": 17
+        }
+      }
+    },
+    {
+      "name": "getAsset",
+      "operationId": "getAsset",
+      "title": "One asset",
+      "path": "/api/v1/assets/0xb20000000000000000000078ee7ce2fe4908108c",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "address": "0xb20000000000000000000078ee7ce2fe4908108c",
+          "symbol": "NVDAc",
+          "name": "NVIDIA Corporation",
+          "decimals": 8,
+          "isin": "US67066G1040",
+          "onchain": {
+            "status": "ok",
+            "decimals": 8,
+            "totalSupply": "6201973777574",
+            "multiplierWad": "1000537939576369481",
+            "pendingMultiplier": null,
+            "transfersPaused": false
+          },
+          "eligibility": { "eligible": true, "reasons": [] },
+          "referencePrice": {
+            "status": "last_close",
+            "priceE8": "12982480034",
+            "updatedAt": "2026-11-20T23:42:40Z",
+            "roundId": "36893488147419104856",
+            "unavailableReason": null,
+            "lastObserved": null,
+            "feedProxy": "0x04689a41629776563e6822f76f2e57d148d28513"
+          }
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "marketPhase": "closed",
+          "referencePriceSource": "chainlink",
+          "datasets": {
+            "assetList": {
+              "source": "coinbase_api",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null
+            },
+            "onchain": {
+              "source": "base_rpc",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null,
+              "blockNumber": "60489401",
+              "blockTimestamp": "2026-11-21T19:10:55Z"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "getAsset.invalidAddress",
+      "operationId": "getAsset",
+      "title": "A malformed address",
+      "path": "/api/v1/assets/0x1234",
+      "registry": "recorded",
+      "status": 400,
+      "body": {
+        "error": {
+          "code": "invalid_address",
+          "message": "The address is not a 0x-prefixed 20-byte hex string.",
+          "details": { "parameter": "address" }
+        }
+      }
+    },
+    {
+      "name": "listIndexes",
+      "operationId": "listIndexes",
+      "title": "The first page of two indexes",
+      "path": "/api/v1/indexes?limit=2",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": [
+          {
+            "indexId": "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759",
+            "identifier": "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759",
+            "position": 0,
+            "creator": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            "createdAt": "2026-11-16T14:00:05Z",
+            "latestVersion": 1,
+            "deprecated": false,
+            "deprecatedAt": null,
+            "latest": {
+              "version": 1,
+              "name": null,
+              "slug": null,
+              "weighting": null,
+              "composition": "static",
+              "constituentCount": 2,
+              "specHash": "0xf0d73df88cb1dee88d5a454bb5527c878c9369366dce566eddf3ffaf9079c40f",
+              "publishedAt": "2026-11-16T14:00:05Z",
+              "publishedBlock": "3",
+              "verification": { "conformant": false, "failedCheck": { "id": "C5", "code": "weight_mismatch" } }
+            }
+          },
+          {
+            "indexId": "0xfdc98c0fc4653ca711a134513147c46e74ad65e4a8222f9c448039cc844f3936",
+            "identifier": "single-asset-fdc98c0f",
+            "position": 1,
+            "creator": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            "createdAt": "2026-11-16T14:00:05Z",
+            "latestVersion": 1,
+            "deprecated": true,
+            "deprecatedAt": "2026-11-16T14:00:05Z",
+            "latest": {
+              "version": 1,
+              "name": "Single Asset Example",
+              "slug": "single-asset",
+              "weighting": "equal",
+              "composition": "static",
+              "constituentCount": 1,
+              "specHash": "0xe76d339311df9c4d1ced8f3da8d94d47d8067ae519c49bed5fcbadb4343da161",
+              "publishedAt": "2026-11-16T14:00:05Z",
+              "publishedBlock": "4",
+              "verification": { "conformant": true, "failedCheck": null }
+            }
+          }
+        ],
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" },
+          "total": 5,
+          "offset": 0,
+          "limit": 2,
+          "count": 2,
+          "nextOffset": 2
+        }
+      }
+    },
+    {
+      "name": "listIndexes.registryNotDeployed",
+      "operationId": "listIndexes",
+      "title": "A deployment whose chain has no registry",
+      "path": "/api/v1/indexes",
+      "registry": "not_deployed",
+      "status": 409,
+      "body": {
+        "error": {
+          "code": "registry_not_deployed",
+          "message": "The index registry is not deployed on the configured chain.",
+          "details": {
+            "chainId": 8453,
+            "registry": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+            "reason": "not_configured"
+          }
+        }
+      }
+    },
+    {
+      "name": "getIndex",
+      "operationId": "getIndex",
+      "title": "One index and its versions",
+      "path": "/api/v1/indexes/diversified-equity-d622e2a5",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+          "identifier": "diversified-equity-d622e2a5",
+          "position": 4,
+          "creator": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+          "createdAt": "2026-11-16T14:00:05Z",
+          "latestVersion": 2,
+          "deprecated": false,
+          "deprecatedAt": null,
+          "latest": {
+            "version": 2,
+            "name": "Diversified Equity",
+            "slug": "diversified-equity",
+            "weighting": "fixed",
+            "composition": "static",
+            "constituentCount": 5,
+            "specHash": "0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6",
+            "publishedAt": "2026-11-16T14:00:05Z",
+            "publishedBlock": "9",
+            "verification": { "conformant": true, "failedCheck": null }
+          },
+          "versions": [
+            {
+              "version": 2,
+              "publishedAt": "2026-11-16T14:00:05Z",
+              "publishedBlock": "9",
+              "specHash": "0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6",
+              "conformant": true
+            },
+            {
+              "version": 1,
+              "publishedAt": "2026-11-16T14:00:05Z",
+              "publishedBlock": "8",
+              "specHash": "0xe64cf7b3200cae7821979cad14798da5796817439c6a5dd96f1f52946cc87b03",
+              "conformant": true
+            }
+          ]
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
+        }
+      }
+    },
+    {
+      "name": "getIndex.notFound",
+      "operationId": "getIndex",
+      "title": "A known prefix with another slug",
+      "path": "/api/v1/indexes/another-name-d622e2a5",
+      "registry": "recorded",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "index_not_found",
+          "message": "The registry holds no index with this identifier.",
+          "details": null
+        }
+      }
+    },
+    {
+      "name": "getIndexVersion",
+      "operationId": "getIndexVersion",
+      "title": "A verified version",
+      "path": "/api/v1/indexes/diversified-equity-d622e2a5/versions/2",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+          "identifier": "diversified-equity-d622e2a5",
+          "version": 2,
+          "latestVersion": 2,
+          "isLatest": true,
+          "creator": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+          "chainId": 31337,
+          "registry": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+          "specHash": "0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6",
+          "publishedAt": "2026-11-16T14:00:05Z",
+          "publishedBlock": "9",
+          "composition": "static",
+          "specSize": 969,
+          "specBytes": "0x7b2263616c63223a226571756974796f732e63616c632f31222c22636861696e4964223a33313333372c22636f6e73747261696e7473223a7b226d6178576569676874427073223a323530307d2c226465736372697074696f6e223a224669766520636f6d70616e6965732066726f6d20646966666572656e7420696e647573747269657320617420666978656420776569676874732e2056657273696f6e20322061646473206120666966746820636f6d70616e792e222c226e616d65223a22446976657273696669656420457175697479222c2270726963696e67223a7b226665656473223a5b22307866616638363931383533383361323466386362303065323762646136623633623939303564636234222c22307862336365323832636431383862333564613065333864386263376435386533333137336432303261222c22307830343638396134313632393737363536336536383232663736663265353764313438643238353133222c22307837383766313364656134386462303839376362636464393835646537373830396438333766393838222c22307830366138653462336162623362373534336438333936666232623736336432323832306362323935225d2c22736f75726365223a22636861696e6c696e6b2d61676772656761746f722d7633227d2c22726562616c616e6365223a7b2264726966745468726573686f6c64427073223a3530302c226d696e496e74657276616c5365636f6e6473223a3630343830302c2274726967676572223a226472696674227d2c22736368656d61223a226571756974796f732e696e6465782f31222c22736c7567223a2264697665727369666965642d657175697479222c22756e697665727365223a7b22746f6b656e73223a5b22307862323030303030303030303030303030303030303030316538303061376635313839343330636430222c22307862323030303030303030303030303030303030303030343838346234323635353662393238383364222c22307862323030303030303030303030303030303030303030373865653763653266653439303831303863222c22307862323030303030303030303030303030303030303030633265333234643234643765656364316662222c22307862323030303030303030303030303030303030303030643931393262366234353634383363326538225d2c2274797065223a22737461746963227d2c22776569676874696e67223a7b2274797065223a226669786564222c2277656967687473427073223a5b323530302c313030302c323530302c323530302c313530305d7d7d",
+          "specText": "{\"calc\":\"equityos.calc/1\",\"chainId\":31337,\"constraints\":{\"maxWeightBps\":2500},\"description\":\"Five companies from different industries at fixed weights. Version 2 adds a fifth company.\",\"name\":\"Diversified Equity\",\"pricing\":{\"feeds\":[\"0xfaf869185383a24f8cb00e27bda6b63b9905dcb4\",\"0xb3ce282cd188b35da0e38d8bc7d58e33173d202a\",\"0x04689a41629776563e6822f76f2e57d148d28513\",\"0x787f13dea48db0897cbcdd985de77809d837f988\",\"0x06a8e4b3abb3b7543d8396fb2b763d22820cb295\"],\"source\":\"chainlink-aggregator-v3\"},\"rebalance\":{\"driftThresholdBps\":500,\"minIntervalSeconds\":604800,\"trigger\":\"drift\"},\"schema\":\"equityos.index/1\",\"slug\":\"diversified-equity\",\"universe\":{\"tokens\":[\"0xb2000000000000000000001e800a7f5189430cd0\",\"0xb2000000000000000000004884b426556b92883d\",\"0xb20000000000000000000078ee7ce2fe4908108c\",\"0xb200000000000000000000c2e324d24d7eecd1fb\",\"0xb200000000000000000000d9192b6b456483c2e8\"],\"type\":\"static\"},\"weighting\":{\"type\":\"fixed\",\"weightsBps\":[2500,1000,2500,2500,1500]}}",
+          "spec": {
+            "schema": "equityos.index/1",
+            "calc": "equityos.calc/1",
+            "chainId": 31337,
+            "name": "Diversified Equity",
+            "slug": "diversified-equity",
+            "description": "Five companies from different industries at fixed weights. Version 2 adds a fifth company.",
+            "universe": {
+              "type": "static",
+              "tokens": [
+                "0xb2000000000000000000001e800a7f5189430cd0",
+                "0xb2000000000000000000004884b426556b92883d",
+                "0xb20000000000000000000078ee7ce2fe4908108c",
+                "0xb200000000000000000000c2e324d24d7eecd1fb",
+                "0xb200000000000000000000d9192b6b456483c2e8"
+              ]
+            },
+            "weighting": { "type": "fixed", "weightsBps": [2500, 1000, 2500, 2500, 1500] },
+            "constraints": { "maxWeightBps": 2500 },
+            "pricing": {
+              "source": "chainlink-aggregator-v3",
+              "feeds": [
+                "0xfaf869185383a24f8cb00e27bda6b63b9905dcb4",
+                "0xb3ce282cd188b35da0e38d8bc7d58e33173d202a",
+                "0x04689a41629776563e6822f76f2e57d148d28513",
+                "0x787f13dea48db0897cbcdd985de77809d837f988",
+                "0x06a8e4b3abb3b7543d8396fb2b763d22820cb295"
+              ]
+            },
+            "rebalance": { "trigger": "drift", "driftThresholdBps": 500, "minIntervalSeconds": 604800 }
+          },
+          "constituents": [
+            { "token": "0xb2000000000000000000001e800a7f5189430cd0", "weightBps": 2500 },
+            { "token": "0xb2000000000000000000004884b426556b92883d", "weightBps": 1000 },
+            { "token": "0xb20000000000000000000078ee7ce2fe4908108c", "weightBps": 2500 },
+            { "token": "0xb200000000000000000000c2e324d24d7eecd1fb", "weightBps": 2500 },
+            { "token": "0xb200000000000000000000d9192b6b456483c2e8", "weightBps": 1500 }
+          ],
+          "verification": {
+            "conformant": true,
+            "checks": [
+              {
+                "id": "C1",
+                "title": "The spec bytes hash to the published spec hash",
+                "status": "pass",
+                "code": "ok",
+                "reason": "keccak256 of the 969 bytes is 0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6"
+              },
+              {
+                "id": "C2",
+                "title": "The spec bytes are UTF-8 JSON without duplicate keys",
+                "status": "pass",
+                "code": "ok",
+                "reason": "well-formed UTF-8, one JSON value, no duplicate property names"
+              },
+              {
+                "id": "C3",
+                "title": "The spec bytes are the canonical serialization",
+                "status": "pass",
+                "code": "ok",
+                "reason": "the bytes equal the canonical serialization of the parsed value"
+              },
+              {
+                "id": "C4",
+                "title": "The spec is valid for its schema and for this chain",
+                "status": "pass",
+                "code": "ok",
+                "reason": "valid equityos.index/1 document for chain 31337"
+              },
+              {
+                "id": "C5",
+                "title": "The published constituents are the ones the spec implies",
+                "status": "pass",
+                "code": "ok",
+                "reason": "5 constituents match the spec in order and weight"
+              }
+            ],
+            "specErrors": []
+          }
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
+        }
+      }
+    },
+    {
+      "name": "getIndexVersion.notConformant",
+      "operationId": "getIndexVersion",
+      "title": "A version that fails check C5",
+      "path": "/api/v1/indexes/0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759/versions/1",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "indexId": "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759",
+          "identifier": "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759",
+          "version": 1,
+          "latestVersion": 1,
+          "isLatest": true,
+          "creator": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+          "chainId": 31337,
+          "registry": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+          "specHash": "0xf0d73df88cb1dee88d5a454bb5527c878c9369366dce566eddf3ffaf9079c40f",
+          "publishedAt": "2026-11-16T14:00:05Z",
+          "publishedBlock": "3",
+          "composition": "static",
+          "specSize": 627,
+          "specBytes": "0x7b2263616c63223a226571756974796f732e63616c632f31222c22636861696e4964223a33313333372c226465736372697074696f6e223a2254776f20636f6d70616e696573206174207468652073616d65207765696768742e205075626c69736865642077697468206f7468657220776569676874732c20736f20766572696669636174696f6e206661696c732e222c226e616d65223a224d69736d6174636865642057656967687473204578616d706c65222c2270726963696e67223a7b226665656473223a5b22307861623635376333396261633064353838363235306437303834396532653365303038663265656362222c22307865623130613663396161376535333761656437363663303863333564616533356233323162313863225d2c22736f75726365223a22636861696e6c696e6b2d61676772656761746f722d7633227d2c22726562616c616e6365223a7b2264726966745468726573686f6c64427073223a3530302c226d696e496e74657276616c5365636f6e6473223a3630343830302c2274726967676572223a226472696674227d2c22736368656d61223a226571756974796f732e696e6465782f31222c22736c7567223a226d69736d6174636865642d77656967687473222c22756e697665727365223a7b22746f6b656e73223a5b22307862323030303030303030303030303030303030303030346166663136303339626130346264666263222c22307862323030303030303030303030303030303030303030616239396366613733396532353338373262225d2c2274797065223a22737461746963227d2c22776569676874696e67223a7b2274797065223a22657175616c227d7d",
+          "specText": "{\"calc\":\"equityos.calc/1\",\"chainId\":31337,\"description\":\"Two companies at the same weight. Published with other weights, so verification fails.\",\"name\":\"Mismatched Weights Example\",\"pricing\":{\"feeds\":[\"0xab657c39bac0d5886250d70849e2e3e008f2eecb\",\"0xeb10a6c9aa7e537aed766c08c35dae35b321b18c\"],\"source\":\"chainlink-aggregator-v3\"},\"rebalance\":{\"driftThresholdBps\":500,\"minIntervalSeconds\":604800,\"trigger\":\"drift\"},\"schema\":\"equityos.index/1\",\"slug\":\"mismatched-weights\",\"universe\":{\"tokens\":[\"0xb2000000000000000000004aff16039ba04bdfbc\",\"0xb200000000000000000000ab99cfa739e253872b\"],\"type\":\"static\"},\"weighting\":{\"type\":\"equal\"}}",
+          "spec": null,
+          "constituents": [
+            { "token": "0xb2000000000000000000004aff16039ba04bdfbc", "weightBps": 6000 },
+            { "token": "0xb200000000000000000000ab99cfa739e253872b", "weightBps": 4000 }
+          ],
+          "verification": {
+            "conformant": false,
+            "checks": [
+              {
+                "id": "C1",
+                "title": "The spec bytes hash to the published spec hash",
+                "status": "pass",
+                "code": "ok",
+                "reason": "keccak256 of the 627 bytes is 0xf0d73df88cb1dee88d5a454bb5527c878c9369366dce566eddf3ffaf9079c40f"
+              },
+              {
+                "id": "C2",
+                "title": "The spec bytes are UTF-8 JSON without duplicate keys",
+                "status": "pass",
+                "code": "ok",
+                "reason": "well-formed UTF-8, one JSON value, no duplicate property names"
+              },
+              {
+                "id": "C3",
+                "title": "The spec bytes are the canonical serialization",
+                "status": "pass",
+                "code": "ok",
+                "reason": "the bytes equal the canonical serialization of the parsed value"
+              },
+              {
+                "id": "C4",
+                "title": "The spec is valid for its schema and for this chain",
+                "status": "pass",
+                "code": "ok",
+                "reason": "valid equityos.index/1 document for chain 31337"
+              },
+              {
+                "id": "C5",
+                "title": "The published constituents are the ones the spec implies",
+                "status": "fail",
+                "code": "weight_mismatch",
+                "reason": "0xb2000000000000000000004aff16039ba04bdfbc is published at 6000 bps, the spec implies 5000 bps"
+              }
+            ],
+            "specErrors": []
+          }
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
+        }
+      }
+    },
+    {
+      "name": "getIndexComposition",
+      "operationId": "getIndexComposition",
+      "title": "The composition of the latest version",
+      "path": "/api/v1/indexes/diversified-equity-d622e2a5/composition",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+          "identifier": "diversified-equity-d622e2a5",
+          "version": 2,
+          "isLatest": true,
+          "constituents": [
+            {
+              "token": "0xb2000000000000000000001e800a7f5189430cd0",
+              "symbol": "TSLAc",
+              "name": "Tesla Inc.",
+              "targetWeightBps": 2500,
+              "eligibility": { "eligible": true, "reasons": [] },
+              "transfersPaused": false,
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "35045000000",
+                "updatedAt": "2026-11-20T22:43:49Z",
+                "roundId": "36893488147419104789",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0xfaf869185383a24f8cb00e27bda6b63b9905dcb4"
+              }
+            },
+            {
+              "token": "0xb2000000000000000000004884b426556b92883d",
+              "symbol": "MSTRc",
+              "name": "Strategy Inc.",
+              "targetWeightBps": 1000,
+              "eligibility": { "eligible": true, "reasons": [] },
+              "transfersPaused": false,
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "7937000000",
+                "updatedAt": "2026-11-21T00:08:11Z",
+                "roundId": "36893488147419107811",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0xb3ce282cd188b35da0e38d8bc7d58e33173d202a"
+              }
+            },
+            {
+              "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+              "symbol": "NVDAc",
+              "name": "NVIDIA Corporation",
+              "targetWeightBps": 2500,
+              "eligibility": { "eligible": true, "reasons": [] },
+              "transfersPaused": false,
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "12982480034",
+                "updatedAt": "2026-11-20T23:42:40Z",
+                "roundId": "36893488147419104856",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x04689a41629776563e6822f76f2e57d148d28513"
+              }
+            },
+            {
+              "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+              "symbol": "AAPLc",
+              "name": "Apple Inc.",
+              "targetWeightBps": 2500,
+              "eligibility": { "eligible": true, "reasons": [] },
+              "transfersPaused": false,
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "34529769685",
+                "updatedAt": "2026-11-20T23:12:02Z",
+                "roundId": "36893488147419103834",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x787f13dea48db0897cbcdd985de77809d837f988"
+              }
+            },
+            {
+              "token": "0xb200000000000000000000d9192b6b456483c2e8",
+              "symbol": "AMZNc",
+              "name": "Amazon.com Inc.",
+              "targetWeightBps": 1500,
+              "eligibility": { "eligible": true, "reasons": [] },
+              "transfersPaused": false,
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "25087900000",
+                "updatedAt": "2026-11-21T00:23:57Z",
+                "roundId": "36893488147419104175",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x06a8e4b3abb3b7543d8396fb2b763d22820cb295"
+              }
+            }
+          ]
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "marketPhase": "closed",
+          "referencePriceSource": "chainlink",
+          "datasets": {
+            "assetList": {
+              "source": "coinbase_api",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null
+            },
+            "onchain": {
+              "source": "base_rpc",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null,
+              "blockNumber": "60489401",
+              "blockTimestamp": "2026-11-21T19:10:55Z"
+            }
+          },
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
+        }
+      }
+    },
+    {
+      "name": "getIndexComposition.notConformant",
+      "operationId": "getIndexComposition",
+      "title": "A version that fails verification has no composition",
+      "path": "/api/v1/indexes/0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759/composition",
+      "registry": "recorded",
+      "status": 409,
+      "body": {
+        "error": {
+          "code": "version_not_conformant",
+          "message": "The version fails verification, so it has no composition.",
+          "details": { "version": 1, "failedCheck": "C5", "code": "weight_mismatch" }
+        }
+      }
+    },
+    {
+      "name": "getPortfolio",
+      "operationId": "getPortfolio",
+      "title": "An address compared with an index",
+      "path": "/api/v1/portfolio?address=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266&index=diversified-equity-d622e2a5",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+          "index": {
+            "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+            "identifier": "diversified-equity-d622e2a5",
+            "name": "Diversified Equity",
+            "version": 2,
+            "latestVersion": 2,
+            "isLatest": true,
+            "specHash": "0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6",
+            "driftThresholdBps": 500,
+            "minIntervalSeconds": 604800
+          },
+          "constituents": [
+            {
+              "token": "0xb2000000000000000000001e800a7f5189430cd0",
+              "symbol": "TSLAc",
+              "name": "Tesla Inc.",
+              "decimals": 8,
+              "balance": "456555856",
+              "targetWeightBps": 2500,
+              "currentWeightBps": 2000,
+              "driftBps": -500,
+              "valueUsdE8": "159999999735",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "35045000000",
+                "updatedAt": "2026-11-20T22:43:49Z",
+                "roundId": "36893488147419104789",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0xfaf869185383a24f8cb00e27bda6b63b9905dcb4"
+              }
+            },
+            {
+              "token": "0xb2000000000000000000004884b426556b92883d",
+              "symbol": "MSTRc",
+              "name": "Strategy Inc.",
+              "decimals": 8,
+              "balance": "503968753",
+              "targetWeightBps": 1000,
+              "currentWeightBps": 500,
+              "driftBps": -500,
+              "valueUsdE8": "39999999925",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "7937000000",
+                "updatedAt": "2026-11-21T00:08:11Z",
+                "roundId": "36893488147419107811",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0xb3ce282cd188b35da0e38d8bc7d58e33173d202a"
+              }
+            },
+            {
+              "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+              "symbol": "NVDAc",
+              "name": "NVIDIA Corporation",
+              "decimals": 8,
+              "balance": "2464860328",
+              "targetWeightBps": 2500,
+              "currentWeightBps": 4000,
+              "driftBps": 1500,
+              "valueUsdE8": "319999999948",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "12982480034",
+                "updatedAt": "2026-11-20T23:42:40Z",
+                "roundId": "36893488147419104856",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x04689a41629776563e6822f76f2e57d148d28513"
+              }
+            },
+            {
+              "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+              "symbol": "AAPLc",
+              "name": "Apple Inc.",
+              "decimals": 8,
+              "balance": "463368280",
+              "targetWeightBps": 2500,
+              "currentWeightBps": 2000,
+              "driftBps": -500,
+              "valueUsdE8": "159999999877",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "34529769685",
+                "updatedAt": "2026-11-20T23:12:02Z",
+                "roundId": "36893488147419103834",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x787f13dea48db0897cbcdd985de77809d837f988"
+              }
+            },
+            {
+              "token": "0xb200000000000000000000d9192b6b456483c2e8",
+              "symbol": "AMZNc",
+              "name": "Amazon.com Inc.",
+              "decimals": 8,
+              "balance": "478318233",
+              "targetWeightBps": 1500,
+              "currentWeightBps": 1500,
+              "driftBps": 0,
+              "valueUsdE8": "119999999976",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "25087900000",
+                "updatedAt": "2026-11-21T00:23:57Z",
+                "roundId": "36893488147419104175",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x06a8e4b3abb3b7543d8396fb2b763d22820cb295"
+              }
+            }
+          ],
+          "totals": {
+            "investedValueUsdE8": "799999999461",
+            "quoteBalance": "250500000",
+            "quoteValueUsdE8": "25050000000",
+            "quotePriceE8": "100000000",
+            "deployableValueUsdE8": "825049999461",
+            "cashShareBps": 303
+          },
+          "drift": {
+            "maxAbsDriftBps": 1500,
+            "maxDriftToken": "0xb20000000000000000000078ee7ce2fe4908108c",
+            "turnoverBps": 1500,
+            "driftThresholdBps": 500,
+            "thresholdReached": true
+          },
+          "outsideIndex": [
+            {
+              "token": "0xb2000000000000000000008bc8786b856e61707c",
+              "symbol": "METAc",
+              "name": "Meta Platforms Inc.",
+              "decimals": 8,
+              "balance": "300000000",
+              "valueUsdE8": "170153376066",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "56717792022",
+                "updatedAt": "2026-11-20T21:15:17Z",
+                "roundId": "36893488147419104702",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0x6526ae6797a76123638b863aee4dd27ba4e4b27d"
+              }
+            },
+            {
+              "token": "0xb200000000000000000000ab99cfa739e253872b",
+              "symbol": "MSFTc",
+              "name": "Microsoft Corporation",
+              "decimals": 8,
+              "balance": "125000000",
+              "valueUsdE8": "61149875000",
+              "referencePrice": {
+                "status": "last_close",
+                "priceE8": "48919900000",
+                "updatedAt": "2026-11-21T00:11:11Z",
+                "roundId": "36893488147419104059",
+                "unavailableReason": null,
+                "lastObserved": null,
+                "feedProxy": "0xeb10a6c9aa7e537aed766c08c35dae35b321b18c"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "code": "market_closed",
+              "severity": "warning",
+              "token": "0xb2000000000000000000001e800a7f5189430cd0",
+              "minimumDeployableValueUsdE8": null,
+              "uninvestedQuote": null,
+              "currentMaxAbsDriftBps": null,
+              "projectedMaxAbsDriftBps": null
+            },
+            {
+              "code": "market_closed",
+              "severity": "warning",
+              "token": "0xb2000000000000000000004884b426556b92883d",
+              "minimumDeployableValueUsdE8": null,
+              "uninvestedQuote": null,
+              "currentMaxAbsDriftBps": null,
+              "projectedMaxAbsDriftBps": null
+            },
+            {
+              "code": "market_closed",
+              "severity": "warning",
+              "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+              "minimumDeployableValueUsdE8": null,
+              "uninvestedQuote": null,
+              "currentMaxAbsDriftBps": null,
+              "projectedMaxAbsDriftBps": null
+            },
+            {
+              "code": "market_closed",
+              "severity": "warning",
+              "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+              "minimumDeployableValueUsdE8": null,
+              "uninvestedQuote": null,
+              "currentMaxAbsDriftBps": null,
+              "projectedMaxAbsDriftBps": null
+            },
+            {
+              "code": "market_closed",
+              "severity": "warning",
+              "token": "0xb200000000000000000000d9192b6b456483c2e8",
+              "minimumDeployableValueUsdE8": null,
+              "uninvestedQuote": null,
+              "currentMaxAbsDriftBps": null,
+              "projectedMaxAbsDriftBps": null
+            }
+          ]
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "marketPhase": "closed",
+          "referencePriceSource": "chainlink",
+          "datasets": {
+            "assetList": {
+              "source": "coinbase_api",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null
+            },
+            "onchain": {
+              "source": "base_rpc",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null,
+              "blockNumber": "60489401",
+              "blockTimestamp": "2026-11-21T19:10:55Z"
+            }
+          },
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" },
+          "balances": {
+            "chainId": 8453,
+            "blockNumber": "60489401",
+            "blockTimestamp": "2026-11-21T19:10:55Z",
+            "mode": "replay"
+          }
+        }
+      }
+    },
+    {
+      "name": "getPortfolioPlan",
+      "operationId": "getPortfolioPlan",
+      "title": "A ready plan in rebalance mode",
+      "path": "/api/v1/portfolio/plan?address=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266&index=diversified-equity-d622e2a5&mode=rebalance",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+          "index": {
+            "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+            "identifier": "diversified-equity-d622e2a5",
+            "name": "Diversified Equity",
+            "version": 2,
+            "latestVersion": 2,
+            "isLatest": true,
+            "specHash": "0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6",
+            "driftThresholdBps": 500,
+            "minIntervalSeconds": 604800
+          },
+          "priceBasis": "reference",
+          "executable": false,
+          "statement": "Arithmetic toward the published target weights at reference prices. It contains no executable quote, no slippage and no gas, and it is not an instruction to trade.",
+          "mode": "rebalance",
+          "depositUsdE8": "0",
+          "reserveBps": 50,
+          "minLegValueUsdE8": "100000000",
+          "plan": {
+            "status": "ready",
+            "warnings": [
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb2000000000000000000001e800a7f5189430cd0",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb2000000000000000000004884b426556b92883d",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb200000000000000000000d9192b6b456483c2e8",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              }
+            ],
+            "legs": [
+              {
+                "side": "sell",
+                "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+                "symbol": "NVDAc",
+                "decimals": 8,
+                "exit": false,
+                "tokenQuantity": "876084531",
+                "quoteAmount": "1137374993",
+                "valueUsdE8": "113737499318",
+                "priceE8": "12982480034"
+              },
+              {
+                "side": "buy",
+                "token": "0xb2000000000000000000001e800a7f5189430cd0",
+                "symbol": "TSLAc",
+                "decimals": 8,
+                "exit": false,
+                "tokenQuantity": "131348801",
+                "quoteAmount": "460311874",
+                "valueUsdE8": "46031187400",
+                "priceE8": "35045000000"
+              },
+              {
+                "side": "buy",
+                "token": "0xb2000000000000000000004884b426556b92883d",
+                "symbol": "MSTRc",
+                "decimals": 8,
+                "exit": false,
+                "tokenQuantity": "532852146",
+                "quoteAmount": "422924749",
+                "valueUsdE8": "42292474900",
+                "priceE8": "7937000000"
+              },
+              {
+                "side": "buy",
+                "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+                "symbol": "AAPLc",
+                "decimals": 8,
+                "exit": false,
+                "tokenQuantity": "133308700",
+                "quoteAmount": "460311871",
+                "valueUsdE8": "46031187100",
+                "priceE8": "34529769685"
+              },
+              {
+                "side": "buy",
+                "token": "0xb200000000000000000000d9192b6b456483c2e8",
+                "symbol": "AMZNc",
+                "decimals": 8,
+                "exit": false,
+                "tokenQuantity": "14902452",
+                "quoteAmount": "37387123",
+                "valueUsdE8": "3738712300",
+                "priceE8": "25087900000"
+              }
+            ],
+            "skipped": [],
+            "candidate": "uncapped",
+            "otherCandidateMaxAbsDriftBps": null,
+            "currentMaxAbsDriftBps": 1500,
+            "availableQuote": "250500000",
+            "buyBudgetQuote": "1380935618",
+            "deployableValueUsdE8": "825049999461",
+            "projected": {
+              "positions": [
+                {
+                  "token": "0xb2000000000000000000001e800a7f5189430cd0",
+                  "symbol": "TSLAc",
+                  "balance": "587904657",
+                  "valueUsdE8": "206031187045",
+                  "targetWeightBps": 2500,
+                  "weightBps": 2500,
+                  "driftBps": 0
+                },
+                {
+                  "token": "0xb2000000000000000000004884b426556b92883d",
+                  "symbol": "MSTRc",
+                  "balance": "1036820899",
+                  "valueUsdE8": "82292474753",
+                  "targetWeightBps": 1000,
+                  "weightBps": 998,
+                  "driftBps": -2
+                },
+                {
+                  "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+                  "symbol": "NVDAc",
+                  "balance": "1588775797",
+                  "valueUsdE8": "206262500630",
+                  "targetWeightBps": 2500,
+                  "weightBps": 2502,
+                  "driftBps": 2
+                },
+                {
+                  "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+                  "symbol": "AAPLc",
+                  "balance": "596676980",
+                  "valueUsdE8": "206031186957",
+                  "targetWeightBps": 2500,
+                  "weightBps": 2499,
+                  "driftBps": -1
+                },
+                {
+                  "token": "0xb200000000000000000000d9192b6b456483c2e8",
+                  "symbol": "AMZNc",
+                  "balance": "493220685",
+                  "valueUsdE8": "123738712232",
+                  "targetWeightBps": 1500,
+                  "weightBps": 1501,
+                  "driftBps": 1
+                }
+              ],
+              "investedValueUsdE8": "824356061617",
+              "quoteBalance": "6939376",
+              "maxAbsDriftBps": 2
+            }
+          }
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "marketPhase": "closed",
+          "referencePriceSource": "chainlink",
+          "datasets": {
+            "assetList": {
+              "source": "coinbase_api",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null
+            },
+            "onchain": {
+              "source": "base_rpc",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null,
+              "blockNumber": "60489401",
+              "blockTimestamp": "2026-11-21T19:10:55Z"
+            }
+          },
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" },
+          "balances": {
+            "chainId": 8453,
+            "blockNumber": "60489401",
+            "blockTimestamp": "2026-11-21T19:10:55Z",
+            "mode": "replay"
+          }
+        }
+      }
+    },
+    {
+      "name": "getPortfolioPlan.blocked",
+      "operationId": "getPortfolioPlan",
+      "title": "A blocked plan: a deposit too small to buy every constituent",
+      "path": "/api/v1/portfolio/plan?address=0x0000000000000000000000000000000000001003&index=diversified-equity-d622e2a5&mode=buy_only&depositUsdE8=200000000",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "address": "0x0000000000000000000000000000000000001003",
+          "index": {
+            "indexId": "0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610",
+            "identifier": "diversified-equity-d622e2a5",
+            "name": "Diversified Equity",
+            "version": 2,
+            "latestVersion": 2,
+            "isLatest": true,
+            "specHash": "0x90d5104e4313a341690a14046df6da168cd3c1924f5ceca79cdc8b3b51fe74f6",
+            "driftThresholdBps": 500,
+            "minIntervalSeconds": 604800
+          },
+          "priceBasis": "reference",
+          "executable": false,
+          "statement": "Arithmetic toward the published target weights at reference prices. It contains no executable quote, no slippage and no gas, and it is not an instruction to trade.",
+          "mode": "buy_only",
+          "depositUsdE8": "200000000",
+          "reserveBps": 50,
+          "minLegValueUsdE8": "100000000",
+          "plan": {
+            "status": "blocked",
+            "blockers": [
+              {
+                "code": "below_minimum_portfolio_value",
+                "severity": "blocker",
+                "token": null,
+                "minimumDeployableValueUsdE8": "1005033970",
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              }
+            ],
+            "warnings": [
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb2000000000000000000001e800a7f5189430cd0",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb2000000000000000000004884b426556b92883d",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb20000000000000000000078ee7ce2fe4908108c",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb200000000000000000000c2e324d24d7eecd1fb",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              },
+              {
+                "code": "market_closed",
+                "severity": "warning",
+                "token": "0xb200000000000000000000d9192b6b456483c2e8",
+                "minimumDeployableValueUsdE8": null,
+                "uninvestedQuote": null,
+                "currentMaxAbsDriftBps": null,
+                "projectedMaxAbsDriftBps": null
+              }
+            ]
+          }
+        },
+        "meta": {
+          "asOf": "2026-11-21T19:10:55Z",
+          "marketPhase": "closed",
+          "referencePriceSource": "chainlink",
+          "datasets": {
+            "assetList": {
+              "source": "coinbase_api",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null
+            },
+            "onchain": {
+              "source": "base_rpc",
+              "fetchedAt": "2026-11-21T19:10:55Z",
+              "ageSeconds": 0,
+              "servedStale": false,
+              "failure": null,
+              "blockNumber": "60489401",
+              "blockTimestamp": "2026-11-21T19:10:55Z"
+            }
+          },
+          "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" },
+          "balances": {
+            "chainId": 8453,
+            "blockNumber": "60489401",
+            "blockTimestamp": "2026-11-21T19:10:55Z",
+            "mode": "replay"
+          }
+        }
+      }
+    },
+    {
+      "name": "getStatus",
+      "operationId": "getStatus",
+      "title": "The status of the API and its data",
+      "path": "/api/v1/status",
+      "registry": "recorded",
+      "status": 200,
+      "body": {
+        "data": {
+          "apiVersion": "1.2.0",
+          "chainId": 8453,
+          "marketPhase": "closed",
+          "executionAvailable": false,
+          "executionUnavailableReason": "not_released",
+          "marketData": {
+            "mode": "replay",
+            "available": true,
+            "referencePriceSource": "chainlink",
+            "datasets": {
+              "assetList": {
+                "source": "coinbase_api",
+                "fetchedAt": "2026-11-21T19:10:55Z",
+                "ageSeconds": 0,
+                "servedStale": false,
+                "failure": null
+              },
+              "onchain": {
+                "source": "base_rpc",
+                "fetchedAt": "2026-11-21T19:10:55Z",
+                "ageSeconds": 0,
+                "servedStale": false,
+                "failure": null,
+                "blockNumber": "60489401",
+                "blockTimestamp": "2026-11-21T19:10:55Z"
+              }
+            },
+            "error": null
+          },
+          "registry": {
+            "chainId": 31337,
+            "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c",
+            "mode": "replay",
+            "deployed": true,
+            "notDeployedReason": null,
+            "indexCount": 5,
+            "error": null
+          }
+        },
+        "meta": { "asOf": "2026-11-21T19:10:55Z" }
+      }
+    }
+  ]
+}

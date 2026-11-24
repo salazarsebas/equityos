@@ -8,6 +8,8 @@ The endpoints are described in:
 - [Portfolio](./portfolio.md): any address compared with a published index, and a reference-price plan.
 - [Execution plan](./execution.md): the plan quoted and checked for execution on Base mainnet. Nothing is sent.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
+- [TypeScript SDK](./sdk.md): `@equityos/sdk`, a typed client of these endpoints and the verification of a
+  version from the registry contract.
 
 The implementation lives in `apps/web/src/server/api` (envelope, errors, validation, OpenAPI document, handlers)
 and `apps/web/src/app/api/v1` (one `route.ts` per path, each a single line that binds a handler to the market
@@ -157,8 +159,13 @@ reference price is computed for the time of each response.
   unavailable data), must validate against the schema the document gives for that path and status. Every object
   schema is closed, so a field that is not documented fails the test.
 
+`apps/web/test/api/sdk.test.ts` keeps the [SDK](./sdk.md) equal to the document: one SDK operation per documented
+operation, decoders with the shape of each response schema, and the recorded examples of
+`apps/web/src/server/api/examples.json` valid against the document and decodable by the SDK.
+
 To add an endpoint: write the handler, add its `route.ts`, add its path and schemas to the document, and add its
-responses to the validation test.
+responses to the validation test. Then add its method and decoders to the SDK, an example request to
+`apps/web/test/api/examples.ts`, and run `bun run --filter @equityos/web record:api-examples`.
 
 ## Execution availability and the jurisdiction gate
 
