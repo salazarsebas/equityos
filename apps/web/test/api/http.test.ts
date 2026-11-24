@@ -1,6 +1,14 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { ApiError, toApiError } from "../../src/server/api/errors";
-import { API_VERSION, isoTimestamp, preflight, publicCache, route, serialize } from "../../src/server/api/http";
+import {
+  API_VERSION,
+  isoTimestamp,
+  preflight,
+  publicCache,
+  redactedHost,
+  route,
+  serialize,
+} from "../../src/server/api/http";
 import { booleanParameter, parseAddress, parseQuery } from "../../src/server/api/params";
 import {
   IneligibleTokenError,
@@ -106,7 +114,7 @@ describe("route wrapper", () => {
     });
   });
 
-  test("a 500 is logged with its cause and answers without the variable name or the cause", async () => {
+  test("a 500 is logged as one line without any message, and answers without the variable name or the cause", async () => {
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
       const cause = new MissingConfigurationError("BASE_RPC_URL", "is not set");
@@ -124,7 +132,28 @@ describe("route wrapper", () => {
           details: null,
         },
       });
-      expect(log).toHaveBeenCalledWith("api /api/v1/status: service_misconfigured", cause);
+      expect(log).toHaveBeenCalledWith("api /api/v1/status: service_misconfigured (MissingConfigurationError)");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  test("an unexpected failure is logged with its error classes and a redacted host, never its message or URL", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const url = "https://base-mainnet.g.example-rpc.com/v2/SECRETKEY?apikey=SECRET2";
+      const transport = Object.assign(new Error(`request to ${url} failed`), { url });
+      const handler = route(() => {
+        throw new TypeError(`wrapped: ${url}`, { cause: transport });
+      });
+      expect((await handler(get("/api/v1/assets"), undefined)).status).toBe(500);
+      const [line, ...rest] = log.mock.calls[0] ?? [];
+      expect(rest).toEqual([]);
+      expect(line).toBe("api /api/v1/assets: internal_error (TypeError < Error) host *.example-rpc.com");
+      expect(String(line)).not.toContain("SECRET");
+      expect(redactedHost(Object.assign(new Error("x"), { url: "http://127.0.0.1:8545/key" }))).toBe("ip-address");
+      expect(redactedHost(Object.assign(new Error("x"), { url: "https://localhost/key" }))).toBe("localhost");
+      expect(redactedHost(new Error("no url"))).toBeNull();
     } finally {
       log.mockRestore();
     }

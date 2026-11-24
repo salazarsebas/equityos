@@ -214,8 +214,9 @@ curl "http://localhost:3000/api/v1/portfolio/plan?address=0xf39fd6e51aad88f6f4ce
 
 The plan is arithmetic toward the published target weights at reference prices. **It contains no executable
 quote, no slippage and no gas, and it is not an instruction to trade.** Every response says so in fixed fields:
-`priceBasis` is `"reference"`, `executable` is `false` and `statement` carries that sentence. No endpoint of this
-version prepares, quotes or executes a trade.
+`priceBasis` is `"reference"`, `executable` is `false` and `statement` carries that sentence. The same plan
+quoted and checked for execution is [`POST /portfolio/execution-plan`](./execution.md); no endpoint executes a
+trade.
 
 `data` of the replayed example, with one warning, two legs and one projected position shown:
 

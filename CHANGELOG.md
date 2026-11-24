@@ -63,11 +63,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `@equityos/core`, the commands that verify a published version, the asset universe and registry state with
   their sources and times, the portfolio comparison, the keyless API and the current limitations. Rendered on
   request. Open Graph image at `/opengraph-image`.
+- `@equityos/sdk`: a typed client of every endpoint of the public API v1 with runtime decoding, amounts as
+  `bigint` and typed errors including `registry_not_deployed`; `verifyIndexVersion`, which reads a version from
+  the registry contract and runs checks C1 to C5 without calling the API; and the methodology functions of
+  `@equityos/core` from the same entry. A test keeps its types equal to the OpenAPI document.
+- Recorded example responses of the API in `apps/web/src/server/api/examples.json`, regenerated with
+  `record:api-examples` and checked against the handlers.
+- Developer pages: `/developers` with the conventions, three keyless requests, the SDK and verification from the
+  contract; `/developers/api`, the API reference generated from the OpenAPI document; and `/developers/spec`, the
+  methodology spec reference generated from its JSON Schema with an example hashed at build time. Linked from the
+  primary navigation and listed in the sitemap.
+- `CodeBlock` component: monospace text with a title bar and a copy button.
+- Public API v1.3.0: `POST /api/v1/portfolio/execution-plan` quotes the reference-price plan for execution on
+  Base mainnet through the KyberSwap aggregator, verifies the calldata against an allowlisted router, runs
+  pre-trade checks at one block (jurisdiction, reference freshness, price deviation, pause, B20 policies,
+  pending multiplier, balances at minimum amounts out, exact approvals), simulates the calls and returns either
+  the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent. Rate limited per address
+  and per instance, with a 20 second deadline. The calldata verification is a browser-safe module.
+- `@equityos/sdk`: `executionPlan` for the new endpoint.
 - Network metrics at `/network` and `GET /api/v1/network`, computed from chain events only: published indexes,
   versions, creators and deprecations, rebalance attestations by tier (A: matching constituent flows in the same
   transaction, B: linked within 900 seconds, unmatched), distinct accounts, accounts within tolerance and the
   reference value moved, each with its definition and block range. Excluded accounts are set with
-  `EQUITYOS_EXCLUDED_ACCOUNTS` and shown apart. API version 1.3.0.
+  `EQUITYOS_EXCLUDED_ACCOUNTS` and shown apart. Public API v1.4.0.
 - The local seed records example usage with mock tokens and feeds, and the registry replay carries the
   requests of the network metrics.
 

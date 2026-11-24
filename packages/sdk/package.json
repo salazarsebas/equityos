@@ -1,17 +1,37 @@
 {
   "name": "@equityos/sdk",
   "version": "0.0.0",
-  "private": true,
-  "description": "TypeScript SDK for EquityOS",
+  "description": "Typed client of the EquityOS API and verification of published indexes from the registry contract",
+  "keywords": [
+    "equityos",
+    "index",
+    "methodology",
+    "tokenized-stocks",
+    "base",
+    "verification",
+    "sdk"
+  ],
+  "homepage": "https://github.com/salazarsebas/equityos/tree/main/packages/sdk#readme",
+  "bugs": "https://github.com/salazarsebas/equityos/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/salazarsebas/equityos.git",
+    "directory": "packages/sdk"
+  },
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -19,5 +39,12 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test"
+  },
+  "dependencies": {
+    "@equityos/contracts-abi": "workspace:*",
+    "@equityos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "viem": "2.58.4"
   }
 }

@@ -130,7 +130,7 @@ describe("GET /api/v1/network", () => {
     const response = await handler()(get("/api/v1/network"), undefined);
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=10");
-    expect(response.headers.get(API_VERSION_HEADER)).toBe("1.3.0");
+    expect(response.headers.get(API_VERSION_HEADER)).toBe("1.4.0");
     const { data, meta } = await response.json();
     expect(meta).toEqual({
       asOf: "2027-01-15T08:00:00Z",

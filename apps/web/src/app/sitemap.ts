@@ -6,7 +6,18 @@ import { site } from "@/lib/site";
  * without a query: a lookup of one address (`/wallet?address=`) is marked `noindex` by the page.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  return ["/", "/indexes", "/assets", "/studio", "/portfolio", "/wallet", "/network"].map((path) => ({
+  return [
+    "/",
+    "/indexes",
+    "/assets",
+    "/studio",
+    "/portfolio",
+    "/wallet",
+    "/developers",
+    "/developers/api",
+    "/developers/spec",
+    "/network",
+  ].map((path) => ({
     url: new URL(path, site.url).toString(),
   }));
 }

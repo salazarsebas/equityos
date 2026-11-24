@@ -9,6 +9,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { indexRegistryAbi, rebalanceLogAbi } from "@equityos/contracts-abi";
+import { verifyIndexVersion } from "@equityos/sdk";
 import { createPublicClient, createWalletClient, type Hex, http, stringToHex } from "viem";
 import { anvil } from "viem/chains";
 import { buildSeedIndexes } from "../../scripts/seed/indexes";
@@ -116,6 +117,43 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
     TIMEOUT_MS,
   );
 
+  test("the SDK verifies every seeded version from the contract alone, with an RPC URL and with a viem client", async () => {
+    for (const [position, seed] of expected.entries()) {
+      const indexId = seeded[position]?.indexId;
+      if (indexId === undefined) throw new Error("missing seed");
+      for (const [i, version] of seed.versions.entries()) {
+        const target = { chainId: LOCAL_CHAIN_ID, registry, indexId, version: i + 1 };
+        const result = await verifyIndexVersion({ ...target, rpcUrl });
+        expect(await verifyIndexVersion({ ...target, publicClient: client })).toEqual(result);
+        expect(result.specHash).toBe(version.specHash);
+        expect<unknown>(result.constituents).toEqual(
+          version.tokens.map((token, j) => ({ token, weightBps: version.weightsBps[j] })),
+        );
+        expect(result.deprecatedAt !== null).toBe(seed.deprecated);
+        if (position === 0) {
+          expect(result).toMatchObject({ conformant: false, spec: null });
+          expect(result.checks.map(({ id, status, code }) => `${id}:${status}:${code}`)).toEqual([
+            "C1:pass:ok",
+            "C2:pass:ok",
+            "C3:pass:ok",
+            "C4:pass:ok",
+            "C5:fail:weight_mismatch",
+          ]);
+        } else {
+          expect(result).toMatchObject({ conformant: true, spec: version.spec });
+        }
+      }
+    }
+    const missing = verifyIndexVersion({
+      chainId: LOCAL_CHAIN_ID,
+      registry,
+      indexId: seeded[4]?.indexId ?? "0x",
+      version: 3,
+      rpcUrl,
+    });
+    await expect(missing).rejects.toMatchObject({ code: "version_not_found" });
+  });
+
   test("the reader returns every seeded index under its canonical identifier, verified unless mismatched", async () => {
     const [creator] = await wallet.getAddresses();
     clock.advance(HEADS_CACHE.ttlSeconds);
@@ -217,6 +255,21 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
         "skipped",
       ]);
       expect(page.indexes[0]?.head.deprecatedAt).toBeGreaterThan(0n);
+      const fromContract = await verifyIndexVersion({
+        chainId: LOCAL_CHAIN_ID,
+        registry,
+        indexId: unverifiable?.head.indexId ?? "0x",
+        version: 1,
+        rpcUrl,
+      });
+      expect(fromContract.checks.map(({ status }) => status)).toEqual([
+        "pass",
+        "fail",
+        "skipped",
+        "skipped",
+        "skipped",
+      ]);
+      expect(fromContract.composition).toBe("rule_based");
 
       const scan = await reader.getEvents();
       if (scan.status !== "ok") throw new Error(scan.status);

@@ -81,7 +81,7 @@ export const MAX_DEPOSIT_USD_E8 = 10n ** 17n;
 export const MAX_MIN_LEG_VALUE_USD_E8 = 10n ** 14n;
 
 /** Everything a comparison is computed from: one conformant version, one market snapshot, one balance read. */
-interface Comparison {
+export interface Comparison {
   readonly address: Address;
   readonly index: IndexSummary;
   readonly view: Extract<IndexVersionView, { conformant: true }>;
@@ -99,15 +99,27 @@ function corePrice(token: Address, entry: AssetMarketData): ReferencePrice {
   return { token, priceE8: price.priceE8, status: price.status };
 }
 
-async function loadComparison(options: PortfolioApiOptions, query: URLSearchParams): Promise<Comparison> {
+async function loadComparisonFromQuery(options: PortfolioApiOptions, query: URLSearchParams): Promise<Comparison> {
   const address = parseAddress(requiredParameter(query, "address"));
   const identifier = requiredParameter(query, "index");
   const requested = query.get("version");
-  const { index, version: view } = await requireProfile(
-    options,
-    identifier,
-    requested === null ? undefined : parseVersion(requested),
-  );
+  return loadComparison(options, address, identifier, requested === null ? undefined : parseVersion(requested));
+}
+
+/**
+ * Loads the comparison of `address` with a version of an index: the version, the market snapshot and the
+ * balances of the address.
+ *
+ * @throws {ApiError} for an unknown index or version, a version that is not conformant, or a constituent
+ *   that is not in the asset list.
+ */
+export async function loadComparison(
+  options: PortfolioApiOptions,
+  address: Address,
+  identifier: string,
+  version: number | undefined,
+): Promise<Comparison> {
+  const { index, version: view } = await requireProfile(options, identifier, version);
   requireConformant(view, "target weights to compare with");
   const snapshot = await options.marketData().getSnapshot();
   const constituents: TargetConstituent[] = [];
@@ -158,7 +170,7 @@ async function loadComparison(options: PortfolioApiOptions, query: URLSearchPara
 }
 
 /** Index facts every portfolio response carries. */
-function indexRef({ index, view }: Comparison) {
+export function indexRef({ index, view }: Comparison) {
   return {
     indexId: index.head.indexId,
     identifier: index.identifier,
@@ -185,7 +197,7 @@ function apiIssue(issue: CalculationIssue) {
   };
 }
 
-function tokenLabel(comparison: Comparison, token: Address) {
+export function tokenLabel(comparison: Comparison, token: Address) {
   const entry = comparison.entries.get(token);
   return { symbol: entry?.asset.symbol ?? null, name: entry?.asset.name ?? null };
 }
@@ -194,7 +206,7 @@ function tokenLabel(comparison: Comparison, token: Address) {
  * The sources of a comparison. The index comes from the registry chain; balances and reference prices come
  * from Base mainnet, and the two blocks are given apart.
  */
-function comparisonMeta(options: PortfolioApiOptions, { snapshot, balances }: Comparison) {
+export function comparisonMeta(options: PortfolioApiOptions, { snapshot, balances }: Comparison) {
   const { blockNumber, blockTimestamp } = balances.value;
   return {
     ...snapshotMeta(snapshot),
@@ -230,7 +242,7 @@ const COMPARISON_PARAMETERS = ["address", "index", "version"] as const;
  */
 export function portfolioHandler(options: PortfolioApiOptions) {
   return route(async (request: Request) => {
-    const comparison = await loadComparison(options, parseQuery(request, COMPARISON_PARAMETERS));
+    const comparison = await loadComparisonFromQuery(options, parseQuery(request, COMPARISON_PARAMETERS));
     const valuation = valuePortfolio(comparison.input);
     const drift = computeDrift(valuation.positions, comparison.view.spec.rebalance.driftThresholdBps);
     const driftOf = new Map(drift?.constituents.map((entry) => [entry.token, entry.driftBps]));
@@ -308,7 +320,7 @@ export function portfolioPlanHandler(options: PortfolioApiOptions) {
     const reserveBps = integerParameter(query, "reserveBps", 0, MAX_RESERVE_BPS) ?? DEFAULT_RESERVE_BPS;
     const minLegValueUsdE8 =
       amountParameter(query, "minLegValueUsdE8", MAX_MIN_LEG_VALUE_USD_E8) ?? DEFAULT_MIN_LEG_VALUE_USD_E8;
-    const comparison = await loadComparison(options, query);
+    const comparison = await loadComparisonFromQuery(options, query);
     const result = planRebalance({ ...comparison.input, mode, depositUsdE8, reserveBps, minLegValueUsdE8 });
     const label = (token: Address) => tokenLabel(comparison, token).symbol;
     const decimalsOf = new Map(comparison.input.constituents.map(({ token, decimals }) => [token, decimals]));

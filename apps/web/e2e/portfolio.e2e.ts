@@ -163,10 +163,23 @@ test.describe("portfolio page", () => {
 });
 
 test.describe("portfolio API on the replay", () => {
+  test("the execution plan is a POST that the replay refuses, and its preflight allows POST", async ({ request }) => {
+    const refused = await request.post("/api/v1/portfolio/execution-plan", {
+      data: { address: ABOVE, index: INDEX, mode: "rebalance" },
+    });
+    expect(refused.status()).toBe(409);
+    expect(refused.headers()["cache-control"]).toBe("no-store");
+    expect((await refused.json()).error).toMatchObject({ code: "execution_unavailable" });
+    const preflight = await request.fetch("/api/v1/portfolio/execution-plan", { method: "OPTIONS" });
+    expect(preflight.status()).toBe(204);
+    expect(preflight.headers()["access-control-allow-methods"]).toBe("POST, OPTIONS");
+    expect((await request.get("/api/v1/portfolio/execution-plan")).status()).toBe(405);
+  });
+
   test("compares a constructed wallet and says where each input was read", async ({ request }) => {
     const response = await request.get(`/api/v1/portfolio?address=${ABOVE}&index=${INDEX}`);
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.3.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.4.0");
     const { data, meta } = await response.json();
     expect(data.drift).toMatchObject({ maxAbsDriftBps: 1500, thresholdReached: true });
     expect(meta.registry).toMatchObject({ chainId: 31_337, mode: "replay" });

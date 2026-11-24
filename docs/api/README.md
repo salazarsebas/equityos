@@ -6,8 +6,11 @@ The endpoints are described in:
 - [Assets](./assets.md): the tokenized stock universe and the API status.
 - [Indexes](./indexes.md): the published indexes, their versions, their verification and their composition.
 - [Portfolio](./portfolio.md): any address compared with a published index, and a reference-price plan.
+- [Execution plan](./execution.md): the plan quoted and checked for execution on Base mainnet. Nothing is sent.
 - [Network](./network.md): registry and usage metrics computed from chain events only.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
+- [TypeScript SDK](./sdk.md): `@equityos/sdk`, a typed client of these endpoints and the verification of a
+  version from the registry contract.
 
 The implementation lives in `apps/web/src/server/api` (envelope, errors, validation, OpenAPI document, handlers)
 and `apps/web/src/app/api/v1` (one `route.ts` per path, each a single line that binds a handler to the market
@@ -23,9 +26,10 @@ EquityOS is not affiliated with their operators. Nothing the API returns is inve
 https://<deployment>/api/v1
 ```
 
-- No API key and no authentication. Every endpoint is a `GET`.
+- No API key and no authentication. Every endpoint is a `GET`, except `POST /portfolio/execution-plan`, which
+  takes a JSON body and is never cached.
 - CORS is open: every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` answers a preflight for
-  `GET`.
+  `GET`, or for `POST` on the execution plan.
 - There is no rate limit in the application. A deployment may apply one in front of it.
 
 ## Envelope
@@ -66,6 +70,7 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
 | 400    | `invalid_parameter`      | A query parameter is unknown, given twice or has a value that is not allowed |
 | 400    | `invalid_address`        | A path address is not `0x` followed by 40 hex digits                         |
 | 400    | `invalid_identifier`     | An index identifier is neither an index id nor a slug with an id prefix      |
+| 400    | `invalid_body`           | A request body is not a JSON object sent as `application/json`, or too large |
 | 404    | `asset_not_found`        | The address is well formed and no listed asset has it                        |
 | 404    | `index_not_found`        | The registry holds no index with the identifier                              |
 | 404    | `version_not_found`      | The index has no version with the number                                     |
@@ -75,15 +80,21 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
 | 409    | `token_paused`           | The issuer paused transfers of the token                                     |
 | 409    | `missing_feed`           | The token has no usable reference feed                                       |
 | 409    | `stale_feed`             | The reference feed of the token missed its heartbeat                         |
+| 409    | `execution_unavailable`  | An execution plan was asked of a server that serves replayed market data     |
+| 429    | `rate_limited`           | Too many execution plans from one address. Carries `Retry-After`             |
 | 500    | `service_misconfigured`  | The server is not configured to read its data sources                        |
 | 500    | `internal_error`         | Anything unexpected                                                          |
 | 502    | `upstream_malformed`     | A data source answered with a payload of an unexpected shape                 |
 | 503    | `upstream_unavailable`   | A data source did not answer and no recent copy of its data is cached        |
+| 503    | `provider_rate_limited`  | The quote provider's limit does not allow an execution plan now              |
+| 503    | `deadline_exceeded`      | An execution plan was not built within 20 seconds                            |
 
 - An unknown query parameter is an error and is not ignored, so a misspelled filter cannot return unfiltered data.
-- A 503 carries `Retry-After: 15`. A 502 and a 503 carry `details.source`: `coinbase_api`, `base_rpc` or
-  `registry_rpc`.
-- A 500 never says what is misconfigured or what failed. The cause is written to the server log.
+- A 503 carries `Retry-After`: 15 seconds, or for `provider_rate_limited` the wait the limit asks for. A 429
+  carries it too. A 502 and an `upstream_unavailable` 503 carry `details.source`: `coinbase_api`, `base_rpc` or
+  `registry_rpc`; `provider_rate_limited` carries `kyberswap_api`.
+- A 500 never says what is misconfigured or what failed. The server log gets one line with the error classes and
+  a redacted host, never an error message or a URL.
 - `ineligible_token`, `token_paused`, `missing_feed` and `stale_feed` are the per-token conditions of the market
   data layer. The asset endpoints report these conditions as data. The portfolio endpoints answer
   `ineligible_token` when a constituent is not in the asset list. The others are reserved for endpoints that need
@@ -123,6 +134,7 @@ guaranteed at it.
 | Assets, built from a snapshot served stale | `no-store`                                             |
 | Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
 | Portfolio and plan                         | `public, max-age=N`: at most 15 s, keyed by the URL    |
+| Execution plan                             | `no-store`: per request, and it expires within 120 s   |
 | Status                                     | `no-store`: it depends on where the request comes from |
 | OpenAPI document                           | `public, max-age=3600`                                 |
 | Any error                                  | `no-store`                                             |
@@ -139,8 +151,9 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.3.0`, which
-  added the network endpoint. `1.2.0` added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.4.0`, which
+  added the network endpoint. `1.3.0` added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0` added the
+  index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
 
 ## The OpenAPI document is the contract
@@ -153,19 +166,38 @@ reference price is computed for the time of each response.
   unavailable data), must validate against the schema the document gives for that path and status. Every object
   schema is closed, so a field that is not documented fails the test.
 
+`apps/web/test/api/sdk.test.ts` keeps the [SDK](./sdk.md) equal to the document: one SDK operation per documented
+operation, decoders with the shape of each response schema, and the recorded examples of
+`apps/web/src/server/api/examples.json` valid against the document and decodable by the SDK.
+
 To add an endpoint: write the handler, add its `route.ts`, add its path and schemas to the document, and add its
-responses to the validation test.
+responses to the validation test. Then add its method and decoders to the SDK, an example request to
+`apps/web/test/api/examples.ts`, and run `bun run --filter @equityos/web record:api-examples`.
+
+## Developer pages
+
+The web app documents the API for readers at `/developers`:
+
+| Page               | Content                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `/developers`      | Conventions, three curl requests against the deployment's own origin, the SDK and verification |
+| `/developers/api`  | Every operation of `openapi.ts`: parameters, response fields, errors, schemas, curl            |
+| `/developers/spec` | The fields of the published JSON Schema, its rules, and an example hashed at build time        |
+
+The pages are static. Their example responses are the recorded examples of `apps/web/src/server/api/examples.json`
+and say so. The commands use `NEXT_PUBLIC_SITE_URL`, the origin of the deployment.
 
 ## Execution availability and the jurisdiction gate
 
-No endpoint executes or prepares a trade. `GET /api/v1/status` already reports `executionAvailable`, which is
-`false` for every request in this version, with a reason:
+No endpoint executes a trade. `POST /portfolio/execution-plan` prepares calls and applies the gate below as its
+first check, but nothing is signed or sent. `GET /api/v1/status` reports `executionAvailable`, which is `false`
+for every request in this version, with a reason:
 
-| `executionUnavailableReason` | Meaning                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------ |
-| `restricted_jurisdiction`    | The request is located in the United States or one of its territories          |
-| `jurisdiction_unknown`       | The location of the request could not be established                           |
-| `not_released`               | The gate would let the request through. This version has no execution endpoint |
+| `executionUnavailableReason` | Meaning                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `restricted_jurisdiction`    | The request is located in the United States or one of its territories     |
+| `jurisdiction_unknown`       | The location of the request could not be established                      |
+| `not_released`               | The gate would let the request through. This version sends no transaction |
 
 The gate is `classifyJurisdiction` in `apps/web/src/server/jurisdiction.ts`. It reads the country the hosting
 platform reports in the `x-vercel-ip-country` header.
@@ -179,7 +211,7 @@ platform reports in the `x-vercel-ip-country` header.
 - A header that is not a two-letter code is `jurisdiction_unknown` in every environment.
 
 The gate does not block any read endpoint and must not be used for that: public data stays public everywhere.
-It will guard execution endpoints and the execution interface when they are added.
+It guards the execution plan, and will guard the execution interface when it is added.
 
 It is a coarse network signal and not a compliance control. It reflects the address a request arrives from,
 which a VPN changes. It says nothing about the residence or the eligibility of a person. It can be forged when

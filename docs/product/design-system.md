@@ -111,6 +111,7 @@ All components live in `apps/web/src/components/ui`. They have no dependency bey
 | `Table` and its parts                  | `table.tsx`       | Sticky header, pinned first column, numeric cells, dense variant, caption, totals.        |
 | `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards. Four or six to a row.                      |
 | `CopyButton`                           | `copy-button.tsx` | Copies an exact value and confirms in place. Rendered only once the page is interactive.  |
+| `CodeBlock`                            | `code-block.tsx`  | Mono text with a title bar and a copy button. Wraps commands, scrolls JSON inside itself. |
 | `SourceLine`                           | `source-line.tsx` | Source name and as-of time in UTC for one data region. Warning tone when stale.           |
 | `Skeleton`                             | `skeleton.tsx`    | Static placeholder sized like the content it replaces.                                    |
 | `EmptyState`, `ErrorState`             | `state.tsx`       | Text and one action. No illustration.                                                     |

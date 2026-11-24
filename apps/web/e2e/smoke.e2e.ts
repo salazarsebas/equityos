@@ -1,6 +1,18 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const routes = ["/", "/assets", "/assets?view=all", "/studio", "/portfolio", "/wallet", "/network", "/dev/components"];
+const routes = [
+  "/",
+  "/assets",
+  "/assets?view=all",
+  "/studio",
+  "/portfolio",
+  "/wallet",
+  "/developers",
+  "/developers/api",
+  "/developers/spec",
+  "/network",
+  "/dev/components",
+];
 
 /** Collects console errors and uncaught exceptions for the lifetime of the page. */
 function collectErrors(page: Page): string[] {
@@ -39,6 +51,9 @@ for (const [route, prerendered] of [
   ["/", false],
   ["/dev/components", true],
   ["/studio", true],
+  ["/developers", true],
+  ["/developers/api", true],
+  ["/developers/spec", true],
   ["/assets", false],
   ["/portfolio", false],
   ["/wallet", false],
@@ -180,7 +195,7 @@ test.describe("assets page on the recorded block", () => {
   }) => {
     const response = await request.get("/api/v1/assets?eligible=true");
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.3.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.4.0");
     expect(response.headers()["access-control-allow-origin"]).toBe("*");
     const { data, meta } = await response.json();
     expect(data).toHaveLength(13);
