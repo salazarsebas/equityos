@@ -50,7 +50,7 @@ function DriftBar({ driftBps, thresholdBps, scaleBps }: { driftBps: number; thre
       <span className="absolute inset-y-0 left-1/2 w-px bg-(--text-secondary)" />
       <span
         data-beyond={bar.beyond || undefined}
-        className="absolute top-1/2 h-1 -translate-y-1/2 bg-(--text-tertiary) data-beyond:bg-accent"
+        className="absolute top-1/2 h-1 -translate-y-1/2 bg-(--text-tertiary) data-beyond:bg-(--warning)"
         style={{ left: bar.left, width: bar.width }}
       />
     </span>
@@ -74,7 +74,7 @@ type DriftTableProps = {
 /**
  * Target weight against current weight for every constituent, held or not, with the drift in percentage points
  * and a diverging bar. Over and under target are not good or bad, so the bars use the neutral tone inside the
- * threshold and the accent beyond it, never the colors of a return.
+ * threshold and the warning tone beyond it, never the colors of a return. The accent is kept for interaction.
  */
 export function DriftTable({ positions, thresholdBps, investedValueUsdE8, marketClosed, apiHref }: DriftTableProps) {
   const rows = [...positions].sort(byDrift);
