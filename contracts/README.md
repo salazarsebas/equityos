@@ -167,7 +167,9 @@ Sepolia or locally. Calling `deploy(bool)` directly with `--sig` is the same opt
 
 ### Live networks
 
-Neither contract is deployed on a live network yet. Before a live deployment:
+Neither contract is deployed on a live network yet. The full runbook, with verification on Basescan or Sourcify
+and the post-deployment checks of `script/check-deployment.sh`, is
+[docs/development/deployment.md](../docs/development/deployment.md). Before a live deployment:
 
 - Deploy on Base Sepolia first and check that the addresses equal the `EXPECTED_*` constants.
 - Run a create, publish, deprecate and read-back round trip there.

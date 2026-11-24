@@ -48,6 +48,9 @@ bun run build
 bun run --filter @equityos/web start
 ```
 
+A production server checks its configuration when it starts and answers 500 until the required variables are set:
+see [Deployment](deployment.md#startup-check).
+
 ## Checks
 
 Run from the repository root. These are the checks CI runs, in the same order.
@@ -90,13 +93,16 @@ bun run --filter @equityos/core test
 | `EQUITYOS_CHAIN_ID`                    | `apps/web` | Chain the index registry is read from: 8453 (default), 84532 or 31337.                 |
 | `EQUITYOS_RPC_URL`                     | `apps/web` | JSON-RPC endpoint of the registry chain when it is 84532 or 31337.                     |
 | `EQUITYOS_LOG_CHUNK_BLOCKS`            | `apps/web` | Blocks per `eth_getLogs` request of the registry event scan. Defaults to 2000.         |
+| `EQUITYOS_REQUIRE_REGISTRY`            | `apps/web` | `true`: a production server refuses to start if the map has no registry on the chain.  |
 | `KYBERSWAP_CLIENT_ID`                  | `apps/web` | `x-client-id` sent to the KyberSwap API for execution plans. Defaults to `equityos`.   |
 | `NEXT_PUBLIC_BASE_RPC_URL`             | `apps/web` | Base mainnet JSON-RPC endpoint the browser reads balances from. Set it in production.  |
 | `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`     | `apps/web` | Base Sepolia JSON-RPC endpoint for the browser. Set it in production.                  |
 | `NEXT_PUBLIC_ANVIL_RPC_URL`            | `apps/web` | Local Anvil endpoint, development builds only. Defaults to `http://127.0.0.1:8545`.    |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | `apps/web` | Enables the WalletConnect option of the connect dialog. Unset: the option is absent.   |
 
-`apps/web/.env.example` lists the variables. Outside production, an unset `BASE_RPC_URL` falls back to the public
+`apps/web/.env.example` lists the variables. A production server (`next start` or Vercel) checks them at startup
+and refuses to serve when a required one is missing or two contradict each other; the production checklist is in
+[Deployment](deployment.md). Outside production, an unset `BASE_RPC_URL` falls back to the public
 Base endpoint, which is rate limited. The market data layer is described in
 [Market data layer](../architecture/market-data.md), the registry variables in
 [Registry reader](../architecture/registry-reader.md), and running against a local node in

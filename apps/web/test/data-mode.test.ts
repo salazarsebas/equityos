@@ -2,6 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { statusHandler } from "../src/server/api/status";
 import { combinedMode, replayRefusal } from "../src/server/data-mode";
 import { register } from "../src/instrumentation";
+import { DeploymentConfigurationError } from "../src/server/deployment-check";
 import { getMarketData, MissingConfigurationError, marketDataMode } from "../src/server/market/index";
 import { RegistryConfigurationError } from "../src/server/registry/errors";
 import { getRegistryReader, getRegistryReplay, registryMode } from "../src/server/registry/reader";
@@ -14,6 +15,10 @@ const VARIABLES = [
   "EQUITYOS_REPLAY_FOR_TESTS",
   "MARKET_REPLAY_DIR",
   "REGISTRY_REPLAY_DIR",
+  "BASE_RPC_URL",
+  "NEXT_PUBLIC_SITE_URL",
+  "NEXT_PUBLIC_BASE_RPC_URL",
+  "NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL",
 ] as const;
 const saved = Object.fromEntries(VARIABLES.map((name) => [name, process.env[name]]));
 
@@ -83,7 +88,20 @@ describe("the process-wide sources on a deployment", () => {
     await expect(register()).rejects.toThrow(MissingConfigurationError);
     environment({ ...deployment, NEXT_RUNTIME: "nodejs", MARKET_REPLAY_DIR: "" });
     await expect(register()).rejects.toThrow(RegistryConfigurationError);
+    // Without a replay, the production configuration is checked next: an empty one is refused as well.
+    const log = spyOn(console, "error").mockImplementation(() => {});
     environment({ NODE_ENV: "production", VERCEL_ENV: "production", NEXT_RUNTIME: "nodejs" });
+    await expect(register()).rejects.toThrow(DeploymentConfigurationError);
+    log.mockRestore();
+    environment({
+      NODE_ENV: "production",
+      VERCEL_ENV: "production",
+      NEXT_RUNTIME: "nodejs",
+      BASE_RPC_URL: "https://rpc.example/base",
+      NEXT_PUBLIC_SITE_URL: "https://equityos.example",
+      NEXT_PUBLIC_BASE_RPC_URL: "https://rpc.example/base-public",
+      NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: "https://rpc.example/sepolia-public",
+    });
     await expect(register()).resolves.toBeUndefined();
   });
 

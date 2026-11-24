@@ -5,9 +5,11 @@ import {
   BASE_SEPOLIA_CHAIN_ID,
   DEPLOYMENTS,
   INDEX_REGISTRY_ADDRESS,
+  INDEX_REGISTRY_CODE_HASH,
   isSupportedChainId,
   LOCAL_CHAIN_ID,
   REBALANCE_LOG_ADDRESS,
+  REBALANCE_LOG_CODE_HASH,
 } from "../src/index.ts";
 
 const deployScript = readFileSync(new URL("../../../contracts/script/Deploy.s.sol", import.meta.url), "utf8");
@@ -22,6 +24,11 @@ function scriptConstant(name: string): string {
 test("the addresses are the ones the deployment script expects", () => {
   expect<string>(INDEX_REGISTRY_ADDRESS).toBe(scriptConstant("EXPECTED_REGISTRY"));
   expect<string>(REBALANCE_LOG_ADDRESS).toBe(scriptConstant("EXPECTED_REBALANCE_LOG"));
+});
+
+test("the runtime code hashes are the ones the deployment script checks", () => {
+  expect<string>(INDEX_REGISTRY_CODE_HASH).toBe(scriptConstant("EXPECTED_REGISTRY_CODE_HASH"));
+  expect<string>(REBALANCE_LOG_CODE_HASH).toBe(scriptConstant("EXPECTED_REBALANCE_LOG_CODE_HASH"));
 });
 
 test("the chain ids are the ones the deployment script accepts", () => {
@@ -41,10 +48,22 @@ test("every chain uses the deterministic addresses", () => {
   }
 });
 
-test("no live network is marked as deployed", () => {
-  expect(DEPLOYMENTS[BASE_MAINNET_CHAIN_ID].deployBlock).toBeNull();
-  expect(DEPLOYMENTS[BASE_SEPOLIA_CHAIN_ID].deployBlock).toBeNull();
+test("a live network is either not deployed or deployed at a positive block", () => {
+  // Recording a deployment changes null to the block of the deployment receipt. Block 0 is the genesis of a
+  // live chain, where nothing of this project can exist. Whether the chain agrees is checked by
+  // apps/web/test/registry/live.test.ts, which reads it.
+  for (const chainId of [BASE_MAINNET_CHAIN_ID, BASE_SEPOLIA_CHAIN_ID] as const) {
+    const { deployBlock } = DEPLOYMENTS[chainId];
+    if (deployBlock !== null) expect(deployBlock).toBeGreaterThan(0n);
+  }
   expect(DEPLOYMENTS[LOCAL_CHAIN_ID].deployBlock).toBe(0n);
+});
+
+test("Base mainnet is not recorded as deployed before Base Sepolia", () => {
+  // The release order is Base Sepolia first. A map that records mainnet alone skipped that step.
+  if (DEPLOYMENTS[BASE_MAINNET_CHAIN_ID].deployBlock !== null) {
+    expect(DEPLOYMENTS[BASE_SEPOLIA_CHAIN_ID].deployBlock).not.toBeNull();
+  }
 });
 
 test("isSupportedChainId accepts exactly the chains of the map", () => {

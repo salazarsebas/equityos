@@ -19,14 +19,14 @@ export interface SeedIndex {
   readonly deprecated: boolean;
 }
 
-interface Holding {
+export interface Holding {
   /** Ticker in the description of the reference feed, used only to pick the token from the feed map. */
   readonly ticker: string;
   /** Fixed weight in basis points. Omitted for equal weighting. */
   readonly weightBps?: number;
 }
 
-interface VersionDraft {
+export interface VersionDraft {
   readonly name: string;
   readonly slug: string;
   readonly description: string;
@@ -49,7 +49,12 @@ function feedCoveredAsset(ticker: string): { token: Address; feed: Address } {
   throw new Error(`no reference feed is mapped for ${ticker}`);
 }
 
-function buildVersion(chainId: number, draft: VersionDraft): SeedVersion {
+/**
+ * Validates a draft with `@equityos/core` and returns the version to publish.
+ *
+ * @throws {Error} if a ticker has no reference feed or the spec is not valid.
+ */
+export function buildVersion(chainId: number, draft: VersionDraft): SeedVersion {
   // A spec lists its tokens in ascending order, with the feeds and weights at the same positions.
   const assets = draft.holdings
     .map((holding) => ({ ...holding, ...feedCoveredAsset(holding.ticker) }))
@@ -85,7 +90,7 @@ function buildVersion(chainId: number, draft: VersionDraft): SeedVersion {
 }
 
 /** UTF-8 text right-padded with zero bytes to 32 bytes. */
-function salt(text: string): Hex {
+export function salt(text: string): Hex {
   const bytes = new TextEncoder().encode(text);
   if (bytes.length > 32) throw new Error(`salt text is longer than 32 bytes: ${text}`);
   return `0x${Buffer.from(bytes).toString("hex").padEnd(64, "0")}`;

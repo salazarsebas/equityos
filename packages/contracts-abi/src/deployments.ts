@@ -17,12 +17,23 @@ export const INDEX_REGISTRY_ADDRESS = "0x4BD4D49A9C88f75FB97674488E23A7Fa59F9506
 /** Address of `RebalanceLog`, equal to `EXPECTED_REBALANCE_LOG` in `contracts/script/Deploy.s.sol`. */
 export const REBALANCE_LOG_ADDRESS = "0x593449aeF0Efc05528D3BC7bE9eb8d99e39AA41c";
 
+/**
+ * keccak256 of the runtime code of `IndexRegistry` built from this commit, equal to `EXPECTED_REGISTRY_CODE_HASH`
+ * in `contracts/script/Deploy.s.sol`; a test compares the two. Code at the registry address with any other hash
+ * is not the contract this package describes.
+ */
+export const INDEX_REGISTRY_CODE_HASH: Hex = "0x3173771214f293dafccb4c612bd272ddd2e923a02946109435a164ca9f2c238b";
+/** keccak256 of the runtime code of `RebalanceLog`, equal to `EXPECTED_REBALANCE_LOG_CODE_HASH` in the script. */
+export const REBALANCE_LOG_CODE_HASH: Hex = "0x533ec75d5535da54ab81bcd5738f031eb828afac0d68ae4cef1d63a7b5d95405";
+
 export interface Deployment {
   readonly registry: Hex;
   readonly rebalanceLog: Hex;
   /**
    * Block the contracts were deployed at, the first block an event scan has to cover. `null` means the
    * contracts are not deployed on the chain: the address is known in advance, but there is no code behind it.
+   * Recording a live deployment is the one-line change described in `docs/development/deployment.md`: the
+   * block of the receipt of the `IndexRegistry` deployment transaction, as a `bigint`.
    */
   readonly deployBlock: bigint | null;
 }
