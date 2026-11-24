@@ -3,7 +3,8 @@
 # No private key is involved: Anvil signs for its unlocked development account.
 #
 # Checks: the first run deploys both contracts with exactly two transactions at the expected addresses, the
-# deployed code is the expected one, and a second run sends nothing.
+# deployed code is the expected one, a second run sends nothing, and script/check-deployment.sh passes, with the
+# deployment block, and fails with a wrong one.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -60,5 +61,10 @@ LOG_REGISTRY="$(cast call "${REBALANCE_LOG}" 'REGISTRY()(address)' --rpc-url "${
 
 deploy >/dev/null
 [ "$(nonce)" = "${NONCE_AFTER_FIRST}" ] || fail "second run must send no transaction"
+
+# The post-deployment checks of the runbook, with the deployment block: one block for each transaction, from 1.
+script/check-deployment.sh "${RPC}" >/dev/null || fail "script/check-deployment.sh failed"
+DEPLOY_BLOCK=1 script/check-deployment.sh "${RPC}" >/dev/null || fail "script/check-deployment.sh with DEPLOY_BLOCK failed"
+if DEPLOY_BLOCK=2 script/check-deployment.sh "${RPC}" >/dev/null 2>&1; then fail "a wrong DEPLOY_BLOCK must fail"; fi
 
 echo "deploy-local: ok (IndexRegistry ${REGISTRY}, RebalanceLog ${REBALANCE_LOG})"
