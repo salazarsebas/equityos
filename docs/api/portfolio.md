@@ -355,8 +355,9 @@ Warnings of a ready plan include `uninvested_quote` (with `uninvestedQuote` in U
 
 Both endpoints answer `public, max-age=N`, where `N` is what is left of the shorter of the onchain read and the
 balance read, at most 15 seconds. The URL carries the address and the server keeps one balance entry per address,
-so a cached answer is only ever the answer for that address. When the market data is served stale the answer is
-`no-store`.
+so a cached answer is only ever the answer for that address. When the asset list or the onchain read is served
+stale the answer is `no-store`. Balances are never served stale: when they cannot be read now the answer is `503
+upstream_unavailable`, never an older read, even one taken exactly a TTL ago.
 
 ## The page
 

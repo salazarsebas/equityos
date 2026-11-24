@@ -97,3 +97,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   refused on Vercel (`VERCEL_ENV` set) and in a production build without the test-only flag
   `EQUITYOS_REPLAY_FOR_TESTS=1`, with a typed configuration error at startup and on every request. A replayed
   reference price is never `live` or `delayed`: it is reported as `last_close`.
+- Balances are never served stale: a cache with a stale window of zero no longer serves a value that is exactly
+  at its TTL when its reload fails, and the portfolio endpoints refuse a balance read served stale with `503`. Any
+  response built from an input served stale is `no-store`, on every caching route.

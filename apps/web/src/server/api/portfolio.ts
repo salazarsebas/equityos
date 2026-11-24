@@ -27,6 +27,7 @@ import {
   type MarketDataMode,
   type MarketSnapshot,
   ONCHAIN_CACHE,
+  UpstreamError,
   USDC_ADDRESS,
 } from "@/server/market";
 import type { IndexSummary, IndexVersionView, RegistryMode, RegistryReader } from "@/server/registry";
@@ -113,6 +114,7 @@ async function loadComparisonFromQuery(options: PortfolioApiOptions, query: URLS
  *
  * @throws {ApiError} for an unknown index or version, a version that is not conformant, or a constituent
  *   that is not in the asset list.
+ * @throws {UpstreamError} if the balances could not be read now: an older read is never used in their place.
  */
 export async function loadComparison(
   options: PortfolioApiOptions,
@@ -138,6 +140,13 @@ export async function loadComparison(
     constituents.push({ token, weightBps, decimals: entry.asset.decimals });
   }
   const balances = await options.marketData().getBalances(address);
+  // Balances move with every transfer: an older read is never presented as the current one. `BALANCE_CACHE` has
+  // no stale window, so this holds for any service that keeps to it, and is checked here for any that does not.
+  if (balances.servedStale) {
+    throw new UpstreamError("base_rpc", `the balance read of ${address} failed and only an older read exists`, {
+      cause: balances.error,
+    });
+  }
   const quoteBalance = balances.value.balances.get(USDC_ADDRESS);
   if (quoteBalance === undefined || quoteBalance === null) {
     throw new MalformedResponseError("base_rpc", `balanceOf(${address}) of USDC`, "did not answer a uint256");
@@ -226,10 +235,11 @@ export function comparisonMeta(options: PortfolioApiOptions, { snapshot, balance
 
 /**
  * Cache lifetime: what is left of the shorter of the two TTLs. The URL carries the address, and the in-process
- * balance cache is keyed by it, so a cached answer is only ever the answer for that address.
+ * balance cache is keyed by it, so a cached answer is only ever the answer for that address. A response with any
+ * input served past its TTL (the asset list, the onchain read or the balances) is not cacheable.
  */
-function comparisonCache({ snapshot, balances }: Comparison): string {
-  if (snapshot.assetList.servedStale || snapshot.onchain.servedStale) return NO_STORE;
+export function comparisonCache({ snapshot, balances }: Comparison): string {
+  if (snapshot.assetList.servedStale || snapshot.onchain.servedStale || balances.servedStale) return NO_STORE;
   const now = snapshot.observedAt;
   const left = Math.min(
     ONCHAIN_CACHE.ttlSeconds - (now - snapshot.onchain.fetchedAt),

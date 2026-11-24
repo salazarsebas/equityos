@@ -143,16 +143,21 @@ guaranteed at it.
 
 `Cache-Control` states how long a response stays current at its source of truth.
 
-| Response                                   | `Cache-Control`                                        |
-| ------------------------------------------ | ------------------------------------------------------ |
-| Assets, built from a fresh snapshot        | `public, max-age=N`: what is left of the 15 second TTL |
-| Assets, built from a snapshot served stale | `no-store`                                             |
-| Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
-| Portfolio and plan                         | `public, max-age=N`: at most 15 s, keyed by the URL    |
-| Execution plan                             | `no-store`: per request, and it expires within 120 s   |
-| Status                                     | `no-store`: it depends on where the request comes from |
-| OpenAPI document                           | `public, max-age=3600`                                 |
-| Any error                                  | `no-store`                                             |
+| Response                                  | `Cache-Control`                                        |
+| ----------------------------------------- | ------------------------------------------------------ |
+| Assets, built from a fresh snapshot       | `public, max-age=N`: what is left of the 15 second TTL |
+| Any response built from data served stale | `no-store`                                             |
+| Indexes, built from the registry          | `public, max-age=10`: the lifetime of the reader cache |
+| Composition, built from a fresh snapshot  | `public, max-age=N`: as the assets                     |
+| Portfolio and plan, from fresh inputs     | `public, max-age=N`: at most 15 s, keyed by the URL    |
+| Execution plan                            | `no-store`: per request, and it expires within 120 s   |
+| Status                                    | `no-store`: it depends on where the request comes from |
+| OpenAPI document                          | `public, max-age=3600`                                 |
+| Any error                                 | `no-store`                                             |
+
+A response is cacheable only while every input it is built from is within its TTL: the asset list, the onchain
+read and, for the portfolio and the plan, the balances. Registry reads and balances are never served stale: a
+failed reload is an error, even for a value exactly at its TTL.
 
 The server reads the chain at most once every 15 seconds and the asset list at most once every 10 minutes. A
 client that polls faster receives the same snapshot again, with a growing `ageSeconds`. The staleness class of a

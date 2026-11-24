@@ -196,7 +196,8 @@ the account address, so the balances of one address are never returned for anoth
 - A cached value keeps the time it was loaded (`fetchedAt`). Serving it again, fresh or stale, never changes
   that time.
 - When a reload fails and a value within the stale window exists, it is served with `servedStale: true` and
-  the code of the failure. Past the window the failure is thrown.
+  the code of the failure. Past the window the failure is thrown. A policy whose stale window is zero, such as
+  the balances, never serves stale: a failed reload is thrown even for a value exactly at its TTL.
 - Staleness classes are not cached. They are recomputed on every call from the round's `updatedAt` and the
   current time, so a cached price ages correctly.
 - Concurrent callers share one load. A failed load is not cached.
