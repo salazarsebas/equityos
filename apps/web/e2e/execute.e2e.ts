@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { Address } from "viem";
+import { KYBERSWAP_ROUTER } from "../src/lib/execution/calldata";
 import { buildBlockedPlan, buildReadyPlan, fairPriceE8, NVDA, OPEN_MARKET_TIME, TSLA, USDC } from "./execution-plans";
 import { installMockWallet, mockBaseRpc, TEST_ACCOUNT } from "./wallet-support";
 
@@ -84,9 +85,15 @@ test.describe("execution review", () => {
     await expect(review.getByRole("region", { name: "Expected balances at minimum amounts out" })).toContainText(
       "466.905",
     );
-    await expect(review.getByRole("list", { name: "Pre-trade checks" })).toContainText(
-      "reference_freshness warn: delayed",
-    );
+    // Each check in words, with its codes kept for developers.
+    const checks = review.getByRole("list", { name: "Pre-trade checks" });
+    await expect(checks.getByRole("listitem")).toHaveCount(5);
+    await expect(checks).toContainText("Reference price (TSLAc): Warning");
+    await expect(checks).toContainText("The reference price is delayed");
+    await expect(checks).toContainText("so a delayed price is within that move of its source");
+    await expect(checks).toContainText("reference_freshness warn delayed");
+    await expect(checks).toContainText("Region: Passed");
+    await expect(checks).toContainText("Execution is offered in this region.");
     for (const statement of [
       "differ from the reference prices",
       "Nothing here is advice",
@@ -99,7 +106,7 @@ test.describe("execution review", () => {
     await expect(signButton(page)).toHaveText("Sign 4 calls in your wallet");
     await expect(signButton(page)).toHaveAttribute("aria-disabled", "true");
     await expect(review.getByTestId("send-refusal")).toContainText("Acknowledge every warning above");
-    await review.getByRole("checkbox", { name: /reference_freshness: delayed for TSLAc/ }).check();
+    await review.getByRole("checkbox", { name: /^I acknowledge this warning\. Reference price \(TSLAc\)/ }).check();
     await expect(signButton(page)).not.toHaveAttribute("aria-disabled", "true");
 
     // Declining in the wallet is calm: nothing was sent, and the same plan can be reviewed again.
@@ -108,6 +115,44 @@ test.describe("execution review", () => {
     await expect(declined).toContainText("Nothing was sent");
     await declined.getByRole("button", { name: "Back to the review" }).click();
     await expect(signButton(page)).toBeVisible();
+  });
+
+  test("the calls fit a desktop screen with addresses shortened, named and copyable, and every exact value inspectable", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const plan = readyPlan(CHAIN_TIME + 100);
+    await answerPlan(page, plan);
+    const review = await openReview(page);
+    const calls = review.getByRole("region", { name: "Calls you would sign" });
+    await expect(calls.getByRole("rowheader")).toHaveCount(4);
+    // No horizontal scroll of the table, collapsed or with every detail open.
+    const overflow = () => calls.evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(await overflow()).toBeLessThanOrEqual(0);
+
+    const sell = calls.getByRole("row", { name: /Sell NVDAc/ });
+    await expect(sell).toContainText("Router0x6131...37b5");
+    await expect(sell.getByRole("button", { name: "Copy the full address of Router" })).toBeVisible();
+    const approve = calls.getByRole("row", { name: /Approve NVDAc/ });
+    await expect(approve).toContainText(`NVDAc, token${NVDA.slice(0, 6)}...${NVDA.slice(-4)}`);
+    await expect(approve.getByRole("button", { name: "Copy the full address of NVDAc" })).toBeVisible();
+    await expect(
+      calls.getByRole("row", { name: /Approve USDC/ }).getByRole("button", { name: "Copy the full address of USDC" }),
+    ).toBeVisible();
+
+    // The full calldata and the exact amounts, as decoded in this browser.
+    for (const summary of await calls.locator("summary").all()) await summary.click();
+    expect(await overflow()).toBeLessThanOrEqual(0);
+    const call = plan.data.calls[2];
+    if (call === undefined) throw new Error("no sell call");
+    await expect(sell).toContainText(call.data);
+    await expect(sell).toContainText("4.00000000 NVDAc (400000000 base units)");
+    await expect(sell).toContainText("516.405000 USDC (516405000 base units)");
+    await expect(sell).toContainText("519.000000 USDC (519000000 base units)");
+    await expect(sell).toContainText(KYBERSWAP_ROUTER);
+    await expect(sell.getByRole("button", { name: "Copy the calldata of call 3" })).toBeVisible();
+    await expect(approve).toContainText("Spender");
+    await expect(approve).toContainText(NVDA);
   });
 
   test("a sale at a price the feed read in the browser contradicts is refused, whatever the plan says", async ({
@@ -148,7 +193,10 @@ test.describe("execution review", () => {
     await answerPlan(page, buildBlockedPlan(ACCOUNT, 8453));
     const review = await openReview(page);
     await expect(review.getByRole("alert")).toContainText("The plan is blocked: no call can be signed.");
-    await expect(review.getByRole("alert")).toContainText("reference_freshness last_close (NVDAc)");
+    await expect(review.getByRole("alert")).toContainText(
+      "Reference price (NVDAc): The market is closed and the reference price is the last close",
+    );
+    await expect(review.getByRole("alert")).toContainText("reference_freshness block last_close");
     await expect(signButton(page)).toHaveCount(0);
     await expect(review.getByRole("button", { name: "Get a new plan" })).toBeVisible();
   });

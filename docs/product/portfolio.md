@@ -86,10 +86,14 @@ missing: a wallet to connect, or a connected wallet that is another address.
    then each call in order with what it does, decoded from its calldata: an approval with its exact amount and
    spender, a swap with its side, amount in, minimum out, the provider's quote marked as not guaranteed, the
    reference price read in this browser and how far the minimum is from it, the route deadline, and the router; the
-   attestation call when there is one, or why there is none. An allowance toward the router already above what
+   attestation call when there is one, or why there is none. Contracts are named (the router, USDC, each token by
+   symbol, the rebalance log) and their addresses shortened, with a control that copies the full address; each
+   call expands to its full addresses, every amount with all of the token's decimals and in base units, and its
+   full calldata. An allowance toward the router already above what
    the plan swaps is shown with how to reduce it. Then the totals (minimum USDC from sells, maximum USDC spent by
-   buys, USDC held when checked, expected balances at minimum amounts out), every pre-trade check with its result,
-   a checkbox for each warning, the plan hash computed here, the expiry with a countdown by the device clock (the
+   buys, USDC held when checked, expected balances at minimum amounts out), every pre-trade check in words (what
+   was checked and its result, and for a warning what it means) with its codes in mono for developers, a checkbox
+   for each warning, the plan hash computed here, the expiry with a countdown by the device clock (the
    expiry itself is checked against the latest block at signing), whether the wallet batches, and three fixed
    statements: executable prices differ from reference prices; nothing here is advice; you sign every call in
    your own wallet.

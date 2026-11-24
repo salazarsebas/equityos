@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfig, useConnection } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Checkbox } from "@/components/ui/field";
 import { ArrowLeftIcon, CheckIcon, WarningIcon } from "@/components/ui/icons";
 import {
@@ -19,7 +20,8 @@ import {
 } from "@/components/ui/table";
 import { Tag } from "@/components/ui/tag";
 import { useWalletCapabilities } from "@/components/wallet/hooks";
-import { formatCount, formatFixed, formatUsd, toIsoInstant } from "@/lib/format";
+import { formatCount, formatFixed, formatUsd, shortenAddress, toIsoInstant } from "@/lib/format";
+import { CHECK_STATUS_TEXT, describeCheck } from "@/lib/execution/check-text";
 import {
   ATTESTATION_OMISSIONS,
   EXECUTION_STATEMENTS,
@@ -30,15 +32,145 @@ import { type Acknowledgements, buildExecutionRequest, type ExecutionRefusal } f
 import { CLIENT_PRICE_BOUND_BPS } from "@/lib/execution/market";
 import type { PlanCheck } from "@/lib/execution/response";
 import { type ExecutionSnapshot, warningKey } from "@/lib/execution/snapshot";
+import type { VerifiedCall } from "@/lib/execution/verify";
 import type { ApiPortfolio } from "@/lib/portfolio/api";
 import { describeBatching } from "@/lib/wallet/capabilities";
 import { chainOf, readChainTime, readWallet } from "./chain";
-import { callTitle, quantity, type TokenLabels, tokenLabels } from "./labels";
+import { callTitle, exactAmount, quantity, type TokenLabels, tokenLabels } from "./labels";
 import { ExecutionProgress } from "./progress-view";
 import { executionInFlight, snapshotSpent, useExecution } from "./use-execution";
 
 function Mono({ children }: { children: ReactNode }) {
   return <span className="font-mono text-sm break-all">{children}</span>;
+}
+
+/**
+ * An address shortened to its first and last characters, with the full address in its title and for assistive
+ * technology. Positioned, so that the visually hidden full address stays inside a scrolling table instead of
+ * widening the page.
+ */
+function ShortAddress({ address }: { address: string }) {
+  return (
+    <span className="relative font-mono text-sm text-secondary">
+      <span aria-hidden="true" title={address}>
+        {shortenAddress(address)}
+      </span>
+      <span className="sr-only">{address}</span>
+    </span>
+  );
+}
+
+/**
+ * A contract address, shortened to its first and last characters with the name the review knows it by. Assistive
+ * technology reads the full address, and the copy control places the full address on the clipboard.
+ */
+function ContractAddress({ address, tokens }: { address: string; tokens: TokenLabels }) {
+  const name = tokens.contractName(address);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {name === null ? null : <span>{name}</span>}
+      <ShortAddress address={address} />
+      <CopyButton value={address} label={`Copy the full address of ${name ?? "the contract"}`} />
+    </span>
+  );
+}
+
+/**
+ * The contract a call is addressed to, in the calls table: its name and role on one line, the shortened address
+ * and its copy control on the next, so that every row has the same shape.
+ */
+function ContractCell({ address, kind, tokens }: { address: string; kind: string; tokens: TokenLabels }) {
+  const name = tokens.contractName(address);
+  return (
+    <div className="flex flex-col items-start gap-1 py-2">
+      <span>
+        {name ?? kind}
+        {name !== null && name !== kind ? <span className="text-secondary">, {kind.toLowerCase()}</span> : null}
+      </span>
+      <span className="inline-flex items-center gap-2">
+        <ShortAddress address={address} />
+        <CopyButton value={address} label={`Copy the full address of ${name ?? `the ${kind.toLowerCase()}`}`} />
+      </span>
+    </div>
+  );
+}
+
+/** One label and value of the expanded detail of a call. */
+function Detail({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-secondary">{label}</dt>
+      <dd className="text-sm">{children}</dd>
+    </div>
+  );
+}
+
+/** A full address in the detail of a call, with its name and a copy control. */
+function FullAddress({ address, tokens }: { address: string; tokens: TokenLabels }) {
+  const name = tokens.contractName(address);
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {name === null ? null : <span>{name}</span>}
+      <span className="font-mono break-all">{address}</span>
+      <CopyButton value={address} label={`Copy the full address of ${name ?? "the contract"}`} />
+    </span>
+  );
+}
+
+/**
+ * Everything one call carries, exactly: the full addresses, every amount with all the token's decimals and in base
+ * units, and the full calldata that would be signed.
+ */
+function CallDetail({ call, position, tokens }: { call: VerifiedCall; position: number; tokens: TokenLabels }) {
+  const bytes = (call.data.length - 2) / 2;
+  return (
+    <details className="mt-1">
+      <summary className="w-fit cursor-pointer rounded-sm text-sm text-accent hover:underline">
+        Calldata and exact amounts<span className="sr-only"> of call {position}</span>
+      </summary>
+      <dl className="mt-2 flex flex-col gap-2 border-l pl-3">
+        <Detail label="Contract">
+          <FullAddress address={call.to} tokens={tokens} />
+        </Detail>
+        {call.kind === "approve" ? (
+          <>
+            <Detail label="Spender">
+              <FullAddress address={call.spender} tokens={tokens} />
+            </Detail>
+            <Detail label="Amount approved">
+              <span className="num">{exactAmount(call.amount, call.token, tokens)}</span>
+            </Detail>
+          </>
+        ) : (
+          <>
+            <Detail label="Swaps exactly">
+              <span className="num">{exactAmount(call.amountIn, call.tokenIn, tokens)}</span>
+            </Detail>
+            <Detail label="Minimum out, enforced by the router">
+              <span className="num">{exactAmount(call.minAmountOut, call.tokenOut, tokens)}</span>
+            </Detail>
+            <Detail label="Quoted out, not guaranteed">
+              <span className="num">{exactAmount(call.quotedAmountOut, call.tokenOut, tokens)}</span>
+            </Detail>
+            <Detail label="Route deadline">
+              <span className="num">
+                {toIsoInstant(BigInt(call.deadline))} (Unix time {call.deadline})
+              </span>
+            </Detail>
+          </>
+        )}
+        <Detail label="Value sent">
+          <span className="num">{call.value.toString()} wei</span>
+        </Detail>
+        <Detail label={`Calldata, ${formatCount(BigInt(bytes))} bytes`}>
+          <span className="flex flex-col items-start gap-1">
+            <code className="font-mono text-xs break-all">{call.data}</code>
+            <CopyButton value={call.data} label={`Copy the calldata of call ${position}`} />
+          </span>
+        </Detail>
+      </dl>
+    </details>
+  );
 }
 
 function amount(value: bigint, token: string, tokens: TokenLabels): string {
@@ -86,28 +218,32 @@ function CallsTable({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens:
               <TableCell numeric>{index + 1}</TableCell>
               <TableRowHeader>{callTitle(call, tokens)}</TableRowHeader>
               <TableCell>
-                {call.kind === "approve" ? (
-                  <>
-                    Exactly <span className="num">{amount(call.amount, call.token, tokens)}</span> to the router{" "}
-                    <Mono>{call.spender}</Mono>
-                  </>
-                ) : (
-                  <>
-                    Swap <span className="num">{amount(call.amountIn, call.tokenIn, tokens)}</span> for at least{" "}
-                    <span className="num">{amount(call.minAmountOut, call.tokenOut, tokens)}</span>
-                    <span className="block text-sm text-secondary">
-                      Quoted {amount(call.quotedAmountOut, call.tokenOut, tokens)}, not guaranteed
-                    </span>
-                    <PriceBound snapshot={snapshot} leg={call.leg} />
-                    <span className="block text-sm text-secondary">
-                      Reverts after {toIsoInstant(BigInt(call.deadline))}, the route deadline decoded from its calldata
-                    </span>
-                  </>
-                )}
+                <div className="min-w-64 py-2 whitespace-normal">
+                  {call.kind === "approve" ? (
+                    <>
+                      Exactly <span className="num">{amount(call.amount, call.token, tokens)}</span> to the{" "}
+                      {tokens.contractName(call.spender) === "Router" ? "router" : "spender"}{" "}
+                      <ShortAddress address={call.spender} />
+                    </>
+                  ) : (
+                    <>
+                      Swap <span className="num">{amount(call.amountIn, call.tokenIn, tokens)}</span> for at least{" "}
+                      <span className="num">{amount(call.minAmountOut, call.tokenOut, tokens)}</span>
+                      <span className="block text-sm text-secondary">
+                        Quoted {amount(call.quotedAmountOut, call.tokenOut, tokens)}, not guaranteed
+                      </span>
+                      <PriceBound snapshot={snapshot} leg={call.leg} />
+                      <span className="block text-sm text-secondary">
+                        Reverts after {toIsoInstant(BigInt(call.deadline))}, the route deadline decoded from its
+                        calldata
+                      </span>
+                    </>
+                  )}
+                  <CallDetail call={call} position={index + 1} tokens={tokens} />
+                </div>
               </TableCell>
-              <TableCell>
-                <Mono>{call.to}</Mono>
-                <span className="block text-sm text-secondary">{call.kind === "approve" ? "Token" : "Router"}</span>
+              <TableCell className="align-top">
+                <ContractCell address={call.to} kind={call.kind === "approve" ? "Token" : "Router"} tokens={tokens} />
               </TableCell>
             </TableRow>
           ))}
@@ -116,11 +252,37 @@ function CallsTable({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens:
               <TableCell numeric>{calls.length + 1}</TableCell>
               <TableRowHeader>Record the rebalance</TableRowHeader>
               <TableCell>
-                recordRebalance of version {attestation.call.version} of this index. Moves no token.
+                <div className="min-w-64 py-2 whitespace-normal">
+                  recordRebalance of version {attestation.call.version} of this index. Moves no token.
+                  <details className="mt-1">
+                    <summary className="w-fit cursor-pointer rounded-sm text-sm text-accent hover:underline">
+                      Calldata<span className="sr-only"> of call {calls.length + 1}</span>
+                    </summary>
+                    <dl className="mt-2 flex flex-col gap-2 border-l pl-3">
+                      <Detail label="Contract">
+                        <FullAddress address={attestation.call.to} tokens={tokens} />
+                      </Detail>
+                      <Detail label="Index id">
+                        <span className="font-mono break-all">{attestation.call.indexId}</span>
+                      </Detail>
+                      <Detail label="Value sent">
+                        <span className="num">{attestation.call.value.toString()} wei</span>
+                      </Detail>
+                      <Detail label={`Calldata, ${formatCount(BigInt((attestation.call.data.length - 2) / 2))} bytes`}>
+                        <span className="flex flex-col items-start gap-1">
+                          <code className="font-mono text-xs break-all">{attestation.call.data}</code>
+                          <CopyButton
+                            value={attestation.call.data}
+                            label={`Copy the calldata of call ${calls.length + 1}`}
+                          />
+                        </span>
+                      </Detail>
+                    </dl>
+                  </details>
+                </div>
               </TableCell>
-              <TableCell>
-                <Mono>{attestation.call.to}</Mono>
-                <span className="block text-sm text-secondary">RebalanceLog</span>
+              <TableCell className="align-top">
+                <ContractCell address={attestation.call.to} kind="Rebalance log" tokens={tokens} />
               </TableCell>
             </TableRow>
           ) : null}
@@ -153,7 +315,7 @@ function AllowancesAbovePlan({ snapshot, tokens }: { snapshot: ExecutionSnapshot
               {currentAllowance >= 2n ** 255n ? "an unlimited amount" : amount(currentAllowance, token, tokens)}
             </span>
             , this plan swaps <span className="num">{amount(planned, token, tokens)}</span>. Spender{" "}
-            <Mono>{spender}</Mono>
+            <ContractAddress address={spender} tokens={tokens} />
           </li>
         ))}
       </ul>
@@ -212,17 +374,45 @@ function Totals({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens: Tok
   );
 }
 
+/** The codes of a check as the server sent them, for developers: check, status, reason and detail. */
+function CheckCode({ check }: { check: PlanCheck }) {
+  return (
+    <code className="block font-mono text-xs break-all text-secondary">
+      {[check.check, check.status, check.reason, check.detail].filter((part) => part !== null).join(" ")}
+    </code>
+  );
+}
+
+/** The name of a check and the token or leg it concerns. */
+function checkTitle(check: PlanCheck, tokens: TokenLabels): string {
+  const { title } = describeCheck(check);
+  if (check.token !== null) return `${title} (${tokens.symbolOf(check.token)})`;
+  return check.leg === null ? title : `${title} (trade ${check.leg + 1})`;
+}
+
 function CheckRow({ check, tokens }: { check: PlanCheck; tokens: TokenLabels }) {
   const blocking = check.status !== "pass" && check.status !== "warn";
+  const text = describeCheck(check);
   return (
-    <li className="flex gap-2 border-t py-1.5 first:border-t-0" data-status={check.status}>
-      <span className={blocking ? "mt-0.5 shrink-0 text-warning" : "mt-0.5 shrink-0 text-primary"}>
+    <li className="flex gap-2 border-t py-2 first:border-t-0" data-status={check.status}>
+      <span
+        className={
+          blocking || check.status === "warn" ? "mt-0.5 shrink-0 text-warning" : "mt-0.5 shrink-0 text-primary"
+        }
+      >
         {check.status === "pass" ? <CheckIcon /> : <WarningIcon />}
       </span>
-      <span className="min-w-0">
-        <code className="font-mono text-sm">{check.check}</code> {check.status}: {check.reason}
-        {check.token === null ? null : <span className="text-secondary"> ({tokens.symbolOf(check.token)})</span>}
-      </span>
+      <div className="flex min-w-0 max-w-measure flex-col gap-0.5">
+        <p>
+          <span className="font-medium">{checkTitle(check, tokens)}</span>
+          <span className="text-secondary">: {CHECK_STATUS_TEXT[check.status]}</span>
+        </p>
+        <p className="text-sm text-secondary">
+          {text.checked} {text.result}
+        </p>
+        {text.meaning === null ? null : <p className="text-sm text-secondary">{text.meaning}</p>}
+        <CheckCode check={check} />
+      </div>
     </li>
   );
 }
@@ -368,8 +558,8 @@ export function ExecutionReview({
           <ul className="flex flex-col gap-1">
             {plan.blockedBy.map((check) => (
               <li key={warningKey(check)}>
-                <code className="font-mono text-sm">{check.check}</code> {check.reason}
-                {check.token === null ? null : ` (${tokens.symbolOf(check.token)})`}
+                <span className="font-medium">{checkTitle(check, tokens)}</span>: {describeCheck(check).result}
+                <CheckCode check={check} />
               </li>
             ))}
           </ul>
@@ -419,14 +609,20 @@ export function ExecutionReview({
           <legend className="text-md font-medium">Warnings to acknowledge</legend>
           {plan.warnings.map((warning) => {
             const key = warningKey(warning);
+            const text = describeCheck(warning);
             return (
-              <Checkbox
-                key={key}
-                checked={acknowledged.has(key)}
-                disabled={busy}
-                onChange={(event) => toggle(key, event.target.checked)}
-                label={`I acknowledge ${warning.check}: ${warning.reason}${warning.token === null ? "" : ` for ${tokens.symbolOf(warning.token)}`}.`}
-              />
+              <div key={key} className="flex max-w-measure flex-col gap-1">
+                <Checkbox
+                  checked={acknowledged.has(key)}
+                  disabled={busy}
+                  onChange={(event) => toggle(key, event.target.checked)}
+                  label={`I acknowledge this warning. ${checkTitle(warning, tokens)}: ${text.result}`}
+                />
+                <div className="flex flex-col gap-0.5 pl-6">
+                  {text.meaning === null ? null : <p className="text-sm text-secondary">{text.meaning}</p>}
+                  <CheckCode check={warning} />
+                </div>
+              </div>
             );
           })}
         </fieldset>

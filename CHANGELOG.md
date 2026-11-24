@@ -165,6 +165,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The execution review states every pre-trade check and warning in plain language, with its codes kept in mono
+  for developers. The text is a typed map over the server's checks and reasons, and a test fails when the server
+  reports a reason without text.
+- The calls of the execution review fit a 1440 px screen: contracts are named and their addresses shortened with a
+  copy control, and each call expands to its full addresses, exact amounts in base units and full calldata.
 - A transaction that is mined and reverts is reported as reverted, in the Studio as in execution, instead of as
   not found: its receipt is read with viem, which returns a reverted receipt, rather than wagmi, which throws.
 

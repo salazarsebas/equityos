@@ -119,7 +119,10 @@ for (const theme of themes) {
       .getByRole("button", { name: /Test Wallet/ })
       .click();
     await page.getByRole("button", { name: "Prepare to execute" }).click();
-    await expect(page.getByRole("region", { name: "Calls you would sign" })).toBeVisible();
+    const calls = page.getByRole("region", { name: "Calls you would sign" });
+    await expect(calls).toBeVisible();
+    // With the detail of every call open: full addresses, exact amounts, calldata and their copy controls.
+    for (const summary of await calls.locator("summary").all()) await summary.click();
     await expectNoBlockingViolations(page);
   });
 }
