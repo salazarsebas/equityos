@@ -12,6 +12,7 @@ import {
   array,
   boolean,
   constant,
+  type Decoder,
   DecodeFailure,
   enumOf,
   hex,
@@ -586,6 +587,108 @@ export const executionPlan = object({
   planHash: nullable(bytes32()),
 });
 
+/** Ids of the network metrics, as `definitions[].id` lists them. */
+const METRIC_IDS = [
+  "registry.indexes_published",
+  "registry.versions_published",
+  "registry.distinct_creators",
+  "registry.indexes_deprecated",
+  "registry.versions_per_day",
+  "usage.attestations",
+  "usage.attestations_tier_a",
+  "usage.attestations_tier_b",
+  "usage.attestations_unmatched",
+  "usage.accounts_tier_a",
+  "usage.accounts_within_tolerance",
+  "usage.tier_a_per_day",
+  "usage.by_index",
+  "volume.tier_a_reference_value",
+  "exclusions.activity",
+] as const;
+
+/** A network metric: its value, its definition id, its chain, the blocks it covers and when it was computed. */
+function metric<T>(value: Decoder<T>) {
+  return object({
+    id: enumOf(METRIC_IDS),
+    value,
+    chainId: integer(),
+    fromBlock: uint(),
+    toBlock: nullable(uint()),
+    computedAt: timestamp(),
+  });
+}
+
+const tierCounts = object({ tierA: integer(), tierB: integer(), unmatched: integer() });
+const dailyCounts = array(object({ day: string(), count: integer() }));
+
+export const networkMetrics = object({
+  indexesPublished: metric(integer()),
+  versionsPublished: metric(integer()),
+  distinctCreators: metric(integer()),
+  indexesDeprecated: metric(integer()),
+  versionsPerDay: metric(dailyCounts),
+  attestations: metric(integer()),
+  attestationsTierA: metric(integer()),
+  attestationsTierB: metric(integer()),
+  attestationsUnmatched: metric(integer()),
+  accountsTierA: metric(integer()),
+  accountsWithinTolerance: metric(integer()),
+  tierAPerDay: metric(dailyCounts),
+  byIndex: metric(
+    array(
+      object({
+        indexId: bytes32(),
+        label: nullable(object({ identifier: string(), name: nullable(string()) })),
+        attestations: tierCounts,
+        accountsTierA: integer(),
+      }),
+    ),
+  ),
+  /** USD scaled by 1e8, at reference prices. Not traded value. */
+  tierAReferenceValueUsdE8: metric(uint()),
+  excludedActivity: metric(object({ indexes: integer(), versions: integer(), attestations: tierCounts })),
+});
+
+export const attestation = object({
+  transactionHash: bytes32(),
+  blockNumber: uint(),
+  blockTimestamp: timestamp(),
+  account: address(),
+  indexId: bytes32(),
+  version: integer(),
+  tier: enumOf(["a", "b", "unmatched"]),
+  reason: nullable(enumOf(["no_constituent_flows", "below_minimum_notional", "price_unavailable"])),
+  valueUsdE8: nullable(uint()),
+  linkedTransaction: nullable(bytes32()),
+  tracking: nullable(
+    object({
+      status: enumOf(["within", "outside", "not_assessed"]),
+      reason: nullable(enumOf(["not_static", "not_verified", "not_valued"])),
+      maxDriftBps: nullable(integer()),
+      toleranceBps: nullable(integer()),
+    }),
+  ),
+  excluded: boolean(),
+});
+
+export const network = object({
+  chainId: integer(),
+  registry: address(),
+  rebalanceLog: address(),
+  scan: object({
+    fromBlock: uint(),
+    scannedToBlock: nullable(uint()),
+    targetBlock: uint(),
+    complete: boolean(),
+    usageComplete: boolean(),
+  }),
+  thresholds: object({ minimumNotionalUsdE8: uint(), tierBWindowSeconds: integer(), toleranceMarginBps: integer() }),
+  metrics: networkMetrics,
+  attestations: array(attestation),
+  exclusions: array(object({ address: address(), label: string() })),
+  definitions: array(object({ id: string(), title: string(), definition: string(), source: string() })),
+});
+
 export const errorBody = object({
   error: object({ code: enumOf(API_ERROR_CODES), message: string(), details: errorDetails }),
 });
@@ -630,3 +733,6 @@ export type ExecutionCheck = Infer<typeof executionCheck>;
 export type ExecutionLeg = Infer<typeof executionLeg>;
 export type ExecutionCall = Infer<typeof executionCall>;
 export type ExecutionPlan = Infer<typeof executionPlan>;
+export type NetworkMetrics = Infer<typeof networkMetrics>;
+export type Attestation = Infer<typeof attestation>;
+export type Network = Infer<typeof network>;
