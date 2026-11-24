@@ -136,7 +136,7 @@ test.describe("portfolio page", () => {
       .getByRole("dialog", { name: "Connect a wallet" })
       .getByRole("button", { name: /Test Wallet/ })
       .click();
-    await expect(page.getByText("Connected wallet")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Connected wallet", { exact: true })).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`address=${TEST_ACCOUNT}`));
     await expect(page.getByTestId("threshold-status")).toContainText("Above threshold by 10.00 pp");
   });
