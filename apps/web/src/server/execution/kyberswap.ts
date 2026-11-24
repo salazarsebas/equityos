@@ -1,7 +1,7 @@
 import "server-only";
 import { type Address, type Hex, isAddress, isHex } from "viem";
 import { MissingConfigurationError } from "@/server/market";
-import type { ProviderResult, QuoteFailure, QuoteProvider, QuoteRequest } from "./provider";
+import type { ProviderResult, QuoteContext, QuoteFailure, QuoteProvider, QuoteRequest } from "./provider";
 
 /**
  * KyberSwap aggregator API. Keyless: requests carry only the `x-client-id` header, which the provider asks
@@ -14,9 +14,6 @@ export const KYBERSWAP_API = "https://aggregator-api.kyberswap.com/base/api/v1";
 export const DEFAULT_CLIENT_ID = "equityos";
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const TIMEOUT_MS = 8_000;
-/** Longest wait before the one retry of a rate-limited request. */
-const MAX_RETRY_WAIT_SECONDS = 10;
-const RETRY_WAIT_MS = 500;
 /** Error code of the API for a pair and amount without a route. */
 const ROUTE_NOT_FOUND = 4008;
 
@@ -35,7 +32,6 @@ export function resolveClientId(env: Readonly<Record<string, string | undefined>
 export interface KyberSwapOptions {
   readonly clientId: string;
   readonly fetch?: typeof fetch;
-  readonly sleep?: (milliseconds: number) => Promise<void>;
 }
 
 type Json = Record<string, unknown>;
@@ -64,30 +60,38 @@ const text = (value: unknown): string | null => (typeof value === "string" && va
 
 type Attempt =
   | { readonly kind: "json"; readonly status: number; readonly body: unknown }
-  | { readonly kind: "transient"; readonly waitMs: number; readonly rateLimited: boolean };
+  | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number }
+  | { readonly kind: "transient" };
+
+/** Seconds a 429 asks to wait: `x-ratelimit-reset-after`, or `Retry-After`, or 10, whole and at least 1. */
+function rateLimitWait(response: Response): number {
+  for (const name of ["x-ratelimit-reset-after", "retry-after"]) {
+    const value = Number(response.headers.get(name) ?? "");
+    if (Number.isFinite(value) && value > 0) return Math.min(Math.ceil(value), 60);
+  }
+  return 10;
+}
 
 /**
  * The KyberSwap implementation of `QuoteProvider`: `GET /routes`, then `POST /route/build` with the route it
- * returned. Each request has a timeout and at most one retry, made only after a transport failure, a timeout,
- * a 429 or a 5xx. A 4xx is not retried and an answer of an unexpected shape is never retried or defaulted.
+ * returned. Each request has its own timeout and stops with the deadline of the request being served. A
+ * transport failure, a timeout or a 5xx is retried once and at once, when the budget allows it. A 429 is never
+ * retried and nothing sleeps: it is returned as `provider_rate_limited` with the wait the provider asks for.
+ * Another 4xx is not retried, and an answer of an unexpected shape is never retried or defaulted.
  */
 export function createKyberSwapProvider(options: KyberSwapOptions): QuoteProvider {
   const send = options.fetch ?? fetch;
-  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
-  async function attempt(url: string, init: RequestInit): Promise<Attempt> {
+  async function attempt(url: string, init: RequestInit, context: QuoteContext): Promise<Attempt> {
     let response: Response;
     try {
-      response = await send(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const signal = AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), context.signal]);
+      response = await send(url, { ...init, signal });
     } catch {
-      return { kind: "transient", waitMs: RETRY_WAIT_MS, rateLimited: false };
+      return { kind: "transient" };
     }
-    if (response.status === 429) {
-      const after = Number(response.headers.get("x-ratelimit-reset-after") ?? "1");
-      const seconds = Number.isFinite(after) ? Math.min(Math.max(after, 0), MAX_RETRY_WAIT_SECONDS) : 1;
-      return { kind: "transient", waitMs: seconds * 1000, rateLimited: true };
-    }
-    if (response.status >= 500) return { kind: "transient", waitMs: RETRY_WAIT_MS, rateLimited: false };
+    if (response.status === 429) return { kind: "rate_limited", retryAfterSeconds: rateLimitWait(response) };
+    if (response.status >= 500) return { kind: "transient" };
     try {
       return { kind: "json", status: response.status, body: await response.json() };
     } catch {
@@ -96,16 +100,19 @@ export function createKyberSwapProvider(options: KyberSwapOptions): QuoteProvide
   }
 
   /** The `data` object of a successful answer, or the failure it stands for. */
-  async function request(url: string, init: RequestInit): Promise<{ status: "ok"; data: Json } | QuoteFailure> {
-    let result = await attempt(url, init);
-    if (result.kind === "transient") {
-      await sleep(result.waitMs);
-      result = await attempt(url, init);
+  async function request(
+    url: string,
+    init: RequestInit,
+    context: QuoteContext,
+  ): Promise<{ status: "ok"; data: Json } | QuoteFailure> {
+    let result = await attempt(url, init, context);
+    if (result.kind === "transient" && !context.signal.aborted && context.takeRetry()) {
+      result = await attempt(url, init, context);
     }
-    if (result.kind === "transient") {
-      const reason = result.rateLimited ? "provider_rate_limited" : "provider_unavailable";
-      return { status: "failed", reason, detail: null };
+    if (result.kind === "rate_limited") {
+      return { status: "failed", reason: "provider_rate_limited", detail: String(result.retryAfterSeconds) };
     }
+    if (result.kind === "transient") return { status: "failed", reason: "provider_unavailable", detail: null };
     const { status, body } = result;
     const code = isRecord(body) && typeof body.code === "number" ? body.code : null;
     if (status !== 200) {
@@ -122,13 +129,14 @@ export function createKyberSwapProvider(options: KyberSwapOptions): QuoteProvide
 
   return {
     name: "kyberswap",
-    async quote(input: QuoteRequest): Promise<ProviderResult> {
+    requestsPerQuote: 2,
+    async quote(input: QuoteRequest, context: QuoteContext): Promise<ProviderResult> {
       const query = new URLSearchParams({
         tokenIn: input.tokenIn,
         tokenOut: input.tokenOut,
         amountIn: input.amountIn.toString(),
       });
-      const route = await request(`${KYBERSWAP_API}/routes?${query}`, { headers });
+      const route = await request(`${KYBERSWAP_API}/routes?${query}`, { headers }, context);
       if (route.status !== "ok") return route;
       try {
         // The summary is sent back to the build endpoint unchanged, as the API requires. Only the fields read
@@ -141,18 +149,22 @@ export function createKyberSwapProvider(options: KyberSwapOptions): QuoteProvide
         ) {
           return { status: "failed", reason: "provider_malformed", detail: "routeSummary" };
         }
-        const build = await request(`${KYBERSWAP_API}/route/build`, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            routeSummary: summary,
-            sender: input.account,
-            recipient: input.account,
-            slippageTolerance: input.slippageBps,
-            deadline: input.deadline,
-            source: options.clientId,
-          }),
-        });
+        const build = await request(
+          `${KYBERSWAP_API}/route/build`,
+          {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              routeSummary: summary,
+              sender: input.account,
+              recipient: input.account,
+              slippageTolerance: input.slippageBps,
+              deadline: input.deadline,
+              source: options.clientId,
+            }),
+          },
+          context,
+        );
         if (build.status !== "ok") return build;
         return {
           status: "ok",

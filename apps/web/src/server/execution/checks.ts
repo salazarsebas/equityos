@@ -93,15 +93,18 @@ export function reportedDeviation(bps: bigint): number {
   return Number(bps > DEVIATION_REPORT_LIMIT_BPS ? DEVIATION_REPORT_LIMIT_BPS : bps);
 }
 
-/** The deviation in either direction must not exceed the band. A price far better than the reference is as
- * suspect as one far worse: one of the two prices is wrong. */
-export function deviationCheck(bps: bigint, bandBps: number, token: Address, leg: number): CheckResult {
-  const magnitude = bps < 0n ? -bps : bps;
-  const outcome = magnitude <= BigInt(bandBps) ? "pass" : "block";
+/**
+ * Both the quoted and the minimum-out prices must deviate from the reference by at most the band, in either
+ * direction, so the worst outcome a plan accepts is within it. A price far better than the reference is as
+ * suspect as one far worse: one of the two prices is wrong. `detail` is `quoted/minimum`, in bps.
+ */
+export function deviationCheck(quotedBps: bigint, minimumBps: bigint, bandBps: number, token: Address, leg: number) {
+  const within = (bps: bigint) => (bps < 0n ? -bps : bps) <= BigInt(bandBps);
+  const outcome = within(quotedBps) && within(minimumBps) ? "pass" : "block";
   return result("price_deviation", outcome, outcome === "pass" ? "within_band" : "outside_band", {
     token,
     leg,
-    detail: String(reportedDeviation(bps)),
+    detail: `${reportedDeviation(quotedBps)}/${reportedDeviation(minimumBps)}`,
   });
 }
 
@@ -165,9 +168,14 @@ export function approvalFor(token: Address, spender: Address, amount: bigint, al
   return { token, spender, currentAllowance: allowance, amount, required: allowance < amount };
 }
 
-export function allowanceCheck(allowance: bigint | null, token: Address): CheckResult {
+/**
+ * The allowance toward the router must be readable. One above what the plan swaps, unlimited included, is a
+ * warning with the amount: the router could pull more than the plan if it were ever called with other calldata.
+ */
+export function allowanceCheck(allowance: bigint | null, amount: bigint, token: Address): CheckResult {
   if (allowance === null) return result("allowance", "block", "read_failed", { token });
-  return result("allowance", "pass", "read", { token, detail: allowance.toString() });
+  if (allowance > amount) return result("allowance", "warn", "above_plan", { token, detail: allowance.toString() });
+  return result("allowance", "pass", "within_plan", { token, detail: allowance.toString() });
 }
 
 /** `balance >= needed`, with the amounts in the detail as `needed/balance`. */

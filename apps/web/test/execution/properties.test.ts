@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { type Address, decodeFunctionData, parseAbi } from "viem";
 import { buildExecutionPlan, type ExecutionLeg } from "../../src/server/execution/plan";
 import { USDC_ADDRESS } from "../../src/server/market/balances";
-import { ACCOUNT, constructedProvider, FakeExecutionChain, OPEN_AT } from "./support";
+import { ACCOUNT, constructedProvider, FakeExecutionChain, NO_DEADLINE, OPEN_AT, OPEN_BUDGET } from "./support";
 
 const approveAbi = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
 const CASES = 300;
@@ -35,7 +35,7 @@ describe("executable plan properties", () => {
       chain.usdc.balance = big(0n, 50_000_000n);
       chain.usdc.allowance = int(0, 3) === 0 ? big(0n, 50_000_000n) : 0n;
       const legs: ExecutionLeg[] = [];
-      const count = int(1, 6);
+      const count = int(1, 5);
       for (let index = 1; index <= count; index += 1) {
         const address = token(index);
         const priceE8 = big(1_000_000_000n, 100_000_000_000n);
@@ -50,13 +50,19 @@ describe("executable plan properties", () => {
       legs.sort((a, b) => (a.side === b.side ? 0 : a.side === "sell" ? -1 : 1));
       const deviationBps = BigInt(int(-90, 90));
       const plan = await buildExecutionPlan(
-        { provider: constructedProvider(legs, { deviationBps }).provider, client: chain.client(), now: () => OPEN_AT },
+        {
+          provider: constructedProvider(legs, { deviationBps }).provider,
+          client: chain.client(),
+          now: () => OPEN_AT,
+          providerBudget: OPEN_BUDGET,
+          signal: NO_DEADLINE,
+        },
         {
           account: ACCOUNT,
           reference: { status: "ready", legs },
           jurisdiction: { restricted: false, reason: "permitted_country", country: "DE" },
           slippageBps: int(0, 200),
-          maxDeviationBps: 100,
+          maxDeviationBps: 500,
           allowUnsimulated: false,
         },
       );

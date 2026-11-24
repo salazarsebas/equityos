@@ -109,6 +109,19 @@ function revertData(error: unknown): Hex | null {
   return null;
 }
 
+/**
+ * The JSON-RPC error code an endpoint answered with, or `null` when the request did not get an answer. viem
+ * gives `-1` to a failure it cannot attribute to the endpoint, which is not an answer.
+ */
+function rpcErrorCode(error: unknown): number | null {
+  let cause = error;
+  for (let depth = 0; isRecord(cause) && depth < 6; depth += 1) {
+    if (typeof cause.code === "number" && cause.code !== -1) return cause.code;
+    cause = cause.cause;
+  }
+  return null;
+}
+
 /** Whether a failed `eth_call` is an execution revert, as opposed to a failure of the endpoint. */
 function isRevert(error: unknown): boolean {
   let cause = error;
@@ -123,7 +136,8 @@ function isRevert(error: unknown): boolean {
  * Simulates the calls from `account` at `blockNumber`, read-only.
  *
  * The whole sequence is executed with `eth_simulateV1` when the endpoint serves it, with validation off so
- * that gas price and nonce do not matter. Otherwise each call is executed alone with `eth_call`, and only the
+ * that gas price and nonce do not matter. A transport failure of that request is retried once. When the
+ * endpoint answers that it does not serve it, or the request fails twice, each call is executed alone with `eth_call`, and only the
  * calls whose index is in `simulableAlone` (their approval and their input balance are already in place) are:
  * the others are `not_simulated`. Allowances are not overridden: the tokens are precompiles whose storage
  * layout is not published, so a state override would not be one the chain applies.
@@ -137,15 +151,21 @@ export async function simulateSequence(
 ): Promise<SimulationOutcome> {
   const block = toHex(blockNumber);
   const request = (call: PlannedCall) => ({ from: account, to: call.to, data: call.data, value: toHex(call.value) });
-  try {
-    const answer = await client.request({
+  const simulate = () =>
+    client.request({
       method: "eth_simulateV1",
       params: [{ blockStateCalls: [{ calls: calls.map(request) }], validation: false, traceTransfers: false }, block],
     });
-    const outcomes = parseSimulation(answer, calls);
-    if (outcomes !== null) return { method: "eth_simulateV1", calls: outcomes };
-  } catch {
-    // Not served, or not usable: fall back to single calls, which are reported as such.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const outcomes = parseSimulation(await simulate(), calls);
+      if (outcomes !== null) return { method: "eth_simulateV1", calls: outcomes };
+      break;
+    } catch (error) {
+      // An answer of the endpoint (a JSON-RPC error: not served, not supported) is final. A transport failure
+      // is retried once.
+      if (rpcErrorCode(error) !== null) break;
+    }
   }
   const outcomes: CallOutcome[] = [];
   for (const [index, call] of calls.entries()) {

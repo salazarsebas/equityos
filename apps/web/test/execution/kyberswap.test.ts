@@ -6,7 +6,7 @@ import {
   resolveClientId,
 } from "../../src/server/execution/kyberswap";
 import type { QuoteRequest } from "../../src/server/execution/provider";
-import { verifyQuote } from "../../src/server/execution/router";
+import { verifyQuote } from "../../src/lib/execution/calldata";
 import { MissingConfigurationError } from "../../src/server/market/errors";
 import { kyberswapFixture, type RecordedLeg } from "./support";
 
@@ -54,24 +54,29 @@ function recordedAnswers(leg: RecordedLeg): Answer[] {
   return [json(leg.route.status, leg.route.body), json(leg.build.status, leg.build.body)];
 }
 
-function provider(answers: Answer[], waits: number[] = []) {
+function provider(answers: Answer[], options: { retries?: number; signal?: AbortSignal } = {}) {
   const transport = scripted(answers);
-  const kyber = createKyberSwapProvider({
-    clientId: "equityos",
-    fetch: transport.fetch,
-    sleep: async (ms) => {
-      waits.push(ms);
+  const kyber = createKyberSwapProvider({ clientId: "equityos", fetch: transport.fetch });
+  let retries = options.retries ?? 10;
+  const retried: number[] = [];
+  const context = {
+    signal: options.signal ?? new AbortController().signal,
+    takeRetry: () => {
+      retried.push(transport.sent.length);
+      if (retries === 0) return false;
+      retries -= 1;
+      return true;
     },
-  });
-  return { kyber, sent: transport.sent, waits };
+  };
+  return { quote: (request: QuoteRequest) => kyber.quote(request, context), sent: transport.sent, retried };
 }
 
 describe("KyberSwap client on recorded answers", () => {
   test("requests a route then a build for the account, and the result verifies", async () => {
     for (const leg of kyberswapFixture.legs) {
-      const { kyber, sent } = provider(recordedAnswers(leg));
+      const { quote, sent } = provider(recordedAnswers(leg));
       const request = requestFor(leg);
-      const answer = await kyber.quote(request);
+      const answer = await quote(request);
       if (answer.status !== "ok") throw new Error(`${leg.name}: ${answer.reason}`);
       expect(answer.quote.quotedAmountOut).toBe(BigInt(leg.build.body.data.amountOut));
       expect(verifyQuote(request, answer.quote).status).toBe("ok");
@@ -98,17 +103,17 @@ describe("KyberSwap client on recorded answers", () => {
   });
 
   test("a pair without a route is no_route, with the recorded error code, and is not retried", async () => {
-    const { kyber, sent } = provider([
+    const { quote, sent } = provider([
       json(kyberswapFixture.routeNotFound.status, kyberswapFixture.routeNotFound.body),
     ]);
-    expect(await kyber.quote(requestFor(buy))).toEqual({ status: "failed", reason: "no_route", detail: "4008" });
+    expect(await quote(requestFor(buy))).toEqual({ status: "failed", reason: "no_route", detail: "4008" });
     expect(sent).toHaveLength(1);
   });
 
   test("a refused request is provider_rejected and is not retried", async () => {
     const refused = { code: 4000, message: "bad request", details: [{ fieldViolations: [{ field: "wallets" }] }] };
-    const { kyber, sent } = provider([json(buy.route.status, buy.route.body), json(400, refused)]);
-    expect(await kyber.quote(requestFor(buy))).toEqual({
+    const { quote, sent } = provider([json(buy.route.status, buy.route.body), json(400, refused)]);
+    expect(await quote(requestFor(buy))).toEqual({
       status: "failed",
       reason: "provider_rejected",
       detail: "4000",
@@ -118,26 +123,47 @@ describe("KyberSwap client on recorded answers", () => {
 
   test("retries once after a 5xx, a timeout or a network error, then reports the provider unavailable", async () => {
     const recovered = provider([json(502, {}), ...recordedAnswers(buy)]);
-    expect((await recovered.kyber.quote(requestFor(buy))).status).toBe("ok");
+    expect((await recovered.quote(requestFor(buy))).status).toBe("ok");
     expect(recovered.sent).toHaveLength(3);
     const down = provider(["network_error", json(503, {})]);
-    expect(await down.kyber.quote(requestFor(buy))).toEqual({
+    expect(await down.quote(requestFor(buy))).toEqual({
       status: "failed",
       reason: "provider_unavailable",
       detail: null,
     });
     expect(down.sent).toHaveLength(2);
-    expect(down.waits).toEqual([500]);
+    // Without budget for a retry, the first failure is final.
+    const spent = provider([json(502, {})], { retries: 0 });
+    expect(await spent.quote(requestFor(buy))).toMatchObject({ reason: "provider_unavailable" });
+    expect(spent.sent).toHaveLength(1);
+    // A request past the deadline of the request being served is not retried.
+    const controller = new AbortController();
+    controller.abort();
+    const late = provider(["network_error", json(503, {})], { signal: controller.signal });
+    expect(await late.quote(requestFor(buy))).toMatchObject({ reason: "provider_unavailable" });
+    expect(late.sent).toHaveLength(1);
   });
 
-  test("waits for the rate limit window before its one retry, at most 10 seconds", async () => {
-    const limited = (after: string) => json(429, {}, { "x-ratelimit-reset-after": after });
-    const once = provider([limited("3"), ...recordedAnswers(buy)]);
-    expect((await once.kyber.quote(requestFor(buy))).status).toBe("ok");
-    expect(once.waits).toEqual([3_000]);
-    const twice = provider([limited("60"), limited("60")]);
-    expect(await twice.kyber.quote(requestFor(buy))).toMatchObject({ reason: "provider_rate_limited" });
-    expect(twice.waits).toEqual([10_000]);
+  test("a 429 is never retried or waited on: it fails at once with the wait the provider asks for", async () => {
+    const limited = (headers: Record<string, string>) => json(429, {}, headers);
+    for (const [headers, seconds] of [
+      [{ "x-ratelimit-reset-after": "3" }, "3"],
+      [{ "x-ratelimit-reset-after": "2.4" }, "3"],
+      [{ "retry-after": "7" }, "7"],
+      [{}, "10"],
+      [{ "x-ratelimit-reset-after": "900" }, "60"],
+    ] as const) {
+      const once = provider([limited(headers)]);
+      expect(await once.quote(requestFor(buy))).toEqual({
+        status: "failed",
+        reason: "provider_rate_limited",
+        detail: seconds,
+      });
+      expect(once.sent).toHaveLength(1);
+      expect(once.retried).toEqual([]);
+    }
+    const onBuild = provider([json(buy.route.status, buy.route.body), limited({ "x-ratelimit-reset-after": "4" })]);
+    expect(await onBuild.quote(requestFor(buy))).toMatchObject({ reason: "provider_rate_limited", detail: "4" });
   });
 
   test("an answer of an unexpected shape is provider_malformed and never retried or defaulted", async () => {
@@ -155,15 +181,15 @@ describe("KyberSwap client on recorded answers", () => {
     ];
     for (const [answers, detail] of cases) {
       const requests = answers.length;
-      const { kyber, sent } = provider(answers);
-      expect(await kyber.quote(requestFor(buy))).toEqual({ status: "failed", reason: "provider_malformed", detail });
+      const { quote, sent } = provider(answers);
+      expect(await quote(requestFor(buy))).toEqual({ status: "failed", reason: "provider_malformed", detail });
       expect(sent.length).toBe(requests);
     }
   });
 
   test("a route for another pair or amount than requested is refused before building", async () => {
-    const { kyber, sent } = provider([json(sell.route.status, sell.route.body)]);
-    expect(await kyber.quote(requestFor(buy))).toEqual({
+    const { quote, sent } = provider([json(sell.route.status, sell.route.body)]);
+    expect(await quote(requestFor(buy))).toEqual({
       status: "failed",
       reason: "provider_malformed",
       detail: "routeSummary",

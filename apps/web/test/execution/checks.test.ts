@@ -15,7 +15,7 @@ import {
   verdict,
 } from "../../src/server/execution/checks";
 import { POLICY_SCOPES } from "../../src/server/execution/reads";
-import { KYBERSWAP_ROUTER } from "../../src/server/execution/router";
+import { KYBERSWAP_ROUTER } from "../../src/lib/execution/calldata";
 import { classifyJurisdiction } from "../../src/server/jurisdiction";
 import { NVDA } from "./support";
 
@@ -73,15 +73,21 @@ describe("deviation", () => {
     expect(deviationBps(5_000_000n, 1_240_000n, 8, 40_000_000_000n)).toBe(81n);
   });
 
+  test("the band also holds for the minimum-out price, so the worst accepted outcome is within it", () => {
+    expect(deviationCheck(0n, -100n, 100, NVDA, 0).status).toBe("pass");
+    expect(deviationCheck(0n, -101n, 100, NVDA, 0)).toMatchObject({ status: "block", detail: "0/-101" });
+    expect(deviationCheck(0n, 101n, 100, NVDA, 0).status).toBe("block");
+  });
+
   test("the band is inclusive in both directions and the report is clamped", () => {
-    expect(deviationCheck(100n, 100, NVDA, 0).status).toBe("pass");
-    expect(deviationCheck(-100n, 100, NVDA, 0).status).toBe("pass");
-    expect(deviationCheck(101n, 100, NVDA, 0)).toMatchObject({
+    expect(deviationCheck(100n, 100n, 100, NVDA, 0).status).toBe("pass");
+    expect(deviationCheck(-100n, -100n, 100, NVDA, 0).status).toBe("pass");
+    expect(deviationCheck(101n, 0n, 100, NVDA, 0)).toMatchObject({
       status: "block",
       reason: "outside_band",
-      detail: "101",
+      detail: "101/0",
     });
-    expect(deviationCheck(-101n, 100, NVDA, 0).status).toBe("block");
+    expect(deviationCheck(-101n, 0n, 100, NVDA, 0).status).toBe("block");
     expect(reportedDeviation(10n ** 12n)).toBe(1_000_000);
     expect(() => deviationBps(1n, 0n, 8, 1n)).toThrow(RangeError);
   });
@@ -147,7 +153,17 @@ describe("balance and allowance", () => {
     expect(approvalFor(NVDA, KYBERSWAP_ROUTER, 100n, 99n).required).toBe(true);
     expect(approvalFor(NVDA, KYBERSWAP_ROUTER, 100n, 100n).required).toBe(false);
     expect(approvalFor(NVDA, KYBERSWAP_ROUTER, 100n, 2n ** 256n - 1n)).toMatchObject({ amount: 100n, required: false });
-    expect(allowanceCheck(null, NVDA).status).toBe("block");
+    expect(allowanceCheck(null, 100n, NVDA).status).toBe("block");
+  });
+
+  test("an allowance above the plan, unlimited included, is a warning with the amount", () => {
+    expect(allowanceCheck(100n, 100n, NVDA)).toMatchObject({ status: "pass", reason: "within_plan" });
+    expect(allowanceCheck(0n, 100n, NVDA).status).toBe("pass");
+    expect(allowanceCheck(101n, 100n, NVDA)).toMatchObject({ status: "warn", reason: "above_plan", detail: "101" });
+    expect(allowanceCheck(2n ** 256n - 1n, 100n, NVDA)).toMatchObject({
+      status: "warn",
+      detail: (2n ** 256n - 1n).toString(),
+    });
   });
 });
 

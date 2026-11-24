@@ -11,9 +11,10 @@
 import { describe, expect, test } from "bun:test";
 import { type Address, createPublicClient, http, isAddress, parseAbi } from "viem";
 import { createKyberSwapProvider, resolveClientId } from "../../src/server/execution/kyberswap";
+import { createExecutionLimits } from "../../src/server/execution/limits";
 import { buildExecutionPlan, type ExecutionLeg } from "../../src/server/execution/plan";
 import { POLICY_SCOPES, readPreTrade } from "../../src/server/execution/reads";
-import { KYBERSWAP_ROUTER, minimumAmountOut, verifyQuote } from "../../src/server/execution/router";
+import { KYBERSWAP_EXECUTOR, KYBERSWAP_ROUTER, minimumAmountOut, verifyQuote } from "../../src/lib/execution/calldata";
 import { USDC_ADDRESS } from "../../src/server/market/balances";
 import { resolveBaseRpcUrl } from "../../src/server/market/config";
 import { createMarketData } from "../../src/server/market/index";
@@ -37,6 +38,7 @@ describe.skipIf(!live)("live: KyberSwap and Base mainnet", () => {
 
   test("the allowlisted router is deployed on Base and the pinned policy scopes are the token's", async () => {
     expect((await client.getCode({ address: KYBERSWAP_ROUTER }))?.length ?? 0).toBeGreaterThan(1_000);
+    expect((await client.getCode({ address: KYBERSWAP_EXECUTOR }))?.length ?? 0).toBeGreaterThan(1_000);
     expect(await client.readContract({ address: KYBERSWAP_ROUTER, abi: routerAbi, functionName: "WETH" })).toBe(
       "0x4200000000000000000000000000000000000006",
     );
@@ -55,7 +57,7 @@ describe.skipIf(!live)("live: KyberSwap and Base mainnet", () => {
       [NVDA, USDC_ADDRESS, 3_000_000n],
     ] as const) {
       const request = { tokenIn, tokenOut, amountIn, account: ACCOUNT, slippageBps: 50, deadline: now() + 300 };
-      const answer = await provider.quote(request);
+      const answer = await provider.quote(request, { signal: AbortSignal.timeout(20_000), takeRetry: () => false });
       if (answer.status !== "ok") throw new Error(`quote failed: ${answer.reason} ${answer.detail}`);
       const verified = verifyQuote(request, answer.quote);
       if (verified.status !== "ok") throw new Error(`verification failed: ${verified.reason} ${verified.detail}`);
@@ -100,7 +102,7 @@ describe.skipIf(!live)("live: KyberSwap and Base mainnet", () => {
     });
     const legs = [buy(NVDA, nvda), buy(TSLA, tsla)];
     const plan = await buildExecutionPlan(
-      { provider, client, now },
+      { provider, client, now, providerBudget: createExecutionLimits().provider, signal: AbortSignal.timeout(20_000) },
       {
         account: ACCOUNT,
         reference: { status: "ready", legs },

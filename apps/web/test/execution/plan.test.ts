@@ -9,30 +9,37 @@ import {
   parseAbiParameters,
 } from "viem";
 import type { CheckResult } from "../../src/server/execution/checks";
+import { KYBERSWAP_ROUTER, planHash } from "../../src/lib/execution/calldata";
 import {
   buildExecutionPlan,
+  DEADLINE_TOLERANCE_SECONDS,
+  DeadlineExceededError,
+  type ExecutionDependencies,
   type ExecutionLeg,
   type ExecutionPlanInput,
   MULTIPLIER_WINDOW_SECONDS,
   PLAN_TTL_SECONDS,
-  planHash,
+  ProviderRateLimitedError,
 } from "../../src/server/execution/plan";
 import type { QuoteProvider } from "../../src/server/execution/provider";
-import { KYBERSWAP_ROUTER } from "../../src/server/execution/router";
 import type { Jurisdiction } from "../../src/server/jurisdiction";
 import { USDC_ADDRESS } from "../../src/server/market/balances";
 import {
   ACCOUNT,
   buyLeg,
   constructedProvider,
+  executorData,
   FakeExecutionChain,
+  NO_DEADLINE,
   NVDA,
   OPEN_AT,
+  OPEN_BUDGET,
   sellLeg,
   swapCalldata,
   TSLA,
 } from "./support";
 
+const NVDA_TWO = "0xb200000000000000000000c2e324d24d7eecd1fb";
 const PERMITTED: Jurisdiction = { restricted: false, reason: "permitted_country", country: "DE" };
 const approveAbi = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
 
@@ -47,6 +54,8 @@ interface Setup {
   readonly provider?: QuoteProvider;
   readonly input?: Partial<ExecutionPlanInput>;
   readonly clock?: () => number;
+  readonly budget?: ExecutionDependencies["providerBudget"];
+  readonly signal?: AbortSignal;
 }
 
 async function plan(setup: Setup = {}) {
@@ -54,7 +63,13 @@ async function plan(setup: Setup = {}) {
   const legs = setup.legs ?? [sellLeg(), buyLeg()];
   const provider = setup.provider ?? constructedProvider(legs).provider;
   return buildExecutionPlan(
-    { provider, client: chain.client(), now: setup.clock ?? (() => OPEN_AT) },
+    {
+      provider,
+      client: chain.client(),
+      now: setup.clock ?? (() => OPEN_AT),
+      providerBudget: setup.budget ?? OPEN_BUDGET,
+      signal: setup.signal ?? NO_DEADLINE,
+    },
     {
       account: ACCOUNT,
       reference: { status: "ready", legs },
@@ -94,7 +109,7 @@ describe("a ready plan", () => {
     ]);
     expect(calls.map((call) => call.leg)).toEqual([null, null, 0, 1]);
     expect(calls.every((call) => call.value === 0n)).toBe(true);
-    expect(result.planHash).toBe(planHash(8453, ACCOUNT, calls));
+    expect(result.planHash).toBe(planHash(8453, ACCOUNT, OPEN_AT + PLAN_TTL_SECONDS, calls));
     expect(result.expiresAt).toBe(OPEN_AT + PLAN_TTL_SECONDS);
     expect(result.checkedAtBlock?.number).toBe(61_000_000n);
   });
@@ -143,7 +158,7 @@ describe("a ready plan", () => {
         amountIn: 3_000_000n,
         account: ACCOUNT,
         slippageBps: 50,
-        deadline: OPEN_AT + 300,
+        deadline: OPEN_AT + PLAN_TTL_SECONDS,
       },
       {
         tokenIn: USDC_ADDRESS,
@@ -151,7 +166,7 @@ describe("a ready plan", () => {
         amountIn: 5_000_000n,
         account: ACCOUNT,
         slippageBps: 50,
-        deadline: OPEN_AT + 300,
+        deadline: OPEN_AT + PLAN_TTL_SECONDS,
       },
     ]);
   });
@@ -165,24 +180,26 @@ describe("planHash", () => {
 
   test("is keccak256 of the documented encoding", () => {
     const encoded = encodeAbiParameters(
-      parseAbiParameters("string, uint256, address, (address to, uint256 value, bytes data)[]"),
-      ["equityos.execution-plan/1", 8453n, ACCOUNT, calls],
+      parseAbiParameters("string, uint256, address, uint64, (address to, uint256 value, bytes data)[]"),
+      ["equityos.execution-plan/1", 8453n, ACCOUNT, 1_795_532_520n, calls],
     );
-    expect(planHash(8453, ACCOUNT, calls)).toBe(keccak256(encoded));
+    expect(planHash(8453, ACCOUNT, 1_795_532_520, calls)).toBe(keccak256(encoded));
   });
 
-  test("changes with the chain, the account, the order and every field of every call", () => {
-    const base = planHash(8453, ACCOUNT, calls);
+  test("changes with the chain, the account, the expiry, the order and every field of every call", () => {
+    const E = 1_795_532_520;
+    const base = planHash(8453, ACCOUNT, E, calls);
     const [first, second] = calls;
     if (first === undefined || second === undefined) throw new Error("two calls");
     const variants = [
-      planHash(84532, ACCOUNT, calls),
-      planHash(8453, NVDA, calls),
-      planHash(8453, ACCOUNT, [second, first]),
-      planHash(8453, ACCOUNT, [first]),
-      planHash(8453, ACCOUNT, [{ ...first, to: TSLA }, second]),
-      planHash(8453, ACCOUNT, [{ ...first, value: 1n }, second]),
-      planHash(8453, ACCOUNT, [first, { ...second, data: "0xe21fd0ea" }]),
+      planHash(84532, ACCOUNT, E, calls),
+      planHash(8453, ACCOUNT, E + 1, calls),
+      planHash(8453, NVDA, E, calls),
+      planHash(8453, ACCOUNT, E, [second, first]),
+      planHash(8453, ACCOUNT, E, [first]),
+      planHash(8453, ACCOUNT, E, [{ ...first, to: TSLA }, second]),
+      planHash(8453, ACCOUNT, E, [{ ...first, value: 1n }, second]),
+      planHash(8453, ACCOUNT, E, [first, { ...second, data: "0xe21fd0ea" }]),
     ];
     expect(new Set([base, ...variants]).size).toBe(variants.length + 1);
   });
@@ -217,8 +234,8 @@ describe("blocking checks", () => {
     });
     const empty = await plan({ input: { reference: { status: "ready", legs: [] } } });
     expect(empty.blockedBy[0]).toMatchObject({ reason: "no_legs" });
-    const many = Array.from({ length: 11 }, () => buyLeg());
-    expect((await plan({ legs: many })).blockedBy[0]).toMatchObject({ reason: "too_many_legs", detail: "11" });
+    const many = Array.from({ length: 6 }, () => buyLeg());
+    expect((await plan({ legs: many })).blockedBy[0]).toMatchObject({ reason: "too_many_legs", detail: "6" });
   });
 
   test("a last close or unavailable reference blocks, a delayed one warns", async () => {
@@ -278,9 +295,23 @@ describe("blocking checks", () => {
       const result = await plan({ legs, provider: constructedProvider(legs, { deviationBps }).provider });
       expect(result.blockedBy.map(({ check }) => check)).toContain("price_deviation");
     }
-    const inside = await plan({ legs, provider: constructedProvider(legs, { deviationBps: -60n }).provider });
+    // 40 bps under the reference, and 50 bps of slippage under that: the minimum is within the 100 bps band.
+    const inside = await plan({ legs, provider: constructedProvider(legs, { deviationBps: -40n }).provider });
     expect(inside.status).toBe("ready");
-    expect(inside.legs[0]?.quoted?.deviationBps).toBe(-60);
+    expect(inside.legs[0]?.quoted).toMatchObject({ deviationBps: -40, minimumDeviationBps: -90 });
+    // 60 bps under is within the band at the quote, and not at the minimum.
+    const worst = await plan({ legs, provider: constructedProvider(legs, { deviationBps: -60n }).provider });
+    expect(find(worst.blockedBy, "price_deviation").map(({ leg, detail }) => [leg, detail])).toEqual([[0, "-60/-110"]]);
+  });
+
+  test("the minimum-out price must be within the band, for a sell and for a buy", async () => {
+    const legs = [sellLeg(), buyLeg()];
+    const loose = await plan({ legs, input: { slippageBps: 150 } });
+    const blocked = find(loose.blockedBy, "price_deviation");
+    expect(blocked.map(({ leg }) => leg)).toEqual([0, 1]);
+    // A sell's minimum is a lower price, a buy's minimum a higher one.
+    expect(loose.legs.map((leg) => leg.quoted?.minimumDeviationBps)).toEqual([-150, 153]);
+    expect((await plan({ legs, input: { slippageBps: 90 } })).status).toBe("ready");
   });
 
   test("buys are funded by the minimum amounts out of the sells, not by their quoted amounts", async () => {
@@ -359,13 +390,144 @@ describe("simulation without eth_simulateV1", () => {
     expect(result.calls).toHaveLength(4);
   });
 
-  test("calls simulated alone pass with a warning that names the method", async () => {
+  test("calls that all ran alone are still not a simulated sequence: blocked, never executable", async () => {
     const chain = wallet().token(NVDA, { balance: 3_000_000n, allowance: 3_000_000n });
     chain.usdc.allowance = 5_000_000n;
     chain.simulation = "unsupported";
     const result = await plan({ chain });
-    expect(find(result.checks, "simulation")[0]).toMatchObject({ status: "warn", reason: "calls_simulated_alone" });
+    expect(result.blockedBy).toMatchObject([
+      { check: "simulation", status: "not_simulated", reason: "calls_simulated_alone" },
+    ]);
     expect(result.simulationMethod).toBe("eth_call");
+    const accepted = await plan({ chain, input: { allowUnsimulated: true } });
+    expect(accepted.status).toBe("ready");
+    expect(accepted.executable).toBe(false);
+  });
+
+  test("a transport failure of eth_simulateV1 is retried once; twice is a fallback to single calls", async () => {
+    const flaky = wallet();
+    flaky.simulation = "flaky";
+    const recovered = await plan({ chain: flaky });
+    expect(recovered.simulationMethod).toBe("eth_simulateV1");
+    expect(recovered.executable).toBe(true);
+    expect(flaky.requests.filter((method) => method === "eth_simulateV1")).toHaveLength(2);
+    const down = wallet();
+    down.simulation = "down";
+    const fallback = await plan({ chain: down });
+    expect(down.requests.filter((method) => method === "eth_simulateV1")).toHaveLength(2);
+    expect(fallback.simulationMethod).toBe("eth_call");
+    expect(fallback.executable).toBe(false);
+    expect(fallback.blockedBy.map(({ check }) => check)).toEqual(["simulation"]);
+  });
+});
+
+describe("deadlines, rate limits and warnings", () => {
+  const atDeadline = (deadline: number) =>
+    constructedProvider([sellLeg(), buyLeg()], {
+      tamper: (quote, request) =>
+        request.tokenIn === NVDA
+          ? {
+              ...quote,
+              calldata: swapCalldata(
+                request,
+                (quote.quotedAmountOut * 9_950n) / 10_000n,
+                {},
+                { targetData: executorData(request.account, deadline) },
+              ),
+            }
+          : quote,
+    }).provider;
+
+  test("the route deadline is decoded, asked as the plan lifetime, and shortens the expiry", async () => {
+    const result = await plan();
+    expect(result.legs.map((leg) => leg.quoted?.quote.deadline)).toEqual([
+      OPEN_AT + PLAN_TTL_SECONDS,
+      OPEN_AT + PLAN_TTL_SECONDS,
+    ]);
+    const sooner = await plan({ provider: atDeadline(OPEN_AT + 30) });
+    expect(sooner.expiresAt).toBe(OPEN_AT + 30);
+    expect(sooner.planHash).toBe(planHash(8453, ACCOUNT, OPEN_AT + 30, sooner.calls ?? []));
+  });
+
+  test("a route deadline beyond the expiry and its tolerance blocks", async () => {
+    const edge = OPEN_AT + PLAN_TTL_SECONDS + DEADLINE_TOLERANCE_SECONDS;
+    expect((await plan({ provider: atDeadline(edge) })).status).toBe("ready");
+    const late = await plan({ provider: atDeadline(edge + 1) });
+    expect(late.blockedBy).toMatchObject([
+      { check: "plan_expiry", reason: "deadline_after_expiry", leg: 0, detail: String(edge + 1) },
+    ]);
+    const past = await plan({ provider: atDeadline(OPEN_AT) });
+    expect(past.blockedBy).toMatchObject([{ check: "plan_expiry", reason: "expired" }]);
+  });
+
+  test("the provider budget is taken before quoting and a refusal throws with the wait", async () => {
+    const taken: number[] = [];
+    const budget = {
+      take: (count: number) => {
+        taken.push(count);
+        return { ok: false, retryAfterSeconds: 7 } as const;
+      },
+    };
+    const { provider, requests } = constructedProvider([sellLeg(), buyLeg()]);
+    const error = await plan({ provider, budget }).catch((rejection: unknown) => rejection);
+    expect(error).toBeInstanceOf(ProviderRateLimitedError);
+    expect(error).toMatchObject({ retryAfterSeconds: 7 });
+    expect(taken).toEqual([4]);
+    expect(requests).toEqual([]);
+  });
+
+  test("a 429 of the provider fails the plan fast with the provider's wait", async () => {
+    const limited: QuoteProvider = {
+      name: "kyberswap",
+      requestsPerQuote: 2,
+      quote: async () => ({ status: "failed", reason: "provider_rate_limited", detail: "9" }),
+    };
+    await expect(plan({ provider: limited })).rejects.toMatchObject({
+      name: "ProviderRateLimitedError",
+      retryAfterSeconds: 9,
+    });
+  });
+
+  test("an aborted request stops with DeadlineExceededError", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(plan({ signal: controller.signal })).rejects.toBeInstanceOf(DeadlineExceededError);
+  });
+
+  test("quotes run at most two at a time and keep the order of the legs", async () => {
+    const legs = [sellLeg(), buyLeg(), buyLeg({ token: NVDA_TWO })];
+    const base = constructedProvider(legs).provider;
+    let running = 0;
+    let peak = 0;
+    const slow: QuoteProvider = {
+      ...base,
+      quote: async (request, context) => {
+        running += 1;
+        peak = Math.max(peak, running);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running -= 1;
+        return base.quote(request, context);
+      },
+    };
+    const chain = wallet().token(NVDA_TWO);
+    chain.usdc.balance = 20_000_000n;
+    const result = await plan({ chain, legs, provider: slow });
+    expect(peak).toBe(2);
+    expect(result.legs.map((leg) => leg.quoted?.quote.routeId)).toEqual([
+      "constructed-sell",
+      "constructed-buy",
+      "constructed-buy",
+    ]);
+    expect(result.status).toBe("ready");
+  });
+
+  test("every warning is listed, an allowance above the plan included", async () => {
+    const chain = wallet().token(NVDA, { balance: 3_000_000n, allowance: 2n ** 256n - 1n });
+    const result = await plan({ chain, legs: [sellLeg({ priceStatus: "delayed" }), buyLeg()] });
     expect(result.executable).toBe(true);
+    expect(result.warnings.map(({ check, reason, detail }) => [check, reason, detail])).toEqual([
+      ["reference_freshness", "delayed", null],
+      ["allowance", "above_plan", (2n ** 256n - 1n).toString()],
+    ]);
   });
 });

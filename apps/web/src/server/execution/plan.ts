@@ -1,6 +1,7 @@
 import "server-only";
 import type { PriceStatus } from "@equityos/core";
-import { type Address, encodeAbiParameters, encodeFunctionData, type Hex, keccak256, parseAbi } from "viem";
+import { type Address, encodeFunctionData, type Hex, parseAbi } from "viem";
+import { type ExecutableQuote, KYBERSWAP_ROUTER, planHash, verifyQuote } from "@/lib/execution/calldata";
 import type { Jurisdiction } from "@/server/jurisdiction";
 import { USDC_ADDRESS } from "@/server/market";
 import {
@@ -20,9 +21,8 @@ import {
   result,
   verdict,
 } from "./checks";
-import { EXECUTION_CHAIN_ID, type QuoteProvider, type QuoteRequest } from "./provider";
+import { EXECUTION_CHAIN_ID, type QuoteFailure, type QuoteProvider, type QuoteRequest } from "./provider";
 import { readPreTrade } from "./reads";
-import { type ExecutableQuote, KYBERSWAP_ROUTER, verifyQuote } from "./router";
 import { type ExecutionClient, type PlannedCall, type SimulationOutcome, simulateSequence } from "./simulate";
 
 /**
@@ -34,22 +34,49 @@ export const DEFAULT_SLIPPAGE_BPS = 50;
 /** Largest slippage tolerance accepted, 200 bps. Together with the deviation band it bounds the loss a minimum allows. */
 export const MAX_SLIPPAGE_BPS = 200;
 /**
- * Default deviation band, 100 bps. A current reference price can trail its market by up to 50 bps (the feed
- * publishes on a 0.5% move), and a small swap pays a pool fee and some price impact on top. Weekend gaps of
- * about 60 bps were observed between pools and a frozen feed; a closed market is blocked by the freshness
- * check instead of being covered by a wider band.
+ * Default deviation band, 150 bps, applied to the quoted price and to the minimum-out price alike, so it bounds
+ * the worst outcome a plan accepts. It is 100 bps of quote deviation (a current reference can trail its market
+ * by up to 50 bps, since the feed publishes on a 0.5% move, plus a pool fee and some price impact) and the
+ * default 50 bps of slippage. A closed market is blocked by the freshness check instead of a wider band.
  */
-export const DEFAULT_MAX_DEVIATION_BPS = 100;
+export const DEFAULT_MAX_DEVIATION_BPS = 150;
 /** Largest deviation band accepted, 500 bps. */
 export const MAX_DEVIATION_BPS = 500;
 /** A multiplier update that takes effect within this many seconds blocks the legs of its token: 24 hours. */
 export const MULTIPLIER_WINDOW_SECONDS = 86_400;
-/** The plan must be quoted again this many seconds after its first quote. */
-export const PLAN_TTL_SECONDS = 60;
-/** Deadline passed to the provider, seconds after quoting: time for several confirmations in a wallet. */
-export const QUOTE_DEADLINE_SECONDS = 300;
-/** Most legs one plan quotes: two provider requests each, against a keyless limit of 10 per 10 seconds. */
-export const MAX_EXECUTION_LEGS = 10;
+/**
+ * Lifetime of a plan from its first quote, 120 seconds: time to review it and confirm an approval and a few
+ * swaps in a wallet. It is also the deadline asked of the provider, so a swap sent later reverts onchain.
+ */
+export const PLAN_TTL_SECONDS = 120;
+/** A route's deadline may exceed the plan's expiry by at most this many seconds, the clock skew allowed. */
+export const DEADLINE_TOLERANCE_SECONDS = 15;
+/**
+ * Most legs one plan quotes: five. Each takes two provider requests, and the keyless limit is 10 requests per
+ * 10 seconds, so a larger plan could not be quoted within one window.
+ */
+export const MAX_EXECUTION_LEGS = 5;
+/** Legs quoted at the same time. The budget is taken before quoting, so concurrency never exceeds it. */
+export const QUOTE_CONCURRENCY = 2;
+
+/** The provider's limit, or the deployment's budget of provider requests, does not allow quoting the plan now. */
+export class ProviderRateLimitedError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number) {
+    super("the quote provider rate limit does not allow quoting the plan now");
+    this.name = "ProviderRateLimitedError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/** The request being served reached its overall deadline. */
+export class DeadlineExceededError extends Error {
+  constructor() {
+    super("the execution plan was not built within the deadline of the request");
+    this.name = "DeadlineExceededError";
+  }
+}
 
 const approveAbi = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
 
@@ -84,13 +111,22 @@ export interface ExecutionDependencies {
   readonly client: ExecutionClient;
   /** Clock in Unix seconds. */
   readonly now: () => number;
+  /** The deployment's budget of provider requests. */
+  readonly providerBudget: {
+    take(count: number): { readonly ok: true } | { readonly ok: false; readonly retryAfterSeconds: number };
+  };
+  /** Aborted when the request being served reaches its overall deadline. */
+  readonly signal: AbortSignal;
 }
 
 export interface QuotedLeg {
   readonly quote: ExecutableQuote;
   /** Unix seconds when the provider answered. */
   readonly quotedAt: number;
+  /** Deviation of the quoted price from the reference, signed, in bps. */
   readonly deviationBps: number;
+  /** Deviation of the minimum-out price from the reference, signed, in bps. */
+  readonly minimumDeviationBps: number;
 }
 
 export interface LegExecution extends ExecutionLeg {
@@ -118,6 +154,8 @@ export interface ExecutionPlan {
   readonly legs: readonly LegExecution[];
   readonly checks: readonly CheckResult[];
   readonly blockedBy: readonly CheckResult[];
+  /** Every check that passed with a warning. A client shows each one and asks for an acknowledgement. */
+  readonly warnings: readonly CheckResult[];
   readonly approvals: readonly Approval[];
   /** Ready only: approvals, then sells, then buys. */
   readonly calls: readonly PlannedCall[] | null;
@@ -126,38 +164,6 @@ export interface ExecutionPlan {
   readonly simulationMethod: SimulationOutcome["method"] | null;
   readonly checkedAtBlock: { readonly number: bigint; readonly timestamp: number } | null;
   readonly expiresAt: number | null;
-}
-
-/** Domain tag of the plan hash encoding, versioned with it. */
-export const PLAN_HASH_DOMAIN = "equityos.execution-plan/1";
-
-/**
- * keccak256 of `abi.encode(PLAN_HASH_DOMAIN, chainId, account, (to, value, data)[])` over the calls in
- * order. A client binds what it shows to what it sends by recomputing it from the calls it is about to send.
- */
-export function planHash(
-  chainId: number,
-  account: Address,
-  calls: readonly Pick<PlannedCall, "to" | "value" | "data">[],
-): Hex {
-  return keccak256(
-    encodeAbiParameters(
-      [
-        { type: "string" },
-        { type: "uint256" },
-        { type: "address" },
-        {
-          type: "tuple[]",
-          components: [
-            { name: "to", type: "address" },
-            { name: "value", type: "uint256" },
-            { name: "data", type: "bytes" },
-          ],
-        },
-      ],
-      [PLAN_HASH_DOMAIN, BigInt(chainId), account, calls.map(({ to, value, data }) => ({ to, value, data }))],
-    ),
-  );
 }
 
 function legView(leg: ExecutionLeg): LegExecution {
@@ -245,10 +251,27 @@ function simulationCheck(outcome: SimulationOutcome, calls: readonly PlannedCall
     return result("simulation", "block", "call_reverted", { detail: `${failure}:${error}` });
   }
   if (outcome.method === "eth_simulateV1") return result("simulation", "pass", "sequence_simulated");
+  // Calls run alone say nothing about the sequence: never a pass, whether or not every call could run.
   const skipped = outcome.calls.flatMap((call, index) => (call.status === "not_simulated" ? [index] : []));
   return skipped.length > 0
     ? result("simulation", "not_simulated", "sequence_not_supported", { detail: skipped.join(",") })
-    : result("simulation", "warn", "calls_simulated_alone");
+    : result("simulation", "not_simulated", "calls_simulated_alone");
+}
+
+/** Runs `work` over `items` with at most `limit` at a time, and returns the results in the order of `items`. */
+async function mapBounded<T, R>(items: readonly T[], limit: number, work: (item: T, index: number) => Promise<R>) {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item !== undefined) results[index] = await work(item, index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 /**
@@ -257,6 +280,8 @@ function simulationCheck(outcome: SimulationOutcome, calls: readonly PlannedCall
  * calls. Nothing is signed or sent. Stages run in order and a stage runs only when the earlier ones let it:
  * the jurisdiction gate, then the reference plan and its freshness, then quotes, reads and simulation.
  *
+ * @throws {ProviderRateLimitedError} if the provider budget or the provider's limit does not allow quoting.
+ * @throws {DeadlineExceededError} if `deps.signal` is aborted.
  * @throws {UpstreamError} if Base mainnet does not answer the pre-trade read.
  * @throws {MissingConfigurationError} if the endpoint is not Base mainnet.
  */
@@ -276,6 +301,7 @@ export async function buildExecutionPlan(
       legs,
       checks,
       blockedBy: blocking,
+      warnings: checks.filter(({ status }) => status === "warn"),
       approvals: [],
       calls: null,
       totals: null,
@@ -286,6 +312,9 @@ export async function buildExecutionPlan(
       ...extra,
       ...(ready ? {} : { calls: null, totals: null, planHash: null }),
     };
+  };
+  const ensureTime = () => {
+    if (deps.signal.aborted) throw new DeadlineExceededError();
   };
   if (input.jurisdiction.restricted) return finish();
 
@@ -302,9 +331,13 @@ export async function buildExecutionPlan(
   for (const [index, leg] of legs.entries()) checks.push(freshnessCheck(leg.priceStatus, leg.token, index));
   if (verdict(checks, input.allowUnsimulated).blocking.length > 0) return finish();
 
-  const deadline = deps.now() + QUOTE_DEADLINE_SECONDS;
-  const quotes: (QuotedLeg | null)[] = [];
-  for (const [index, leg] of legs.entries()) {
+  // The whole plan's provider requests are taken from the budget before the first one is sent.
+  const budget = deps.providerBudget.take(legs.length * deps.provider.requestsPerQuote);
+  if (!budget.ok) throw new ProviderRateLimitedError(budget.retryAfterSeconds);
+  const startedAt = deps.now();
+  const deadline = startedAt + PLAN_TTL_SECONDS;
+  const context = { signal: deps.signal, takeRetry: () => deps.providerBudget.take(1).ok };
+  const answers = await mapBounded(legs, QUOTE_CONCURRENCY, async (leg) => {
     const request: QuoteRequest = {
       tokenIn: leg.tokenIn,
       tokenOut: leg.tokenOut,
@@ -313,25 +346,48 @@ export async function buildExecutionPlan(
       slippageBps: input.slippageBps,
       deadline,
     };
-    const answer = await deps.provider.quote(request);
+    const answer = await deps.provider.quote(request, context);
     const verified = answer.status === "ok" ? verifyQuote(request, answer.quote) : answer;
+    return { verified, quotedAt: deps.now() };
+  });
+  ensureTime();
+  const limited = answers.find(
+    (answer): answer is { verified: QuoteFailure; quotedAt: number } =>
+      answer.verified.status === "failed" && answer.verified.reason === "provider_rate_limited",
+  );
+  if (limited !== undefined) throw new ProviderRateLimitedError(Number(limited.verified.detail ?? "10") || 10);
+  const quotes: (QuotedLeg | null)[] = [];
+  for (const [index, leg] of legs.entries()) {
+    const answer = answers[index];
+    if (answer === undefined) throw new Error(`no answer for leg ${index}`);
+    const { verified, quotedAt } = answer;
     if (verified.status !== "ok") {
       checks.push(result("quote", "block", verified.reason, { token: leg.token, leg: index, detail: verified.detail }));
       quotes.push(null);
       continue;
     }
     const { quote } = verified;
-    const [usdc, tokens] =
-      leg.side === "sell" ? [quote.quotedAmountOut, leg.amountIn] : [leg.amountIn, quote.quotedAmountOut];
-    const deviation = deviationBps(usdc, tokens, leg.decimals, leg.priceE8);
+    // Deviation of the executable price: with the quoted amount, and with the minimum the router enforces.
+    const deviationAt = (out: bigint) =>
+      leg.side === "sell"
+        ? deviationBps(out, leg.amountIn, leg.decimals, leg.priceE8)
+        : deviationBps(leg.amountIn, out, leg.decimals, leg.priceE8);
+    const quoted = deviationAt(quote.quotedAmountOut);
+    const minimum = deviationAt(quote.minAmountOut);
     checks.push(result("quote", "pass", "verified", { token: leg.token, leg: index, detail: quote.routeId }));
-    checks.push(deviationCheck(deviation, input.maxDeviationBps, leg.token, index));
-    quotes.push({ quote, quotedAt: deps.now(), deviationBps: reportedDeviation(deviation) });
+    checks.push(deviationCheck(quoted, minimum, input.maxDeviationBps, leg.token, index));
+    quotes.push({
+      quote,
+      quotedAt,
+      deviationBps: reportedDeviation(quoted),
+      minimumDeviationBps: reportedDeviation(minimum),
+    });
   }
   legs = legs.map((leg, index) => ({ ...leg, quoted: quotes[index] ?? null }));
 
   const tokens = [USDC_ADDRESS, ...new Set(legs.map((leg) => leg.token))];
   const read = await readPreTrade(deps.client, account, KYBERSWAP_ROUTER, tokens);
+  ensureTime();
   const state = (token: Address) => read.tokens.get(token);
   const observedAt = deps.now();
   for (const token of tokens) {
@@ -343,9 +399,10 @@ export async function buildExecutionPlan(
       checks.push(multiplierCheck(effectiveAt, read.blockTimestamp, observedAt, MULTIPLIER_WINDOW_SECONDS, token));
     }
   }
-  const spentTokens = [...new Set(legs.map((leg) => leg.tokenIn))];
-  for (const token of spentTokens) checks.push(allowanceCheck(state(token)?.allowance ?? null, token));
   const approvals = requiredApprovals(legs, (token) => state(token)?.allowance ?? 0n, KYBERSWAP_ROUTER);
+  for (const approval of approvals) {
+    checks.push(allowanceCheck(state(approval.token)?.allowance ?? null, approval.amount, approval.token));
+  }
   const checkedAtBlock = { number: read.blockNumber, timestamp: read.blockTimestamp };
   const pairs = legs.flatMap((leg, index) => {
     const quotedLeg = quotes[index];
@@ -387,18 +444,35 @@ export async function buildExecutionPlan(
     }),
   );
   const simulation = await simulateSequence(deps.client, account, read.blockNumber, calls, simulableAlone);
+  ensureTime();
   checks.push(simulationCheck(simulation, calls));
 
-  const expiresAt = Math.min(...quoted.map(({ quotedAt }) => quotedAt)) + PLAN_TTL_SECONDS;
-  const expired = deps.now() >= expiresAt;
-  checks.push(
-    result("plan_expiry", expired ? "block" : "pass", expired ? "expired" : "current", { detail: String(expiresAt) }),
-  );
+  // The plan expires with its first quote's lifetime, or with the earliest route deadline when that is sooner.
+  // A route whose deadline runs past the plan's expiry would let a stale swap execute: it blocks.
+  const lifetime = Math.min(...quoted.map(({ quotedAt }) => quotedAt)) + PLAN_TTL_SECONDS;
+  const late = quoted.findIndex(({ quote }) => quote.deadline > lifetime + DEADLINE_TOLERANCE_SECONDS);
+  const expiresAt = Math.min(lifetime, ...quoted.map(({ quote }) => quote.deadline));
+  const now = deps.now();
+  if (late >= 0) {
+    checks.push(
+      result("plan_expiry", "block", "deadline_after_expiry", {
+        leg: pairs[late]?.index ?? late,
+        detail: String(quoted[late]?.quote.deadline),
+      }),
+    );
+  } else {
+    const expired = now >= expiresAt;
+    checks.push(
+      result("plan_expiry", expired ? "block" : "pass", expired ? "expired" : "current", {
+        detail: String(expiresAt),
+      }),
+    );
+  }
   return finish({
     approvals,
     calls,
     totals: executionTotals(legs, quoted, (token) => balanceOf(token) ?? 0n),
-    planHash: planHash(EXECUTION_CHAIN_ID, account, calls),
+    planHash: planHash(EXECUTION_CHAIN_ID, account, expiresAt, calls),
     simulationMethod: simulation.method,
     checkedAtBlock,
     expiresAt,

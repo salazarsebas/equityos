@@ -13,7 +13,13 @@ import {
 import type { ExecutionLeg } from "../../src/server/execution/plan";
 import type { ProviderQuote, QuoteProvider, QuoteRequest } from "../../src/server/execution/provider";
 import { POLICY_SCOPES, preTradeAbi } from "../../src/server/execution/reads";
-import { KYBERSWAP_ROUTER, kyberswapRouterAbi, minimumAmountOut } from "../../src/server/execution/router";
+import {
+  EXECUTOR_DATA_HEADER,
+  KYBERSWAP_EXECUTOR,
+  KYBERSWAP_ROUTER,
+  kyberswapRouterAbi,
+  minimumAmountOut,
+} from "../../src/lib/execution/calldata";
 import type { ExecutionClient } from "../../src/server/execution/simulate";
 import { b20AssetAbi } from "../../src/server/market/abis";
 import { USDC_ADDRESS } from "../../src/server/market/balances";
@@ -48,8 +54,6 @@ export const kyberswapFixture = JSON.parse(
 export const NVDA: Address = "0xb20000000000000000000078ee7ce2fe4908108c";
 export const TSLA: Address = "0xb2000000000000000000001e800a7f5189430cd0";
 export const ACCOUNT: Address = "0x00000000000000000000000000000000000a11ce";
-/** Executor named in constructed calldata. Any address: the router allowlist does not cover it. */
-const EXECUTOR: Address = "0x8f10b468b06c6fd214b65f87778827f7d113f996";
 
 /** Tuesday 2026-11-24 15:00:00 UTC, 10:00 in New York: the regular session is open. */
 export const OPEN_AT = 1_795_532_400;
@@ -89,31 +93,49 @@ export interface ConstructedQuoteOptions {
   readonly tamper?: (quote: ProviderQuote, request: QuoteRequest) => ProviderQuote;
 }
 
+/**
+ * Executor data in the layout recorded from the provider: the header, then 32-byte words, the 9th the recipient
+ * and the 17th the deadline. Constructed, not a provider answer.
+ */
+export function executorData(recipient: Address, deadline: number | bigint, words = 20): Hex {
+  const body = Array.from({ length: words }, (_, index) => {
+    const value = index === 8 ? BigInt(recipient) : index === 16 ? BigInt(deadline) : 0n;
+    return value.toString(16).padStart(64, "0");
+  });
+  return `${EXECUTOR_DATA_HEADER}${body.join("")}`;
+}
+
 /** Router calldata for a request, in the shape the real router takes. Constructed, not a provider answer. */
-export function swapCalldata(request: QuoteRequest, minReturnAmount: bigint, desc: Record<string, unknown> = {}): Hex {
+export function swapCalldata(
+  request: QuoteRequest,
+  minReturnAmount: bigint,
+  desc: Record<string, unknown> = {},
+  execution: Record<string, unknown> = {},
+): Hex {
   return encodeFunctionData({
     abi: kyberswapRouterAbi,
     functionName: "swap",
     args: [
       {
-        callTarget: EXECUTOR,
+        callTarget: KYBERSWAP_EXECUTOR,
         approveTarget: "0x0000000000000000000000000000000000000000",
-        targetData: "0x01",
+        targetData: executorData(request.account, request.deadline),
         desc: {
           srcToken: request.tokenIn,
           dstToken: request.tokenOut,
-          srcReceivers: [EXECUTOR],
+          srcReceivers: [KYBERSWAP_EXECUTOR],
           srcAmounts: [request.amountIn],
           feeReceivers: [],
           feeAmounts: [],
           dstReceiver: request.account,
           amount: request.amountIn,
           minReturnAmount,
-          flags: 0n,
+          flags: 0x200n,
           permit: "0x",
           ...desc,
         },
         clientData: "0x",
+        ...execution,
       },
     ],
   });
@@ -130,6 +152,7 @@ export function constructedProvider(
   const requests: QuoteRequest[] = [];
   const provider: QuoteProvider = {
     name: "kyberswap",
+    requestsPerQuote: 2,
     async quote(request) {
       requests.push(request);
       const buy = request.tokenIn === USDC_ADDRESS;
@@ -182,7 +205,9 @@ export class FakeExecutionChain {
   usdc = { paused: false, balance: 10_000_000n, allowance: 0n, blacklisted: new Set<Address>() };
   /** Accounts denied by a policy id. Policy 5 is the blocklist the issuer configures today. */
   readonly denied = new Map<bigint, Set<Address>>();
-  simulation: "supported" | "unsupported" = "supported";
+  /** `flaky`: the first `eth_simulateV1` request fails in transport, the next one is answered. */
+  simulation: "supported" | "unsupported" | "flaky" | "down" = "supported";
+  private simulateAttempts = 0;
   /** Index of a call that reverts in the simulation, with the error data. */
   revert: { index: number; data: Hex } | null = null;
   readonly requests: string[] = [];
@@ -244,8 +269,7 @@ export class FakeExecutionChain {
   private callResult(data: Hex): Hex {
     if (SELECTOR(data) === "0x095ea7b3")
       return encodeFunctionResult({ abi: boolAbi, functionName: "read", result: true });
-    const decoded = decodeFunctionData({ abi: kyberswapRouterAbi, data });
-    const desc = decoded.functionName === "swapSimpleMode" ? decoded.args[1] : decoded.args[0].desc;
+    const desc = decodeFunctionData({ abi: kyberswapRouterAbi, data }).args[0].desc;
     return encodeFunctionResult({
       abi: swapResultAbi,
       functionName: "swap",
@@ -264,7 +288,11 @@ export class FakeExecutionChain {
             return { number: blockHex, timestamp: `0x${this.blockTimestamp.toString(16)}`, transactions: [] };
           }
           if (method === "eth_simulateV1") {
+            this.simulateAttempts += 1;
             if (this.simulation === "unsupported") throw Object.assign(new Error("method not found"), { code: -32601 });
+            if (this.simulation === "down" || (this.simulation === "flaky" && this.simulateAttempts === 1)) {
+              throw new Error("socket hang up");
+            }
             if (list[1] !== blockHex) throw new Error("simulation is not pinned to the read block");
             const calls =
               (list[0] as { blockStateCalls: { calls: { data: Hex }[] }[] }).blockStateCalls[0]?.calls ?? [];
@@ -294,3 +322,9 @@ export class FakeExecutionChain {
     return createPublicClient({ transport });
   }
 }
+
+/** A provider budget that always admits, for tests that are not about rate limits. */
+export const OPEN_BUDGET = { take: () => ({ ok: true }) as const };
+
+/** A signal that is never aborted. */
+export const NO_DEADLINE: AbortSignal = new AbortController().signal;

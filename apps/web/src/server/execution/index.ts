@@ -23,5 +23,6 @@ export function getExecutionClient(): ExecutionClient {
 export * from "./checks";
 export * from "./plan";
 export * from "./provider";
-export { KYBERSWAP_ROUTER } from "./router";
+export { KYBERSWAP_EXECUTOR, KYBERSWAP_ROUTER } from "@/lib/execution/calldata";
+export { createExecutionLimits, type ExecutionLimits } from "./limits";
 export type { ExecutionClient, PlannedCall } from "./simulate";
