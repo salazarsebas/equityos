@@ -59,3 +59,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The home page uses the application shell and the design tokens.
 - The home page states that indexes can be browsed and verified, and what a network without the registry shows.
+- IBM Plex Sans and IBM Plex Mono load from pinned Fontsource packages with `next/font/local`, so the build
+  makes no network request.

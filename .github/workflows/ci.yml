@@ -51,6 +51,14 @@ jobs:
       - name: Build
         run: bun run build
 
+      # The fonts are self-hosted: the build and the pages must not reference a Google Fonts host.
+      - name: Check for Google Fonts references
+        run: |
+          if grep -rIlE 'fonts\.(googleapis|gstatic)\.com' apps/web/src apps/web/.next; then
+            echo "Google Fonts host referenced in the files above: self-host the font with next/font/local."
+            exit 1
+          fi
+
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
