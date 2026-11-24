@@ -1,5 +1,5 @@
 import { executionPlanHandler } from "@/server/api/execution";
-import { getExecutionClient, getQuoteProvider } from "@/server/execution";
+import { createExecutionLimits, getExecutionClient, getQuoteProvider } from "@/server/execution";
 import { getMarketData, marketDataMode } from "@/server/market";
 import { getRegistryReader, registryMode } from "@/server/registry";
 
@@ -14,4 +14,5 @@ export const POST = executionPlanHandler({
   marketMode: marketDataMode,
   provider: getQuoteProvider,
   executionClient: getExecutionClient,
+  limits: createExecutionLimits(),
 });

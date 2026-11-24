@@ -10,6 +10,9 @@ import {
 import type { Address } from "viem";
 import {
   buildExecutionPlan,
+  DeadlineExceededError,
+  type ExecutionLimits,
+  ProviderRateLimitedError,
   DEFAULT_MAX_DEVIATION_BPS,
   DEFAULT_SLIPPAGE_BPS,
   EXECUTION_CHAIN_ID,
@@ -22,7 +25,8 @@ import {
   type QuoteProvider,
   type ReferenceOutcome,
 } from "@/server/execution";
-import { classifyJurisdiction, type JurisdictionEnvironment } from "@/server/jurisdiction";
+import { clientKey } from "@/server/execution/limits";
+import { classifyJurisdiction, type Jurisdiction, type JurisdictionEnvironment } from "@/server/jurisdiction";
 import { ApiError } from "./errors";
 import { isoTimestamp, NO_STORE, ok, route } from "./http";
 import { parseAddress } from "./params";
@@ -47,7 +51,17 @@ export interface ExecutionApiOptions extends PortfolioApiOptions {
   readonly executionClient: () => ExecutionClient;
   /** Environment of the jurisdiction gate. Defaults to `process.env`. */
   readonly env?: JurisdictionEnvironment;
+  /** The rate limits of the route: one set per process, created with the route. */
+  readonly limits: ExecutionLimits;
+  /** Overall deadline of one request, in milliseconds. Defaults to `REQUEST_DEADLINE_MS`. */
+  readonly deadlineMs?: number;
 }
+
+/**
+ * Overall deadline of one request: 20 seconds. Five legs at two provider requests each, the reads and the
+ * simulation fit well within it; past it the request answers 503 `deadline_exceeded` and stops its requests.
+ */
+export const REQUEST_DEADLINE_MS = 20_000;
 
 interface ExecutionRequest {
   readonly address: Address;
@@ -186,6 +200,8 @@ function serializePlan(plan: ExecutionPlan, symbol: (token: Address) => string |
               quotedAmountOut: leg.quoted.quote.quotedAmountOut,
               minAmountOut: leg.quoted.quote.minAmountOut,
               deviationBps: leg.quoted.deviationBps,
+              minimumDeviationBps: leg.quoted.minimumDeviationBps,
+              deadline: isoTimestamp(leg.quoted.quote.deadline),
               gasEstimate: leg.quoted.quote.gasEstimate,
               quotedAt: isoTimestamp(leg.quoted.quotedAt),
               routeId: leg.quoted.quote.routeId,
@@ -193,6 +209,7 @@ function serializePlan(plan: ExecutionPlan, symbol: (token: Address) => string |
     })),
     checks: plan.checks,
     blockedBy: plan.blockedBy,
+    warnings: plan.warnings,
     approvals: plan.approvals,
     calls: plan.calls,
     totals: plan.totals,
@@ -207,6 +224,16 @@ function serializePlan(plan: ExecutionPlan, symbol: (token: Address) => string |
  */
 export function executionPlanHandler(options: ExecutionApiOptions) {
   return route(async (request: Request) => {
+    const admitted = options.limits.clients.take(clientKey(request.headers), 1);
+    if (!admitted.ok) {
+      throw new ApiError(
+        429,
+        "rate_limited",
+        "Too many execution plans from this address. Retry after the time in Retry-After.",
+        null,
+        admitted.retryAfterSeconds,
+      );
+    }
     const body = await parseExecutionRequest(request);
     if (options.marketMode() === "replay") {
       throw new ApiError(409, "execution_unavailable", "Execution plans are not built from replayed market data.", {
@@ -214,57 +241,99 @@ export function executionPlanHandler(options: ExecutionApiOptions) {
       });
     }
     const jurisdiction = classifyJurisdiction(request.headers, options.env);
-    const comparison = await loadComparison(options, body.address, body.index, body.version);
-    const result = planRebalance({
-      ...comparison.input,
-      mode: body.mode,
-      reserveBps: body.reserveBps,
-      minLegValueUsdE8: body.minLegValueUsdE8,
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new DeadlineExceededError());
+      }, options.deadlineMs ?? REQUEST_DEADLINE_MS);
     });
-    const decimalsOf = new Map(comparison.input.constituents.map(({ token, decimals }) => [token, decimals]));
-    const statusOf = (token: Address): PriceStatus =>
-      comparison.entries.get(token)?.referencePrice?.status ?? "unavailable";
-    const reference: ReferenceOutcome =
-      result.status === "blocked"
-        ? { status: "blocked", codes: result.blockers.map(({ code }) => code) }
-        : {
-            status: "ready",
-            legs: result.legs.map((leg): ExecutionLeg => {
-              // Every leg trades a constituent, and every constituent carries its decimals.
-              const decimals = decimalsOf.get(leg.token);
-              if (decimals === undefined) throw new Error(`leg token ${leg.token} is not a constituent`);
-              return { ...leg, decimals, priceStatus: statusOf(leg.token) };
-            }),
-          };
-    const plan = await buildExecutionPlan(
-      { provider: options.provider(), client: options.executionClient(), now: options.now ?? systemClock },
-      {
-        account: body.address,
-        reference,
-        jurisdiction,
-        slippageBps: body.slippageBps,
-        maxDeviationBps: body.maxDeviationBps,
-        allowUnsimulated: body.allowUnsimulated,
-      },
-    );
-    const data = {
-      address: body.address,
-      index: indexRef(comparison),
-      chainId: EXECUTION_CHAIN_ID,
-      priceBasis: "executable_quote",
-      statement: EXECUTION_STATEMENT,
-      mode: body.mode,
-      reserveBps: body.reserveBps,
-      minLegValueUsdE8: body.minLegValueUsdE8,
+    try {
+      return await Promise.race([expired, build(options, body, jurisdiction, controller.signal)]);
+    } catch (error) {
+      if (error instanceof ProviderRateLimitedError) {
+        throw new ApiError(
+          503,
+          "provider_rate_limited",
+          "The quote provider's rate limit does not allow quoting this plan now. Retry after the time in Retry-After.",
+          { source: "kyberswap_api" },
+          error.retryAfterSeconds,
+        );
+      }
+      if (error instanceof DeadlineExceededError) {
+        throw new ApiError(503, "deadline_exceeded", "The execution plan could not be built in time. Retry shortly.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
+/** Builds the response of one request, within the deadline `signal` carries. */
+async function build(
+  options: ExecutionApiOptions,
+  body: ExecutionRequest,
+  jurisdiction: Jurisdiction,
+  signal: AbortSignal,
+): Promise<Response> {
+  const comparison = await loadComparison(options, body.address, body.index, body.version);
+  const result = planRebalance({
+    ...comparison.input,
+    mode: body.mode,
+    reserveBps: body.reserveBps,
+    minLegValueUsdE8: body.minLegValueUsdE8,
+  });
+  const decimalsOf = new Map(comparison.input.constituents.map(({ token, decimals }) => [token, decimals]));
+  const statusOf = (token: Address): PriceStatus =>
+    comparison.entries.get(token)?.referencePrice?.status ?? "unavailable";
+  const reference: ReferenceOutcome =
+    result.status === "blocked"
+      ? { status: "blocked", codes: result.blockers.map(({ code }) => code) }
+      : {
+          status: "ready",
+          legs: result.legs.map((leg): ExecutionLeg => {
+            // Every leg trades a constituent, and every constituent carries its decimals.
+            const decimals = decimalsOf.get(leg.token);
+            if (decimals === undefined) throw new Error(`leg token ${leg.token} is not a constituent`);
+            return { ...leg, decimals, priceStatus: statusOf(leg.token) };
+          }),
+        };
+  const plan = await buildExecutionPlan(
+    {
+      provider: options.provider(),
+      client: options.executionClient(),
+      now: options.now ?? systemClock,
+      providerBudget: options.limits.provider,
+      signal,
+    },
+    {
+      account: body.address,
+      reference,
+      jurisdiction,
       slippageBps: body.slippageBps,
       maxDeviationBps: body.maxDeviationBps,
       allowUnsimulated: body.allowUnsimulated,
-      provider: { name: options.provider().name, router: KYBERSWAP_ROUTER },
-      ...serializePlan(plan, (token) => tokenLabel(comparison, token).symbol),
-    };
-    // Never stored: it depends on who asks and from where, and it expires within a minute.
-    return ok(data, comparisonMeta(options, comparison), NO_STORE);
-  });
+    },
+  );
+  const data = {
+    address: body.address,
+    index: indexRef(comparison),
+    chainId: EXECUTION_CHAIN_ID,
+    priceBasis: "executable_quote",
+    statement: EXECUTION_STATEMENT,
+    mode: body.mode,
+    reserveBps: body.reserveBps,
+    minLegValueUsdE8: body.minLegValueUsdE8,
+    slippageBps: body.slippageBps,
+    maxDeviationBps: body.maxDeviationBps,
+    allowUnsimulated: body.allowUnsimulated,
+    provider: { name: options.provider().name, router: KYBERSWAP_ROUTER },
+    ...serializePlan(plan, (token) => tokenLabel(comparison, token).symbol),
+  };
+  // Never stored: it depends on who asks and from where, and it expires within two minutes.
+  return ok(data, comparisonMeta(options, comparison), NO_STORE);
 }
 
 function systemClock(): number {

@@ -61,7 +61,8 @@ export function ok(data: unknown, meta: unknown, cacheControl: string): Response
 /** Error envelope: `{ error: { code, message, details } }`. Never cached. */
 export function fail(error: ApiError): Response {
   const { status, code, message, details } = error;
-  const retry: Record<string, string> = status === 503 ? { "Retry-After": String(UPSTREAM_RETRY_AFTER_SECONDS) } : {};
+  const seconds = error.retryAfterSeconds ?? (status === 503 ? UPSTREAM_RETRY_AFTER_SECONDS : null);
+  const retry: Record<string, string> = seconds === null ? {} : { "Retry-After": String(seconds) };
   return json(status, { error: { code, message, details } }, { "Cache-Control": NO_STORE, ...retry });
 }
 
@@ -93,6 +94,46 @@ export function preflightPost(): Response {
   });
 }
 
+/** The error classes along the cause chain of `error`, outermost first: `UpstreamError < HttpRequestError`. */
+function errorClasses(error: unknown): string {
+  const names: string[] = [];
+  let cause = error;
+  for (let depth = 0; typeof cause === "object" && cause !== null && depth < 6; depth += 1) {
+    names.push(typeof cause.constructor === "function" ? cause.constructor.name : "Object");
+    cause = "cause" in cause ? cause.cause : undefined;
+  }
+  return names.length === 0 ? typeof error : names.join(" < ");
+}
+
+/**
+ * The host of the first URL found on the cause chain, reduced to its last two labels (`*.example.com`), or
+ * `ip-address` for an address literal: an RPC endpoint can carry its key in the path, the query or a subdomain,
+ * and none of them may reach a log.
+ */
+export function redactedHost(error: unknown): string | null {
+  let cause = error;
+  for (let depth = 0; typeof cause === "object" && cause !== null && depth < 6; depth += 1) {
+    const url = "url" in cause && typeof cause.url === "string" ? cause.url : null;
+    if (url !== null && URL.canParse(url)) {
+      const host = new URL(url).hostname;
+      if (/^[0-9.]+$/.test(host) || host.includes(":")) return "ip-address";
+      const labels = host.split(".");
+      return labels.length <= 2 ? host : `*.${labels.slice(-2).join(".")}`;
+    }
+    cause = "cause" in cause ? cause.cause : undefined;
+  }
+  return null;
+}
+
+/**
+ * The one line logged for an unexpected failure: a fixed message, the path of the API, the error classes and a
+ * redacted host. Never an error message or object, which can hold an endpoint URL with its key.
+ */
+export function logLine(pathname: string, code: string, error: unknown): string {
+  const host = redactedHost(error);
+  return `api ${pathname}: ${code} (${errorClasses(error)})${host === null ? "" : ` host ${host}`}`;
+}
+
 /**
  * Wraps a handler so that everything it throws leaves as an error envelope. A 500 is logged with its cause,
  * which the response never carries.
@@ -105,7 +146,7 @@ export function route<Context>(
       return await handler(request, context);
     } catch (error) {
       const apiError = toApiError(error);
-      if (apiError.status === 500) console.error(`api ${new URL(request.url).pathname}: ${apiError.code}`, error);
+      if (apiError.status === 500) console.error(logLine(new URL(request.url).pathname, apiError.code, error));
       return fail(apiError);
     }
   };

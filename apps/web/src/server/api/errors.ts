@@ -25,6 +25,9 @@ export const API_ERROR_CODES = [
   "stale_feed",
   "invalid_body",
   "execution_unavailable",
+  "rate_limited",
+  "provider_rate_limited",
+  "deadline_exceeded",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
@@ -36,13 +39,22 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: ApiErrorCode;
   readonly details: ApiErrorDetails | null;
+  /** Seconds sent in `Retry-After`. `null` sends the default of a 503 and nothing otherwise. */
+  readonly retryAfterSeconds: number | null;
 
-  constructor(status: number, code: ApiErrorCode, message: string, details: ApiErrorDetails | null = null) {
+  constructor(
+    status: number,
+    code: ApiErrorCode,
+    message: string,
+    details: ApiErrorDetails | null = null,
+    retryAfterSeconds: number | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

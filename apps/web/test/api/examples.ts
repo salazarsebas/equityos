@@ -12,9 +12,13 @@ interface ExampleRequest {
   /** Path and query, from `/api/v1`. */
   readonly path: string;
   readonly registry: FixtureRegistry;
+  /** The JSON body of a POST. A request without one is a GET. */
+  readonly body?: Readonly<Record<string, unknown>>;
 }
 
-export interface RecordedExample extends ExampleRequest {
+export interface RecordedExample extends Omit<ExampleRequest, "body"> {
+  /** The JSON body of a POST request. */
+  readonly requestBody?: Readonly<Record<string, unknown>>;
   readonly status: number;
   readonly body: unknown;
 }
@@ -129,6 +133,14 @@ const REQUESTS: readonly ExampleRequest[] = [
     registry: "recorded",
   },
   {
+    name: "executionPlan.replay",
+    operationId: "executionPlan",
+    title: "A deployment that serves replayed market data builds no execution plan",
+    path: "/api/v1/portfolio/execution-plan",
+    registry: "recorded",
+    body: { address: ACCOUNT, index: DIVERSIFIED, mode: "rebalance" },
+  },
+  {
     name: "getStatus",
     operationId: "getStatus",
     title: "The status of the API and its data",
@@ -147,9 +159,18 @@ export const EXAMPLES_FILE = new URL("../../src/server/api/examples.json", impor
 export async function recordApiExamples(): Promise<RecordedExamples> {
   const servers = { recorded: fixtureServer("recorded"), not_deployed: fixtureServer("not_deployed") };
   const examples: RecordedExample[] = [];
-  for (const request of REQUESTS) {
-    const response = await servers[request.registry](new Request(`${FIXTURE_ORIGIN}${request.path}`));
-    examples.push({ ...request, status: response.status, body: JSON.parse(await response.text()) });
+  for (const { body, ...request } of REQUESTS) {
+    const init =
+      body === undefined
+        ? {}
+        : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+    const response = await servers[request.registry](new Request(`${FIXTURE_ORIGIN}${request.path}`, init));
+    examples.push({
+      ...request,
+      ...(body === undefined ? {} : { requestBody: body }),
+      status: response.status,
+      body: JSON.parse(await response.text()),
+    });
   }
   const recordedAt = new Date(onchainFixture.blockTimestamp * 1000).toISOString().replace(".000Z", "Z");
   return {

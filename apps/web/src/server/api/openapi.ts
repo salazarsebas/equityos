@@ -42,7 +42,7 @@ interface ResponseObject {
   readonly content: { readonly "application/json": { readonly schema: Schema } };
 }
 
-interface Operation {
+export interface Operation {
   readonly operationId: string;
   readonly summary: string;
   readonly description: string;
@@ -771,15 +771,22 @@ const schemas: Record<string, Schema> = {
       object({
         provider: text("Quote provider."),
         router: ref("Address"),
-        functionName: oneOf(["swap", "swapGeneric", "swapSimpleMode"], "Router function of the calldata."),
+        functionName: oneOf(["swap"], "Router function of the calldata."),
         quotedAmountOut: { ...ref("UintString"), description: "Amount out the provider quotes. Not guaranteed." },
         minAmountOut: { ...ref("UintString"), description: "Minimum the router enforces, decoded from calldata." },
         deviationBps: {
           type: "integer",
           minimum: -10_000,
           maximum: 1_000_000,
-          description: "Executable price minus reference price, over the reference, rounded away from zero.",
+          description: "Quoted price minus reference price, over the reference, rounded away from zero.",
         },
+        minimumDeviationBps: {
+          type: "integer",
+          minimum: -10_000,
+          maximum: 1_000_000,
+          description: "The same at the minimum amount out: the worst price the swap accepts.",
+        },
+        deadline: { ...ref("Timestamp"), description: "Time after which the route reverts, decoded from calldata." },
         gasEstimate: { ...ref("UintString"), description: "Gas estimated by the provider. Not verified." },
         quotedAt: ref("Timestamp"),
         routeId: text("Route identifier at the provider."),
@@ -816,6 +823,11 @@ const schemas: Record<string, Schema> = {
     legs: { type: "array", items: ref("ExecutionLeg"), description: "In the order of the reference plan." },
     checks: { type: "array", items: ref("ExecutionCheck"), description: "Every check that ran, in order." },
     blockedBy: { type: "array", items: ref("ExecutionCheck"), description: "The checks that block. Empty when ready." },
+    warnings: {
+      type: "array",
+      items: ref("ExecutionCheck"),
+      description: "Every check that passed with a warning. Show each one and ask for an acknowledgement.",
+    },
     approvals: {
       type: "array",
       items: object({
@@ -1114,9 +1126,9 @@ export const openApiDocument: OpenApiDocument = {
     },
     "/portfolio/execution-plan": {
       post: {
-        operationId: "postPortfolioExecutionPlan",
+        operationId: "executionPlan",
         summary: "Executable plan with pre-trade checks",
-        description: `The reference-price plan of the same comparison, quoted for execution on Base mainnet and checked: blocked with the checks that fail, or ready with the ordered calls, totals at the minimum amounts out, an expiry and planHash. Nothing is signed or sent. Never cached. ${EXECUTION_STATEMENT}`,
+        description: `The reference-price plan of the same comparison, quoted for execution on Base mainnet and checked: blocked with the checks that fail, or ready with the ordered calls, totals at the minimum amounts out, an expiry and planHash. Nothing is signed or sent. Never cached. Rate limited per instance: 3 plans per address at once, then one every 20 seconds (429 rate_limited), and 10 quote provider requests per 10 seconds, two per leg (503 provider_rate_limited). A request answers within 20 seconds or with 503 deadline_exceeded. ${EXECUTION_STATEMENT}`,
         tags: ["Portfolio"],
         requestBody: {
           required: true,
@@ -1130,7 +1142,16 @@ export const openApiDocument: OpenApiDocument = {
             `${registryNotDeployed} version_not_conformant, ineligible_token, and execution_unavailable: the server serves replayed market data.`,
             ref("Error"),
           ),
-          ...failures,
+          "429": json(
+            "rate_limited: more execution plans from one address than the limit, 3 at once then one every 20 seconds. Carries Retry-After.",
+            ref("Error"),
+          ),
+          "500": failures["500"],
+          "502": failures["502"],
+          "503": json(
+            "upstream_unavailable: Base mainnet did not answer. provider_rate_limited: the quote provider's limit, or this instance's budget of 10 provider requests per 10 seconds, does not allow quoting now. deadline_exceeded: the plan was not built within 20 seconds. Carries Retry-After.",
+            ref("Error"),
+          ),
         },
       },
     },

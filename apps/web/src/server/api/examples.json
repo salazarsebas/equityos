@@ -1520,6 +1520,26 @@
       }
     },
     {
+      "name": "executionPlan.replay",
+      "operationId": "executionPlan",
+      "title": "A deployment that serves replayed market data builds no execution plan",
+      "path": "/api/v1/portfolio/execution-plan",
+      "registry": "recorded",
+      "requestBody": {
+        "address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+        "index": "diversified-equity-d622e2a5",
+        "mode": "rebalance"
+      },
+      "status": 409,
+      "body": {
+        "error": {
+          "code": "execution_unavailable",
+          "message": "Execution plans are not built from replayed market data.",
+          "details": { "reason": "market_data_replay" }
+        }
+      }
+    },
+    {
       "name": "getStatus",
       "operationId": "getStatus",
       "title": "The status of the API and its data",
@@ -1528,7 +1548,7 @@
       "status": 200,
       "body": {
         "data": {
-          "apiVersion": "1.2.0",
+          "apiVersion": "1.3.0",
           "chainId": 8453,
           "marketPhase": "closed",
           "executionAvailable": false,

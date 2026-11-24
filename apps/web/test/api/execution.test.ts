@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { EXECUTION_STATEMENT, MAX_BODY_BYTES } from "../../src/server/api/execution";
-import { planHash } from "../../src/server/execution/plan";
+import { planHash } from "../../src/lib/execution/calldata";
+import { createExecutionLimits } from "../../src/server/execution/limits";
 import type { PlannedCall } from "../../src/server/execution/simulate";
 import { ABOVE, executionResponses, INDEX, post, READY_BODY, setup } from "./execution-support";
 import { body, RECORDED_AT } from "./support";
@@ -14,6 +15,8 @@ type Plan = {
   blockedBy: { check: string; reason: string }[];
   calls: (Omit<PlannedCall, "value" | "minAmountOut"> & { value: string; minAmountOut: string | null })[] | null;
   planHash: string | null;
+  expiresAt: string | null;
+  warnings: { check: string; reason: string }[];
   legs: { side: string; quote: { deviationBps: number } | null }[];
 };
 
@@ -33,7 +36,9 @@ describe("POST /api/v1/portfolio/execution-plan", () => {
     expect(data.statement).toBe(EXECUTION_STATEMENT);
     const calls = (data.calls ?? []).map((call) => ({ to: call.to, value: BigInt(call.value), data: call.data }));
     expect(calls.length).toBeGreaterThan(2);
-    expect(data.planHash).toBe(planHash(8453, ABOVE, calls));
+    const expiresAt = Date.parse(data.expiresAt ?? "") / 1000;
+    expect(data.planHash).toBe(planHash(8453, ABOVE, expiresAt, calls));
+    expect(data.warnings).toEqual([]);
     // Quoted at the reference price: what remains is the rounding of the quoted amount to a base unit.
     expect(data.legs.every((leg) => Math.abs(leg.quote?.deviationBps ?? 99) <= 1)).toBe(true);
   });
@@ -105,5 +110,75 @@ describe("POST /api/v1/portfolio/execution-plan", () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  test("limits each address to 3 plans at once, then one every 20 seconds", async () => {
+    let ms = 1_000_000;
+    const handler = await setup({ limits: createExecutionLimits(() => ms) });
+    const from = (ip: string) => post({ ...READY_BODY, slippageBps: 999 }, { "x-real-ip": ip });
+    for (let i = 0; i < 3; i += 1) expect((await handler(from("192.0.2.1"), undefined)).status).toBe(400);
+    const limited = await handler(from("192.0.2.1"), undefined);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("20");
+    expect((await body(limited)).error?.code).toBe("rate_limited");
+    expect((await handler(from("192.0.2.2"), undefined)).status).toBe(400);
+    ms += 20_000;
+    expect((await handler(from("192.0.2.1"), undefined)).status).toBe(400);
+  });
+
+  test("takes the plan's provider requests from the instance budget, and answers 503 when it is spent", async () => {
+    let ms = 1_000_000;
+    const handler = await setup({ limits: createExecutionLimits(() => ms) });
+    const first = await plan(handler, post(READY_BODY));
+    expect(first.response.status).toBe(200);
+    // Each leg takes two of the 10 provider requests the instance may make in 10 seconds.
+    const perPlan = first.data.legs.length * 2;
+    for (let made = perPlan; made + perPlan <= 10; made += perPlan) {
+      expect((await handler(post(READY_BODY), undefined)).status).toBe(200);
+    }
+    const spent = await handler(post(READY_BODY), undefined);
+    expect(spent.status).toBe(503);
+    expect((await body(spent)).error?.code).toBe("provider_rate_limited");
+    expect(Number(spent.headers.get("retry-after"))).toBeGreaterThan(0);
+    ms += 10_000;
+    expect((await handler(post(READY_BODY), undefined)).status).toBe(200);
+  });
+
+  test("a 429 of the provider fails fast with 503 provider_rate_limited and its Retry-After", async () => {
+    const handler = await setup({
+      provider: (base) => ({
+        ...base,
+        quote: async () => ({ status: "failed", reason: "provider_rate_limited", detail: "9" }),
+      }),
+    });
+    const response = await handler(post(READY_BODY), undefined);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("9");
+    expect((await body(response)).error).toMatchObject({
+      code: "provider_rate_limited",
+      details: { source: "kyberswap_api" },
+    });
+  });
+
+  test("answers 503 deadline_exceeded past the overall deadline, and aborts the provider requests", async () => {
+    let aborted = false;
+    const handler = await setup({
+      deadlineMs: 30,
+      provider: (base) => ({
+        ...base,
+        quote: (_request, context) =>
+          new Promise((resolve) => {
+            context.signal.addEventListener("abort", () => {
+              aborted = true;
+              resolve({ status: "failed", reason: "provider_unavailable", detail: null });
+            });
+          }),
+      }),
+    });
+    const response = await handler(post(READY_BODY), undefined);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("15");
+    expect((await body(response)).error?.code).toBe("deadline_exceeded");
+    expect(aborted).toBe(true);
   });
 });

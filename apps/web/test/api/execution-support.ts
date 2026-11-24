@@ -1,5 +1,7 @@
 import { type Address, decodeFunctionResult, encodeFunctionResult, type Hex, isAddress } from "viem";
 import { executionPlanHandler } from "../../src/server/api/execution";
+import { createExecutionLimits, type ExecutionLimits } from "../../src/server/execution/limits";
+import type { QuoteProvider } from "../../src/server/execution/provider";
 import type { ExecutionClient } from "../../src/server/execution/simulate";
 import { aggregatorAbi } from "../../src/server/market/abis";
 import { USDC_ADDRESS } from "../../src/server/market/balances";
@@ -66,6 +68,10 @@ export interface Setup {
   readonly client?: ExecutionClient;
   readonly marketMode?: "live" | "replay";
   readonly nodeEnv?: string;
+  readonly limits?: ExecutionLimits;
+  readonly deadlineMs?: number;
+  /** Replaces the provider; it receives the provider the default setup would use. */
+  readonly provider?: (base: QuoteProvider) => QuoteProvider;
 }
 
 export async function setup(options: Setup = {}) {
@@ -78,22 +84,33 @@ export async function setup(options: Setup = {}) {
       : [],
   );
   const chain = options.chain ?? chainOf(ABOVE);
+  const base = constructedProvider(prices).provider;
+  const provider = options.provider?.(base) ?? base;
   return executionPlanHandler({
     registry: () => recordedRegistry(),
     mode: () => "replay",
     marketData: service.marketData,
     marketMode: () => options.marketMode ?? "live",
     now: () => at,
-    provider: () => constructedProvider(prices).provider,
+    provider: () => provider,
     executionClient: () => options.client ?? chain.client(),
     env: { NODE_ENV: options.nodeEnv ?? "production" },
+    limits: options.limits ?? createExecutionLimits(),
+    ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),
   });
 }
 
+let requests = 0;
+
+/**
+ * A POST of the execution plan. Each request comes from its own address unless `headers` names one, so that the
+ * per-address limit applies only where a test is about it.
+ */
 export function post(payload: unknown, headers: Record<string, string> = { "x-vercel-ip-country": "DE" }): Request {
+  requests += 1;
   return new Request("https://equityos.test/api/v1/portfolio/execution-plan", {
     method: "POST",
-    headers: { "content-type": "application/json", ...headers },
+    headers: { "content-type": "application/json", "x-real-ip": `198.51.100.${requests % 250}`, ...headers },
     body: typeof payload === "string" ? payload : JSON.stringify(payload),
   });
 }

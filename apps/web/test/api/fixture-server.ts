@@ -5,7 +5,9 @@ import {
   indexHandler,
   indexVersionHandler,
 } from "../../src/server/api/indexes";
+import { executionPlanHandler } from "../../src/server/api/execution";
 import { portfolioHandler, portfolioPlanHandler } from "../../src/server/api/portfolio";
+import { createExecutionLimits } from "../../src/server/execution/limits";
 import { statusHandler } from "../../src/server/api/status";
 import { GET as openApiDocumentRoute } from "../../src/app/api/v1/openapi.json/route";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
@@ -60,6 +62,21 @@ export function fixtureServer(registry: FixtureRegistry = "recorded"): (request:
     ],
     [/^\/portfolio$/, (request) => portfolioHandler(options)(request, undefined)],
     [/^\/portfolio\/plan$/, (request) => portfolioPlanHandler(options)(request, undefined)],
+    [
+      /^\/portfolio\/execution-plan$/,
+      // The fixtures are a replay, which the endpoint refuses before it quotes or reads anything.
+      (request) =>
+        executionPlanHandler({
+          ...options,
+          provider: () => {
+            throw new Error("a replay never quotes");
+          },
+          executionClient: () => {
+            throw new Error("a replay never reads the chain");
+          },
+          limits: createExecutionLimits(),
+        })(request, undefined),
+    ],
     [
       /^\/status$/,
       (request) =>
