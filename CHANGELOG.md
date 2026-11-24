@@ -112,3 +112,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   adds less than one quote base unit no longer counts as a deposit in the tie between the two candidates.
 - The deposit field of the portfolio plan accepts at most 6 decimals, the precision of USDC, and says so,
   instead of 8 decimals that could not be deposited.
+- A test fails from October 1 of any year unless the market calendar covers the whole of the next year, so the
+  end of the holiday table on 2027-12-31 cannot pass unnoticed.

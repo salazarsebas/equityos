@@ -131,7 +131,9 @@ A read served from cache after a failed refresh is never `live`: a newer round m
   both years.
 
 The table covers 2026-01-01 to 2027-12-31. Outside it the phase is `unknown` and rule 2 applies. The table must
-be extended before the end of 2027. Unscheduled halts and closures are not modelled: during one, a price shows
+be extended before the end of 2027, and a test makes sure it is: `packages/core/test/market-calendar-coverage.test.ts`
+reads the clock and, from October 1 of any year, fails unless the table covers the whole of the next year. With
+the current table it starts failing on 2027-10-01, with a message that says what to add. Unscheduled halts and closures are not modelled: during one, a price shows
 as `delayed` and then `unavailable` once the heartbeat is missed. Whether the overnight session runs on the
 evening before a holiday is an assumption of the model, not a verified fact.
 
