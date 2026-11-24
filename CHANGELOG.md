@@ -101,6 +101,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   published first elsewhere offers to load the latest version and keep the draft.
 - The index profile offers "Publish a new version" to its creator, and the Studio lists the indexes of the
   connected account.
+- Deployment runbook in `docs/development/deployment.md`: preconditions, the Base Sepolia then Base mainnet
+  deployment with a Foundry keystore, source verification on Basescan or Sourcify, post-deployment checks,
+  recording the deployment map, the seed, the Vercel project settings, a production environment variable
+  checklist and the release order.
+- `contracts/script/check-deployment.sh`: read-only post-deployment checks of code hashes, constants, the log's
+  registry and the deployment block, also run against the local Anvil deployment in CI.
+- `seed:public`: publishes three seed indexes on Base Sepolia or Base mainnet, chosen from live market data by
+  stated rules. A dry run by default; sending needs the key in `SEED_PRIVATE_KEY` and the digest of the reviewed
+  plan, and `SEED_MAINNET=true` on Base mainnet.
+- A production server checks its configuration at startup and refuses to serve when a required variable is
+  missing, a replay variable is set, the chain is the local one, or `EQUITYOS_REQUIRE_REGISTRY=true` names a chain
+  the deployment map records no registry on.
+- Security headers on every response: a Content-Security-Policy that allows the configured RPC origins and the
+  wallet connectors only, `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`,
+  `Permissions-Policy` and `frame-ancestors 'none'`.
+- `smoke:deployment`: read-only smoke checks of a deployment (live data, registry deployed, prices with feeds and
+  times, key pages, security headers) with a short report.
+- `INDEX_REGISTRY_CODE_HASH` and `REBALANCE_LOG_CODE_HASH` in `@equityos/contracts-abi`, checked against the
+  deployment script.
 
 ### Changed
 
