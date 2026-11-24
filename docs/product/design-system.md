@@ -51,8 +51,16 @@ swapping an icon.
 ### Type
 
 IBM Plex Sans (400, 500, 600) for all interface text and IBM Plex Mono (400, 500) for identifiers: addresses,
-hashes, symbols, code and API paths. Both are loaded with `next/font`, which downloads the files at build time and
-serves them from the app's own origin.
+hashes, symbols, code and API paths. Both are self-hosted with `next/font/local` and served from the app's own
+origin; the build makes no network request.
+
+- Files: the latin subset in woff2 from the exact-pinned Fontsource packages `@fontsource-variable/ibm-plex-sans`
+  (the variable font, one file for the three weights) and `@fontsource/ibm-plex-mono` (one file per weight). Both
+  fonts are under the SIL Open Font License 1.1, which allows redistribution with the software.
+- Display: `swap`. IBM Plex Sans is preloaded, IBM Plex Mono is not.
+- Fallback: until a web font loads, text renders in Arial with metric overrides that match IBM Plex, declared in
+  `globals.css` as `IBM Plex Sans Fallback` and `IBM Plex Mono Fallback`, so the swap does not shift the layout.
+- CI fails if the source or the build output references a Google Fonts host.
 
 | Utility     | Size / line height (px) | Use                                         |
 | ----------- | ----------------------- | ------------------------------------------- |

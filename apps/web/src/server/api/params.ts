@@ -70,3 +70,51 @@ export function integerParameter(query: URLSearchParams, name: string, min: numb
   }
   return parsed;
 }
+
+/**
+ * Reads a query parameter that must be present and not empty.
+ *
+ * @throws {ApiError} 400 `invalid_parameter`
+ */
+export function requiredParameter(query: URLSearchParams, name: string): string {
+  const value = query.get(name);
+  if (value === null || value === "") throw invalidParameter(name, `Query parameter "${name}" is required.`);
+  return value;
+}
+
+/**
+ * Reads a non-negative integer written in decimal digits, within `[0, max]`, as a `bigint`: an amount that can
+ * exceed 2^53.
+ *
+ * @returns `undefined` when the parameter is absent
+ * @throws {ApiError} 400 `invalid_parameter`
+ */
+export function amountParameter(query: URLSearchParams, name: string, max: bigint): bigint | undefined {
+  const value = query.get(name);
+  if (value === null) return undefined;
+  const parsed = /^(0|[1-9][0-9]{0,29})$/.test(value) ? BigInt(value) : null;
+  if (parsed === null || parsed > max) {
+    throw invalidParameter(name, `Query parameter "${name}" must be an integer from 0 to ${max} in decimal digits.`);
+  }
+  return parsed;
+}
+
+/**
+ * Reads a parameter that takes one of a fixed set of values.
+ *
+ * @returns `undefined` when the parameter is absent
+ * @throws {ApiError} 400 `invalid_parameter`
+ */
+export function choiceParameter<T extends string>(
+  query: URLSearchParams,
+  name: string,
+  accepted: readonly T[],
+): T | undefined {
+  const value = query.get(name);
+  if (value === null) return undefined;
+  const found = accepted.find((choice) => choice === value);
+  if (found === undefined) {
+    throw invalidParameter(name, `Query parameter "${name}" must be one of ${accepted.join(", ")}.`, accepted);
+  }
+  return found;
+}

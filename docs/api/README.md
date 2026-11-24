@@ -5,6 +5,7 @@ The endpoints are described in:
 
 - [Assets](./assets.md): the tokenized stock universe and the API status.
 - [Indexes](./indexes.md): the published indexes, their versions, their verification and their composition.
+- [Portfolio](./portfolio.md): any address compared with a published index, and a reference-price plan.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
 
 The implementation lives in `apps/web/src/server/api` (envelope, errors, validation, OpenAPI document, handlers)
@@ -83,9 +84,9 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
   `registry_rpc`.
 - A 500 never says what is misconfigured or what failed. The cause is written to the server log.
 - `ineligible_token`, `token_paused`, `missing_feed` and `stale_feed` are the per-token conditions of the market
-  data layer. No endpoint of this version returns
-  them: the asset endpoints report these conditions as data. They are reserved for endpoints that need a value a
-  token cannot provide.
+  data layer. The asset endpoints report these conditions as data. The portfolio endpoints answer
+  `ineligible_token` when a constituent is not in the asset list. The others are reserved for endpoints that need
+  a value a token cannot provide.
 - A source that is down does not immediately produce a 503. The last successful read is served for a bounded time
   with `servedStale: true` in `meta` (see [Caching](#caching)).
 
@@ -120,6 +121,7 @@ guaranteed at it.
 | Assets, built from a fresh snapshot        | `public, max-age=N`: what is left of the 15 second TTL |
 | Assets, built from a snapshot served stale | `no-store`                                             |
 | Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
+| Portfolio and plan                         | `public, max-age=N`: at most 15 s, keyed by the URL    |
 | Status                                     | `no-store`: it depends on where the request comes from |
 | OpenAPI document                           | `public, max-age=3600`                                 |
 | Any error                                  | `no-store`                                             |
@@ -136,8 +138,8 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.1.0`, which
-  added the index endpoints and `registry` in the status.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.2.0`, which
+  added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
 
 ## The OpenAPI document is the contract

@@ -1,6 +1,7 @@
 import "server-only";
 import { API_ERROR_CODES, MARKET_ERROR_CODES } from "./errors";
 import { API_VERSION, API_VERSION_HEADER } from "./http";
+import { CALCULATION_ISSUE_CODES, MAX_DEPOSIT_USD_E8, MAX_MIN_LEG_VALUE_USD_E8, PLAN_STATEMENT } from "./portfolio";
 
 /** The subset of JSON Schema 2020-12 this document uses. */
 export interface Schema {
@@ -83,6 +84,12 @@ function oneOf(values: readonly string[], description: string): Schema {
 
 const count: Schema = { type: "integer", minimum: 0 };
 const bps: Schema = { type: "integer", minimum: 0, maximum: 10_000 };
+const signedBps: Schema = {
+  type: "integer",
+  minimum: -10_000,
+  maximum: 10_000,
+  description: "Current weight minus target weight, in basis points. Positive above target.",
+};
 const versionNumber: Schema = { type: "integer", minimum: 1, description: "Version number, from 1." };
 
 /** A closed object of the published spec, where a property is present only when the author wrote it. */
@@ -119,6 +126,33 @@ const failures = {
   "500": json("The server is not configured to read its data sources, or failed unexpectedly.", ref("Error")),
   "502": json("A data source answered with a payload that does not have the expected shape.", ref("Error")),
   "503": json("A data source did not answer and no recent copy is cached. Carries Retry-After.", ref("Error")),
+} as const;
+
+const portfolioParameters: readonly Parameter[] = [
+  {
+    name: "address",
+    in: "query",
+    required: true,
+    description: "Address on Base mainnet, in any letter case.",
+    schema: { type: "string", pattern: "^0x[0-9a-fA-F]{40}$" },
+  },
+  { ...identifierParameter, in: "query", name: "index" },
+  {
+    name: "version",
+    in: "query",
+    required: false,
+    description: "Version number. Defaults to the latest version.",
+    schema: { type: "string", pattern: "^[1-9][0-9]{0,9}$" },
+  },
+];
+const portfolioErrors = {
+  "400": invalidRequest,
+  "404": json("No index has this identifier, or the index has no version with this number.", ref("Error")),
+  "409": json(
+    `${registryNotDeployed} version_not_conformant: the version fails verification. ineligible_token: a constituent is not in the asset list.`,
+    ref("Error"),
+  ),
+  ...failures,
 } as const;
 
 const INELIGIBILITY_CODES = [
@@ -489,6 +523,187 @@ const schemas: Record<string, Schema> = {
     }),
     registry: ref("RegistryStatus"),
   }),
+  PortfolioIndex: object(
+    {
+      indexId: ref("Bytes32"),
+      identifier: text("Canonical identifier of the index."),
+      name: text("Name from the spec of the version."),
+      version: versionNumber,
+      latestVersion: versionNumber,
+      isLatest: { type: "boolean", description: "False when a newer version of the index is published." },
+      specHash: ref("Bytes32"),
+      driftThresholdBps: { ...bps, description: "rebalance.driftThresholdBps of the spec." },
+      minIntervalSeconds: { ...count, description: "rebalance.minIntervalSeconds of the spec." },
+    },
+    "The conformant version the address is compared with.",
+  ),
+  CalculationIssue: object(
+    {
+      code: oneOf(CALCULATION_ISSUE_CODES, "Finding of equityos.calc/1. See docs/architecture/calculation.md."),
+      severity: oneOf(["blocker", "warning"], "A blocker prevents a plan."),
+      token: nullable({ ...ref("Address"), description: "The token concerned. Null for the whole portfolio." }),
+      minimumDeployableValueUsdE8: nullable({
+        ...ref("UintString"),
+        description:
+          "below_minimum_portfolio_value only: a value from which every constituent gets a buy, USD scaled by 1e8.",
+      }),
+      uninvestedQuote: nullable({
+        ...ref("UintString"),
+        description: "uninvested_quote only: USDC base units left on top of the reserve.",
+      }),
+      currentMaxAbsDriftBps: nullable({
+        ...bps,
+        description: "projected_drift_increase only. Null for a first replication.",
+      }),
+      projectedMaxAbsDriftBps: nullable({ ...bps, description: "projected_drift_increase only." }),
+    },
+    "A data-quality or plan finding, returned as data. Fields that belong to other codes are null.",
+  ),
+  PortfolioPosition: object({
+    token: ref("Address"),
+    symbol: nullable(text("Display symbol from the asset list.")),
+    name: nullable(text("Display name from the asset list.")),
+    decimals: { ...count, description: "Decimals of the token as listed." },
+    balance: { ...ref("UintString"), description: "Token base units held. Zero when the address holds none." },
+    targetWeightBps: { ...bps, description: "Published target weight." },
+    currentWeightBps: nullable({
+      ...bps,
+      description: "Share of the invested value. Null when a constituent has no value or nothing is invested.",
+    }),
+    driftBps: nullable(signedBps),
+    valueUsdE8: nullable({
+      ...ref("UintString"),
+      description: "Balance at the reference price, rounded down, USD scaled by 1e8. Null without a usable price.",
+    }),
+    referencePrice: ref("ReferencePrice"),
+  }),
+  OutsideHolding: object(
+    {
+      token: ref("Address"),
+      symbol: nullable(text("Display symbol.")),
+      name: nullable(text("Display name.")),
+      decimals: { ...count, description: "Decimals the token reports." },
+      balance: ref("UintString"),
+      valueUsdE8: nullable(ref("UintString")),
+      referencePrice: ref("ReferencePrice"),
+    },
+    "An index-eligible token held outside this index. Reported and never counted in any total, weight or drift.",
+  ),
+  Portfolio: object({
+    address: ref("Address"),
+    index: ref("PortfolioIndex"),
+    constituents: {
+      type: "array",
+      items: ref("PortfolioPosition"),
+      description: "Every constituent, held or not, in ascending token order.",
+    },
+    totals: object({
+      investedValueUsdE8: nullable({
+        ...ref("UintString"),
+        description: "Sum of the constituent values: the denominator of every weight. Null when a value is unknown.",
+      }),
+      quoteBalance: { ...ref("UintString"), description: "USDC held, in base units of 6 decimals." },
+      quoteValueUsdE8: ref("UintString"),
+      quotePriceE8: { ...ref("UintString"), description: "Stated assumption: one USDC is valued at 1 USD." },
+      deployableValueUsdE8: nullable(ref("UintString")),
+      cashShareBps: nullable({ ...bps, description: "USDC share of the deployable value. Not a weight." }),
+    }),
+    drift: nullable(
+      object(
+        {
+          maxAbsDriftBps: bps,
+          maxDriftToken: ref("Address"),
+          turnoverBps: { ...bps, description: "Half the sum of the absolute drifts." },
+          driftThresholdBps: bps,
+          thresholdReached: { type: "boolean", description: "maxAbsDriftBps is at least the threshold." },
+        },
+        "Null when the weights are not defined.",
+      ),
+    ),
+    outsideIndex: { type: "array", items: ref("OutsideHolding") },
+    issues: { type: "array", items: ref("CalculationIssue") },
+  }),
+  PortfolioMeta: object({
+    ...snapshotMetaProperties,
+    registry: { ...ref("RegistryRef"), description: "Where the index was read: the configured registry chain." },
+    balances: object(
+      {
+        chainId: { type: "integer", const: 8453 },
+        blockNumber: ref("UintString"),
+        blockTimestamp: ref("Timestamp"),
+        mode: oneOf(["live", "replay"], "replay means constructed balances of a test recording, not a chain read."),
+      },
+      "Where the balances were read: Base mainnet, like the reference prices, at this block.",
+    ),
+  }),
+  PlanLeg: object({
+    side: oneOf(["sell", "buy"], "sell: token to USDC. buy: USDC to token."),
+    token: ref("Address"),
+    symbol: nullable(text("Display symbol.")),
+    decimals: nullable({ ...count, description: "Decimals of the token." }),
+    exit: { type: "boolean", description: "Always false: tokens outside the version are never sold." },
+    tokenQuantity: { ...ref("UintString"), description: "Token base units at the reference price." },
+    quoteAmount: { ...ref("UintString"), description: "USDC base units at the reference price." },
+    valueUsdE8: { ...ref("UintString"), description: "Reference value of the leg, USD scaled by 1e8." },
+    priceE8: { ...ref("UintString"), description: "Reference price the leg was sized with." },
+  }),
+  SkippedLeg: object({
+    side: oneOf(["sell", "buy"], "Side of the leg."),
+    token: ref("Address"),
+    symbol: nullable(text("Display symbol.")),
+    exit: { type: "boolean" },
+    valueUsdE8: ref("UintString"),
+    reason: oneOf(["below_minimum", "zero_quantity", "above_target_weight", "not_needed"], "Why it is not proposed."),
+  }),
+  BlockedPlan: object({
+    status: { type: "string", const: "blocked" },
+    blockers: { type: "array", items: ref("CalculationIssue"), description: "Never empty." },
+    warnings: { type: "array", items: ref("CalculationIssue") },
+  }),
+  ReadyPlan: object({
+    status: { type: "string", const: "ready" },
+    warnings: { type: "array", items: ref("CalculationIssue") },
+    legs: { type: "array", items: ref("PlanLeg"), description: "Sells in ascending token order, then buys." },
+    skipped: { type: "array", items: ref("SkippedLeg") },
+    candidate: oneOf(["uncapped", "capped"], "Which of the two candidates of the calculation was chosen."),
+    otherCandidateMaxAbsDriftBps: nullable(bps),
+    currentMaxAbsDriftBps: nullable({ ...bps, description: "Null when nothing is invested." }),
+    availableQuote: { ...ref("UintString"), description: "USDC held plus the deposit, in base units." },
+    buyBudgetQuote: ref("UintString"),
+    deployableValueUsdE8: ref("UintString"),
+    projected: object(
+      {
+        positions: {
+          type: "array",
+          items: object({
+            token: ref("Address"),
+            symbol: nullable(text("Display symbol.")),
+            balance: ref("UintString"),
+            valueUsdE8: ref("UintString"),
+            targetWeightBps: bps,
+            weightBps: nullable(bps),
+            driftBps: nullable(signedBps),
+          }),
+        },
+        investedValueUsdE8: ref("UintString"),
+        quoteBalance: { ...ref("UintString"), description: "USDC left after every leg: the reserve and any rest." },
+        maxAbsDriftBps: nullable(bps),
+      },
+      "The address after every leg at its reference price.",
+    ),
+  }),
+  PortfolioPlan: object({
+    address: ref("Address"),
+    index: ref("PortfolioIndex"),
+    priceBasis: { type: "string", const: "reference" },
+    executable: { type: "boolean", const: false },
+    statement: { type: "string", const: PLAN_STATEMENT },
+    mode: oneOf(["rebalance", "buy_only"], "buy_only never sells."),
+    depositUsdE8: ref("UintString"),
+    reserveBps: { type: "integer", minimum: 0, maximum: 2_000 },
+    minLegValueUsdE8: ref("UintString"),
+    plan: { anyOf: [ref("BlockedPlan"), ref("ReadyPlan")] },
+  }),
   ErrorDetails: nullable({
     type: "object",
     description: "Machine-readable context of an error, such as the offending parameter or the failing source.",
@@ -519,6 +734,7 @@ export const openApiDocument: OpenApiDocument = {
   tags: [
     { name: "Assets", description: "Tokenized stocks listed on Base mainnet." },
     { name: "Indexes", description: "Published index methodologies, their versions and their verification." },
+    { name: "Portfolio", description: "An address compared with a published index. Read-only, nothing stored." },
     { name: "Meta", description: "The API itself." },
   ],
   paths: {
@@ -667,6 +883,63 @@ export const openApiDocument: OpenApiDocument = {
             ref("Error"),
           ),
           ...failures,
+        },
+      },
+    },
+    "/portfolio": {
+      get: {
+        operationId: "getPortfolio",
+        summary: "Compare an address with an index",
+        description:
+          "The balances of an address on Base mainnet compared with one conformant version of an index: per constituent balance, value, current and target weight and drift, the totals, the USDC held, the maximum drift against the threshold of the index, index-eligible holdings outside the index (reported, never counted) and every finding of the calculation. Nothing is stored: it is computed on each request. The index is read from the registry chain, balances and reference prices from Base mainnet.",
+        tags: ["Portfolio"],
+        parameters: portfolioParameters,
+        responses: {
+          "200": success("The comparison.", ref("Portfolio"), ref("PortfolioMeta")),
+          ...portfolioErrors,
+        },
+      },
+    },
+    "/portfolio/plan": {
+      get: {
+        operationId: "getPortfolioPlan",
+        summary: "Reference-price plan toward the target weights",
+        description: `The rebalance plan of equityos.calc/1 for the same comparison: blocked with its blockers, or ready with legs, skipped legs, the projection and warnings. ${PLAN_STATEMENT}`,
+        tags: ["Portfolio"],
+        parameters: [
+          ...portfolioParameters,
+          {
+            name: "mode",
+            in: "query",
+            required: true,
+            description: "rebalance sells and buys. buy_only never sells.",
+            schema: { type: "string", enum: ["rebalance", "buy_only"] },
+          },
+          {
+            name: "depositUsdE8",
+            in: "query",
+            required: false,
+            description: `USDC to add before the plan, in USD scaled by 1e8, from 0 to ${MAX_DEPOSIT_USD_E8}. Defaults to 0.`,
+            schema: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+          },
+          {
+            name: "reserveBps",
+            in: "query",
+            required: false,
+            description: "Share of the funds buys leave unspent, 0 to 2000. Defaults to 50.",
+            schema: { type: "integer", minimum: 0, maximum: 2_000 },
+          },
+          {
+            name: "minLegValueUsdE8",
+            in: "query",
+            required: false,
+            description: `Reference value below which a leg is not proposed, USD scaled by 1e8, from 0 to ${MAX_MIN_LEG_VALUE_USD_E8}. Defaults to 100000000 (1.00 USD).`,
+            schema: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+          },
+        ],
+        responses: {
+          "200": success("The plan.", ref("PortfolioPlan"), ref("PortfolioMeta")),
+          ...portfolioErrors,
         },
       },
     },

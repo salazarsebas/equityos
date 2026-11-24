@@ -33,3 +33,6 @@ export const multicall3Abi = parseAbi([
   "function aggregate3(Call3[] calls) view returns (Result[] returnData)",
   "function getChainId() view returns (uint256 chainid)",
 ]);
+
+/** The one ERC-20 function read for an account. B20 tokens and USDC both implement it. */
+export const erc20BalanceAbi = parseAbi(["function balanceOf(address account) view returns (uint256)"]);

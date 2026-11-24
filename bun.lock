@@ -17,6 +17,8 @@
         "@base-org/account": "2.6.0",
         "@equityos/contracts-abi": "workspace:*",
         "@equityos/core": "workspace:*",
+        "@fontsource-variable/ibm-plex-sans": "5.3.0",
+        "@fontsource/ibm-plex-mono": "5.3.0",
         "@tanstack/react-query": "5.108.2",
         "@wagmi/core": "3.6.9",
         "@walletconnect/ethereum-provider": "2.26.0",
@@ -97,6 +99,10 @@
     "@equityos/sdk": ["@equityos/sdk@workspace:packages/sdk"],
 
     "@equityos/web": ["@equityos/web@workspace:apps/web"],
+
+    "@fontsource-variable/ibm-plex-sans": ["@fontsource-variable/ibm-plex-sans@5.3.0", "", {}, "sha512-agG8tXFEo0hD9+J7npa4vbbWult52eMLVaQ6WQRlhs/iCAojrMAoejru85W9HTVXHfyUj96KM7gp/KGAS87XaQ=="],
+
+    "@fontsource/ibm-plex-mono": ["@fontsource/ibm-plex-mono@5.3.0", "", {}, "sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 

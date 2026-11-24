@@ -46,6 +46,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Registry replay (`REGISTRY_REPLAY_DIR`) and a recorder, so that tests serve a recorded local registry.
 - The local seed publishes an index that fails verification and a deprecated index next to the three examples.
 - Documentation of the indexes API and of the index profile and its verification checks.
+- Public API v1.2.0: `GET /api/v1/portfolio` compares any address on Base mainnet with a published index version
+  (balances, values, current and target weights, drift, holdings outside the index, findings), and
+  `GET /api/v1/portfolio/plan` returns the reference-price rebalance plan of `@equityos/core`. Nothing is stored.
+- Balance read of the market data layer (`balanceOf` by multicall), a recorded Base mainnet fixture, a recorder,
+  and constructed balances served by the market data replay for tests.
 - Index Studio at `/studio`: an editor that builds a valid `equityos.index/1` spec with a live preview of the
   composition, the canonical JSON and the spec hash, a draft kept in the browser, an export of the canonical
   bytes, and a reviewed, simulated and verified `createIndex` publication where the registry is deployed.
@@ -56,3 +61,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The home page uses the application shell and the design tokens.
 - The home page states that indexes can be browsed and verified, and what a network without the registry shows.
+- IBM Plex Sans and IBM Plex Mono load from pinned Fontsource packages with `next/font/local`, so the build
+  makes no network request.
