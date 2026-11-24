@@ -140,6 +140,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `INDEX_REGISTRY_CODE_HASH` and `REBALANCE_LOG_CODE_HASH` in `@equityos/contracts-abi`, checked against the
   deployment script.
 
+- Automated accessibility check with axe-core over every route in both themes, which fails on any serious or
+  critical violation.
+- A not-found page for any unknown path, inside the application shell, and an error state for the portfolio page
+  when its data sources do not answer.
+
 ### Changed
 
 - Public API v1.6.0: `GET /api/v1/status` answers `executionAvailable: true` for every request the jurisdiction
@@ -150,6 +155,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The home page states that indexes can be browsed and verified, and what a network without the registry shows.
 - IBM Plex Sans and IBM Plex Mono load from pinned Fontsource packages with `next/font/local`, so the build
   makes no network request.
+
+- Drift bars beyond the threshold use the warning tone instead of the accent, which is kept for interaction.
+- The weighting of an equal weight index reads "Equal weights", parallel to "Fixed weights". The drift table
+  names its columns "Target weight" and "Current weight", and the network page puts units in parentheses like
+  every other table.
+- The default page title uses the product line "Open, verifiable index infrastructure for tokenized stocks on
+  Base", and the Studio page title matches its heading, "Index Studio".
 
 ### Fixed
 
@@ -175,3 +187,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   instead of 8 decimals that could not be deposited.
 - A test fails from October 1 of any year unless the market calendar covers the whole of the next year, so the
   end of the holiday table on 2027-12-31 cannot pass unnoticed.
+- The separator of a source line no longer starts or ends a wrapped line.
+- The network page no longer names "the configured chain" as if it were a chain name when the chain cannot be
+  read.
+- A stat label that wraps no longer overlaps its value, and values in a row stay level.
+- Accessibility: the account button and token address links have names that contain their visible text, code
+  blocks that scroll can be scrolled with the keyboard, the version table and the API schemas no longer repeat
+  the name of another landmark, and the Studio composition preview has no empty column header.
