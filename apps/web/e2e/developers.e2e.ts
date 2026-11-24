@@ -32,7 +32,9 @@ test.describe("developer pages", () => {
     await expect(
       page.getByRole("navigation", { name: "Developer documentation" }).getByRole("link", { name: "Overview" }),
     ).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("complementary", { name: "Conventions" })).toContainText("Integer basis points");
+    const conventions = page.getByRole("complementary", { name: "Conventions" });
+    await expect(conventions).toContainText("Integer basis points");
+    await expect(conventions).toContainText("except the execution plan, a POST");
 
     const first = await copied(page, "Copy request 1");
     expect(first).toMatch(/^curl "https?:\/\/[^"]+\/api\/v1\/indexes\?limit=2"$/);
@@ -77,6 +79,16 @@ test.describe("developer pages", () => {
     expect(await copied(page, "Copy getIndexComposition request")).toMatch(
       new RegExp(`^curl "https?://[^"]+/api/v1/indexes/${DIVERSIFIED}/composition"$`),
     );
+
+    // The one POST: its method, its JSON body field by field, and a curl that sends the body.
+    const execution = page.locator('section[aria-labelledby="executionPlan"]');
+    await expect(execution.getByRole("heading", { level: 3 })).toContainText("POST");
+    await expect(execution.getByRole("list", { name: "Fields of the request body" })).toContainText("slippageBps");
+    await expect(execution).toContainText("3 plans per address at once");
+    const curl = await copied(page, "Copy executionPlan request");
+    expect(curl).toMatch(/^curl -X POST "https?:\/\/[^"]+\/api\/v1\/portfolio\/execution-plan"/);
+    expect(curl).toContain('-H "Content-Type: application/json"');
+    expect(JSON.parse(curl.slice(curl.indexOf("-d '") + 4, -1))).toMatchObject({ mode: "rebalance" });
     expect(errors).toEqual([]);
   });
 

@@ -8,6 +8,8 @@ export interface ApiExample {
   /** Path and query from the origin, starting with `/api/v1`. */
   readonly path: string;
   readonly registry: string;
+  /** The JSON body of a POST request. Absent for a GET. */
+  readonly requestBody?: Readonly<Record<string, unknown>>;
   readonly status: number;
   readonly body: unknown;
 }
@@ -34,7 +36,10 @@ export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-/** A curl command for a path of this deployment. */
-export function curlCommand(origin: string, path: string): string {
-  return `curl "${origin}${path}"`;
+/** A curl command for a path of this deployment: a GET, or a POST of `body` as JSON. */
+export function curlCommand(origin: string, path: string, body?: Readonly<Record<string, unknown>>): string {
+  if (body === undefined) return `curl "${origin}${path}"`;
+  return `curl -X POST "${origin}${path}" \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(body)}'`;
 }

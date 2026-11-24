@@ -9,7 +9,6 @@ import { Code, Section, Step } from "./parts";
 
 const docs = (path: string) => `${site.repositoryUrl}/blob/main/docs/${path}`;
 
-export const API_DOCS_URL = docs("api/README.md");
 export const METHODOLOGY_SPEC_URL = docs("architecture/methodology-spec.md");
 
 export function Hero() {
@@ -30,13 +29,12 @@ export function Hero() {
         >
           Explore indexes
         </NextLink>
-        <a
-          href={API_DOCS_URL}
-          rel="noreferrer"
+        <NextLink
+          href="/developers"
           className="inline-flex h-10 items-center rounded-md border border-strong bg-surface px-4 font-medium text-primary transition-colors duration-[120ms] hover:bg-subtle pointer-coarse:h-11"
         >
           Read the API docs
-        </a>
+        </NextLink>
       </div>
     </div>
   );
@@ -153,7 +151,7 @@ export function Developers() {
             Assets, indexes, single versions with their checks, and portfolio comparisons follow the same shape.
           </p>
           <p className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-base">
-            <Link href={API_DOCS_URL}>API reference</Link>
+            <Link href="/developers/api">API reference</Link>
             <Link href="/api/v1/openapi.json">OpenAPI description</Link>
           </p>
         </div>

@@ -11,6 +11,7 @@ import {
   fieldRows,
   type OperationEntry,
   operationsByTag,
+  refName,
 } from "@/lib/developers/openapi-view";
 import { openApiDocument } from "@/server/api/openapi";
 import { FieldList, schemaAnchor, TypeLabel } from "./schema-view";
@@ -80,6 +81,20 @@ function Parameters({ operation, id }: { operation: ApiOperation; id: string }) 
   );
 }
 
+/** The JSON body of an operation that takes one, field by field. */
+function RequestBody({ operation, id }: { operation: ApiOperation; id: string }) {
+  const schema = operation.requestBody?.content["application/json"].schema;
+  if (schema === undefined) return null;
+  const resolved = schema.$ref === undefined ? schema : openApiDocument.components.schemas[refName(schema.$ref)];
+  if (resolved === undefined) return null;
+  return (
+    <>
+      <Heading id={`${id}-body`}>Request body (application/json)</Heading>
+      <FieldList rows={fieldRows(resolved)} label="Fields of the request body" />
+    </>
+  );
+}
+
 function Responses({ operation, id }: { operation: ApiOperation; id: string }) {
   const entries = Object.entries(operation.responses);
   return (
@@ -117,6 +132,7 @@ function Endpoint({ entry, origin }: { entry: OperationEntry; origin: string }) 
   const id = operation.operationId;
   const examples = examplesOf(id);
   const request = examples.find(({ status }) => status === 200)?.path ?? `${API_BASE}${path}`;
+  const requestBody = examples.find((example) => example.requestBody !== undefined)?.requestBody;
   return (
     <section aria-labelledby={id} className="scroll-mt-6 border-t pt-6 pb-10">
       <h3 id={id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -129,9 +145,10 @@ function Endpoint({ entry, origin }: { entry: OperationEntry; origin: string }) 
       <p className="mt-1 max-w-measure text-secondary">{operation.description}</p>
 
       <Heading id={`${id}-request`}>Request</Heading>
-      <CodeBlock title="Shell" code={curlCommand(origin, request)} copyLabel={`${id} request`} />
+      <CodeBlock title="Shell" code={curlCommand(origin, request, requestBody)} copyLabel={`${id} request`} />
 
       <Parameters operation={operation} id={id} />
+      <RequestBody operation={operation} id={id} />
       <Responses operation={operation} id={id} />
 
       {examples.length === 0 ? null : (
@@ -144,7 +161,9 @@ function Endpoint({ entry, origin }: { entry: OperationEntry; origin: string }) 
                   <summary className="flex min-h-10 cursor-pointer flex-wrap items-center gap-x-3 px-3 py-2 text-sm -outline-offset-2 pointer-coarse:min-h-11">
                     <span className="num font-mono font-medium">{example.status}</span>
                     <span className="font-medium text-accent">{example.title}</span>
-                    <code className="min-w-0 font-mono text-xs break-all text-secondary">{example.path}</code>
+                    <code className="min-w-0 font-mono text-xs break-all text-secondary">
+                      {example.requestBody === undefined ? example.path : `POST ${example.path}`}
+                    </code>
                   </summary>
                   <CodeBlock
                     title={`Response ${example.status}`}

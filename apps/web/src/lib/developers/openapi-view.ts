@@ -1,4 +1,4 @@
-import type { OpenApiDocument, Schema } from "@/server/api/openapi";
+import type { OpenApiDocument, Operation, Schema } from "@/server/api/openapi";
 
 /** The type of a value, as the API reference shows it. */
 export type TypeNode =
@@ -104,8 +104,7 @@ export function fieldRows(schema: Schema, prefix = "", depth = 0): FieldRow[] {
   return rows;
 }
 
-type PathItem = OpenApiDocument["paths"][string];
-export type ApiOperation = PathItem[keyof PathItem];
+export type ApiOperation = Operation;
 
 export interface OperationEntry {
   readonly method: string;
@@ -120,7 +119,7 @@ export function operationsByTag(
   const entries: OperationEntry[] = [];
   for (const [path, item] of Object.entries(document.paths)) {
     for (const [method, operation] of Object.entries(item)) {
-      entries.push({ method: method.toUpperCase(), path, operation });
+      if (operation !== undefined) entries.push({ method: method.toUpperCase(), path, operation });
     }
   }
   return document.tags

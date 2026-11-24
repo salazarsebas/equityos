@@ -80,7 +80,10 @@ bun run --filter @equityos/sdk build`;
 function Conventions({ origin }: { origin: string }) {
   const rows = [
     ["Base URL", <code key="url" className="font-mono text-sm break-all">{`${origin}/api/v1`}</code>],
-    ["Access", "Every endpoint is a GET. No key, no account, open CORS."],
+    [
+      "Access",
+      "No key, no account, open CORS. Every endpoint is a GET except the execution plan, a POST with a JSON body that is never cached and is rate limited per address.",
+    ],
     [
       "Amounts",
       <span key="amounts">
