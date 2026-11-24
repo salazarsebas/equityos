@@ -7,6 +7,7 @@ The endpoints are described in:
 - [Indexes](./indexes.md): the published indexes, their versions, their verification and their composition.
 - [Portfolio](./portfolio.md): any address compared with a published index, and a reference-price plan.
 - [Execution plan](./execution.md): the plan quoted and checked for execution on Base mainnet. Nothing is sent.
+- [Network](./network.md): registry and usage metrics computed from chain events only.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
 - [TypeScript SDK](./sdk.md): `@equityos/sdk`, a typed client of these endpoints and the verification of a
   version from the registry contract.
@@ -150,8 +151,9 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.3.0`, which
-  added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.4.0`, which
+  added the network endpoint. `1.3.0` added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0` added the
+  index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
 
 ## The OpenAPI document is the contract

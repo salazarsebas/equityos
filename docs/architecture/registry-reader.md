@@ -267,7 +267,9 @@ States a caller renders are results, not errors: `registry_not_deployed`, `inval
 When `REGISTRY_REPLAY_DIR` names a directory, the process-wide reader does not read a chain. It serves the
 recording in that directory (`registry.json`, in the format of `apps/web/test/fixtures/registry`): the answer of
 every read call of the registry of a local chain at one block. The recording goes through the same decoding,
-verification, identifier and caching code as a live chain. A call it does not hold, such as the event scan, is an
+verification, identifier and caching code as a live chain. The optional `requests` list holds other recorded
+requests with their results, matched by method and parameters: the event scan, receipts and reads at past
+blocks of the [network metrics](../product/network-metrics.md). A call it does not hold is an
 `upstream_failure`, never an empty answer.
 
 `bun run --filter @equityos/web record:registry <directory>` writes a recording from a running Anvil node. It

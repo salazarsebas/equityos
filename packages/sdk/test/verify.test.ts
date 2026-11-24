@@ -43,7 +43,7 @@ describe("verifyIndexVersion on the recorded registry", () => {
       registry: INDEX_REGISTRY_ADDRESS.toLowerCase(),
       version: 2,
       latestVersion: 2,
-      blockNumber: 9n,
+      blockNumber: 29n,
       composition: "static",
       deprecatedAt: null,
       creator: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
@@ -90,7 +90,7 @@ describe("verifyIndexVersion on the recorded registry", () => {
     await verifyIndexVersion({ ...target(DIVERSIFIED, 1), publicClient: client });
     expect(seen.length).toBe(6);
     expect(new Set(seen.map(({ to, blockNumber }) => `${to}@${blockNumber}`))).toEqual(
-      new Set([`${INDEX_REGISTRY_ADDRESS.toLowerCase()}@9`]),
+      new Set([`${INDEX_REGISTRY_ADDRESS.toLowerCase()}@29`]),
     );
   });
 });
@@ -185,7 +185,7 @@ describe("the JSON-RPC path", () => {
             ? `0x${BigInt(REGISTRY_RECORDING.blockNumber).toString(16)}`
             : method === "eth_getCode"
               ? "0x6080"
-              : (await chain.call({ ...(params[0] as { to: Hex; data: Hex }), blockNumber: 9n })).data;
+              : (await chain.call({ ...(params[0] as { to: Hex; data: Hex }), blockNumber: 29n })).data;
       return Response.json({ jsonrpc: "2.0", id, result });
     });
   }
@@ -210,7 +210,7 @@ describe("the JSON-RPC path", () => {
       "eth_call",
       "eth_call",
     ]);
-    expect(requests.slice(2).every(({ params }) => params.at(-1) === "0x9")).toBe(true);
+    expect(requests.slice(2).every(({ params }) => params.at(-1) === "0x1d")).toBe(true);
     expect(mock.calls.every(({ init }) => init.method === "POST")).toBe(true);
   });
 
@@ -243,7 +243,7 @@ describe("the JSON-RPC path", () => {
     const mock = rpcFetch();
     const client = jsonRpcClient("http://rpc.test", mock.fetch);
     expect(await client.getChainId()).toBe(CHAIN_ID);
-    expect(await client.getBlockNumber()).toBe(9n);
+    expect(await client.getBlockNumber()).toBe(29n);
     expect(mock.calls.map(({ init }) => JSON.parse(init.body ?? "{}").id)).toEqual([1, 2]);
   });
 });
@@ -257,7 +257,7 @@ test("a viem PublicClient is accepted as the chain client", async () => {
         if (method === "eth_blockNumber") return `0x${BigInt(REGISTRY_RECORDING.blockNumber).toString(16)}`;
         if (method === "eth_getCode") return "0x6080";
         if (method === "eth_call")
-          return (await chain.call({ ...(params[0] as { to: Hex; data: Hex }), blockNumber: 9n })).data;
+          return (await chain.call({ ...(params[0] as { to: Hex; data: Hex }), blockNumber: 29n })).data;
         throw new Error(`unexpected ${method}`);
       },
     }),

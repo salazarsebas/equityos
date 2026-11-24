@@ -6,12 +6,15 @@ import {
   indexVersionHandler,
 } from "../../src/server/api/indexes";
 import { executionPlanHandler } from "../../src/server/api/execution";
+import { networkHandler } from "../../src/server/api/network";
 import { portfolioHandler, portfolioPlanHandler } from "../../src/server/api/portfolio";
 import { createExecutionLimits } from "../../src/server/execution/limits";
 import { statusHandler } from "../../src/server/api/status";
 import { GET as openApiDocumentRoute } from "../../src/app/api/v1/openapi.json/route";
+import { createNetworkService } from "../../src/server/network";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
+import { loadRegistryReplay } from "../../src/server/registry/replay";
 import { fixtureService, RECORDED_AT, recordedRegistry } from "./support";
 
 export const FIXTURE_ORIGIN = "https://equityos.test";
@@ -32,9 +35,12 @@ type Handler = (request: Request, params: readonly string[]) => Promise<Response
  */
 export function fixtureServer(registry: FixtureRegistry = "recorded"): (request: Request) => Promise<Response> {
   const service = fixtureService();
-  const reader: RegistryReader =
-    registry === "recorded" ? recordedRegistry() : createRegistryReader({ config: resolveRegistryConfig({}) });
+  const replay = loadRegistryReplay(new URL("../fixtures/registry", import.meta.url).pathname);
+  const config = registry === "recorded" ? replay.config : resolveRegistryConfig({});
+  const reader: RegistryReader = registry === "recorded" ? recordedRegistry() : createRegistryReader({ config });
   const now = () => RECORDED_AT;
+  // On Base mainnet the registry is not deployed, so the client is never asked for.
+  const network = createNetworkService({ reader, config, client: () => replay.client, exclusions: [], now });
   const options = {
     registry: () => reader,
     mode: () => (registry === "recorded" ? ("replay" as const) : ("live" as const)),
@@ -76,6 +82,10 @@ export function fixtureServer(registry: FixtureRegistry = "recorded"): (request:
           },
           limits: createExecutionLimits(),
         })(request, undefined),
+    ],
+    [
+      /^\/network$/,
+      (request) => networkHandler({ network: () => network, mode: options.mode, now })(request, undefined),
     ],
     [
       /^\/status$/,

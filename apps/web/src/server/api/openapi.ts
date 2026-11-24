@@ -9,6 +9,7 @@ import {
 import { API_ERROR_CODES, MARKET_ERROR_CODES } from "./errors";
 import { EXECUTION_STATEMENT } from "./execution";
 import { API_VERSION, API_VERSION_HEADER } from "./http";
+import { METRIC_DEFINITIONS } from "@/server/network";
 import { CALCULATION_ISSUE_CODES, MAX_DEPOSIT_USD_E8, MAX_MIN_LEG_VALUE_USD_E8, PLAN_STATEMENT } from "./portfolio";
 
 /** The subset of JSON Schema 2020-12 this document uses. */
@@ -221,6 +222,111 @@ const indexProperties = {
   latest: ref("VersionSummary"),
 } as const satisfies Record<string, Schema>;
 
+/** A metric: its value with its definition id, chain, block range and computation time. */
+function metric(value: Schema): Schema {
+  return object({
+    id: oneOf(
+      METRIC_DEFINITIONS.map(({ id }) => id),
+      "Id of the definition in data.definitions.",
+    ),
+    value,
+    chainId: { type: "integer", description: "EIP-155 id of the chain the events were read from." },
+    fromBlock: { ...ref("UintString"), description: "First block covered: the deploy block." },
+    toBlock: nullable({ ...ref("UintString"), description: "Last block covered. Null before the first range." }),
+    computedAt: ref("Timestamp"),
+  });
+}
+
+function networkSchemas(): Record<string, Schema> {
+  const tierCounts = object({ tierA: count, tierB: count, unmatched: count });
+  const daily = { type: "array", items: object({ day: text("UTC day, YYYY-MM-DD."), count }) } as const;
+  const countMetric = metric(count);
+  return {
+    NetworkMetrics: object({
+      indexesPublished: countMetric,
+      versionsPublished: countMetric,
+      distinctCreators: countMetric,
+      indexesDeprecated: countMetric,
+      versionsPerDay: metric(daily),
+      attestations: countMetric,
+      attestationsTierA: countMetric,
+      attestationsTierB: countMetric,
+      attestationsUnmatched: countMetric,
+      accountsTierA: countMetric,
+      accountsWithinTolerance: countMetric,
+      tierAPerDay: metric(daily),
+      byIndex: metric({
+        type: "array",
+        items: object({
+          indexId: ref("Bytes32"),
+          label: nullable(
+            object({ identifier: text("Canonical identifier."), name: nullable(text("Name, when verified.")) }),
+          ),
+          attestations: tierCounts,
+          accountsTierA: count,
+        }),
+      }),
+      tierAReferenceValueUsdE8: metric({ ...ref("UintString"), description: "USD scaled by 1e8. Not traded value." }),
+      excludedActivity: metric(object({ indexes: count, versions: count, attestations: tierCounts })),
+    }),
+    Attestation: object({
+      transactionHash: ref("Bytes32"),
+      blockNumber: ref("UintString"),
+      blockTimestamp: ref("Timestamp"),
+      account: ref("Address"),
+      indexId: ref("Bytes32"),
+      version: versionNumber,
+      tier: oneOf(["a", "b", "unmatched"], "Tier of the attestation, see the definitions."),
+      reason: nullable(
+        oneOf(
+          ["no_constituent_flows", "below_minimum_notional", "price_unavailable"],
+          "Why its own transaction does not make it tier A. Null for tier A.",
+        ),
+      ),
+      valueUsdE8: nullable({ ...ref("UintString"), description: "Reference value of the qualifying flows." }),
+      linkedTransaction: nullable({ ...ref("Bytes32"), description: "The earlier transaction of a tier B link." }),
+      tracking: nullable(
+        object({
+          status: oneOf(["within", "outside", "not_assessed"], "Holdings against the tolerance after the block."),
+          reason: nullable(oneOf(["not_static", "not_verified", "not_valued"], "Why it was not assessed.")),
+          maxDriftBps: nullable(bps),
+          toleranceBps: nullable({ type: "integer", minimum: 0 }),
+        }),
+      ),
+      excluded: { type: "boolean", description: "Whether the account is excluded from the headline figures." },
+    }),
+    Network: object({
+      chainId: { type: "integer" },
+      registry: ref("Address"),
+      rebalanceLog: ref("Address"),
+      scan: object({
+        fromBlock: ref("UintString"),
+        scannedToBlock: nullable(ref("UintString")),
+        targetBlock: ref("UintString"),
+        complete: { type: "boolean", description: "False while blocks up to targetBlock remain to be scanned." },
+        usageComplete: { type: "boolean", description: "False while scanned attestations remain unclassified." },
+      }),
+      thresholds: object({
+        minimumNotionalUsdE8: ref("UintString"),
+        tierBWindowSeconds: count,
+        toleranceMarginBps: count,
+      }),
+      metrics: ref("NetworkMetrics"),
+      attestations: { type: "array", items: ref("Attestation"), description: "The 50 most recent, newest first." },
+      exclusions: { type: "array", items: object({ address: ref("Address"), label: text("Who and why.") }) },
+      definitions: {
+        type: "array",
+        items: object({
+          id: text("Metric id."),
+          title: text("Title."),
+          definition: text("Exact rule."),
+          source: text("Chain data used."),
+        }),
+      },
+    }),
+  };
+}
+
 const schemas: Record<string, Schema> = {
   Address: {
     type: "string",
@@ -350,6 +456,7 @@ const schemas: Record<string, Schema> = {
     nextOffset: nullable({ ...count, description: "Offset of the next page. Null on the last page." }),
   }),
   CompositionMeta: object({ ...snapshotMetaProperties, registry: ref("RegistryRef") }),
+  ...networkSchemas(),
   VerificationSummary: object({
     conformant: { type: "boolean", description: "True only if checks C1 to C5 all pass." },
     failedCheck: nullable(
@@ -915,6 +1022,7 @@ export const openApiDocument: OpenApiDocument = {
   tags: [
     { name: "Assets", description: "Tokenized stocks listed on Base mainnet." },
     { name: "Indexes", description: "Published index methodologies, their versions and their verification." },
+    { name: "Network", description: "Registry and usage metrics computed from chain events only." },
     { name: "Portfolio", description: "An address compared with a published index. Read-only, nothing stored." },
     { name: "Meta", description: "The API itself." },
   ],
@@ -1063,6 +1171,21 @@ export const openApiDocument: OpenApiDocument = {
             `${registryNotDeployed} version_not_conformant: the version fails verification, so no composition is computed from it.`,
             ref("Error"),
           ),
+          ...failures,
+        },
+      },
+    },
+    "/network": {
+      get: {
+        operationId: "getNetworkMetrics",
+        summary: "Network metrics from chain events",
+        description:
+          "Activity of the registry and the rebalance log on the configured chain, computed from logs only: published indexes, versions, creators and deprecations; rebalance attestations by tier with distinct accounts; the reference value moved in tier A transactions. Every metric carries its definition id, chain, block range and computation time. Excluded accounts are listed and counted apart. The app's own analytics, connected wallets and page views are never counted.",
+        tags: ["Network"],
+        responses: {
+          "200": success("The metrics.", ref("Network"), ref("RegistryMeta")),
+          "400": invalidRequest,
+          "409": json(registryNotDeployed, ref("Error")),
           ...failures,
         },
       },

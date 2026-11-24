@@ -240,6 +240,8 @@ function callFor(client: EquityOSClient, example: RecordedExample): Promise<unkn
         mode: String(body.mode),
       });
     }
+    case "getNetworkMetrics":
+      return client.getNetworkMetrics();
     case "getStatus":
       return client.getStatus();
     default:

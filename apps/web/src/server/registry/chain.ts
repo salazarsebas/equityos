@@ -17,7 +17,14 @@ const MULTICALL_BATCH_BYTES = 16_384;
 /** The read-only client surface the registry reader needs. */
 export type RegistryClient = Pick<
   PublicClient,
-  "getBlock" | "getBlockNumber" | "getChainId" | "getCode" | "getLogs" | "multicall" | "readContract"
+  | "getBlock"
+  | "getBlockNumber"
+  | "getChainId"
+  | "getCode"
+  | "getLogs"
+  | "getTransactionReceipt"
+  | "multicall"
+  | "readContract"
 >;
 
 /** Creates a read-only client of the endpoint. */
