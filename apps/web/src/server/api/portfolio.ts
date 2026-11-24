@@ -16,6 +16,7 @@ import {
 } from "@equityos/core";
 import type { Address } from "viem";
 import type { Cached } from "@/server/cache";
+import { combinedMode } from "@/server/data-mode";
 import {
   type AssetMarketData,
   BALANCE_CACHE,
@@ -204,18 +205,21 @@ export function tokenLabel(comparison: Comparison, token: Address) {
 
 /**
  * The sources of a comparison. The index comes from the registry chain; balances and reference prices come
- * from Base mainnet, and the two blocks are given apart.
+ * from Base mainnet, and the two blocks are given apart. `mode` is `replay` when the registry or the market
+ * data is replayed.
  */
 export function comparisonMeta(options: PortfolioApiOptions, { snapshot, balances }: Comparison) {
   const { blockNumber, blockTimestamp } = balances.value;
+  const { registry } = registryMeta(options);
+  const marketMode = options.marketMode();
   return {
-    ...snapshotMeta(snapshot),
-    registry: registryMeta(options).registry,
+    ...snapshotMeta(snapshot, combinedMode(marketMode, registry.mode)),
+    registry,
     balances: {
       chainId: BASE_CHAIN_ID,
       blockNumber: blockNumber.toString(),
       blockTimestamp: isoTimestamp(blockTimestamp),
-      mode: options.marketMode(),
+      mode: marketMode,
     },
   };
 }

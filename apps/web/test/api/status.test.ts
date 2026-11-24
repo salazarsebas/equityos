@@ -32,7 +32,7 @@ describe("GET /api/v1/status", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(await body(response)).toEqual({
       data: {
-        apiVersion: "1.3.0",
+        apiVersion: "1.4.0",
         chainId: 8453,
         marketPhase: "closed",
         executionAvailable: false,
@@ -71,7 +71,7 @@ describe("GET /api/v1/status", () => {
           error: null,
         },
       },
-      meta: { asOf: "2026-11-21T19:11:04Z" },
+      meta: { mode: "live", asOf: "2026-11-21T19:11:04Z" },
     });
   });
 
@@ -97,7 +97,7 @@ describe("GET /api/v1/status", () => {
     const response = await handler(service)(get("/api/v1/status"), undefined);
     const { data, meta } = await body(response);
     expect(response.status).toBe(200);
-    expect(meta).toEqual({ asOf: "2026-11-21T19:10:55Z" });
+    expect(meta).toEqual({ mode: "live", asOf: "2026-11-21T19:10:55Z" });
     expect(data).toMatchObject({
       marketPhase: "closed",
       marketData: {
@@ -127,10 +127,30 @@ describe("GET /api/v1/status", () => {
 
   test("says so when the server replays a recording", async () => {
     const response = await handler(fixtureService(), "replay", recordedRegistry())(get("/api/v1/status"), undefined);
-    expect((await body(response)).data).toMatchObject({
-      marketData: { mode: "replay" },
-      registry: { chainId: 31_337, mode: "replay", deployed: true, notDeployedReason: null, indexCount: 5 },
+    expect(await body(response)).toMatchObject({
+      data: {
+        marketData: { mode: "replay" },
+        registry: { chainId: 31_337, mode: "replay", deployed: true, notDeployedReason: null, indexCount: 5 },
+      },
+      meta: { mode: "replay" },
     });
+  });
+
+  test("meta.mode is replay as soon as either source is replayed", async () => {
+    const modes = async (market: "live" | "replay", registry: "live" | "replay") => {
+      const service = fixtureService();
+      const response = await statusHandler({
+        marketData: service.marketData,
+        mode: () => market,
+        registry: () => baseRegistry,
+        registryMode: () => registry,
+        now: () => service.clock.now,
+      })(get("/api/v1/status"), undefined);
+      return (await body(response)).meta?.mode;
+    };
+    expect(await modes("live", "live")).toBe("live");
+    expect(await modes("replay", "live")).toBe("replay");
+    expect(await modes("live", "replay")).toBe("replay");
   });
 
   test("tells a registry without code from one that cannot be read, and still answers 200", async () => {

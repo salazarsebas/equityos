@@ -1,12 +1,14 @@
 import "server-only";
 import { type MarketPhase, marketPhaseAt } from "@equityos/core";
 import type { Address } from "viem";
+import type { DataMode } from "@/server/data-mode";
 import {
   type AssetMarketData,
   type IneligibilityCode,
   listAssets,
   type MarketData,
   type MarketDataErrorCode,
+  type MarketDataMode,
   type MarketSnapshot,
   ONCHAIN_CACHE,
   type PricePoint,
@@ -46,6 +48,11 @@ export interface ApiDatasets {
 }
 
 export interface ApiSnapshotMeta {
+  /**
+   * `replay` when any data of the response is a replayed recording, for the browser tests: then it is not
+   * current data, and no reference price is `live` or `delayed`.
+   */
+  readonly mode: DataMode;
   /** Clock time the staleness classes were computed for. */
   readonly asOf: string;
   /** Phase of the US equity market at `asOf`. `unknown` outside the covered calendar. */
@@ -187,8 +194,12 @@ export function toApiDatasets({ assetList, onchain, observedAt }: MarketSnapshot
   };
 }
 
-export function snapshotMeta(snapshot: MarketSnapshot): ApiSnapshotMeta {
+/**
+ * @param mode the mode of the whole response: `replay` when the snapshot or any other source of it is replayed.
+ */
+export function snapshotMeta(snapshot: MarketSnapshot, mode: DataMode): ApiSnapshotMeta {
   return {
+    mode,
     asOf: isoTimestamp(snapshot.observedAt),
     marketPhase: marketPhaseAt(snapshot.observedAt),
     referencePriceSource: "chainlink",
@@ -205,19 +216,24 @@ export function snapshotCache({ assetList, onchain, observedAt }: MarketSnapshot
   return publicCache(ONCHAIN_CACHE.ttlSeconds - (observedAt - onchain.fetchedAt));
 }
 
+export interface AssetApiOptions {
+  readonly marketData: () => MarketData;
+  readonly mode: () => MarketDataMode;
+}
+
 /** `GET /api/v1/assets`: every listed token, or only the eligible or the ineligible ones. */
-export function assetsHandler(marketData: () => MarketData) {
+export function assetsHandler({ marketData, mode }: AssetApiOptions) {
   return route(async (request: Request) => {
     const eligible = booleanParameter(parseQuery(request, ["eligible"]), "eligible");
     const snapshot = await marketData().getSnapshot();
     const data = listAssets(snapshot, eligible).map(toApiAsset);
-    const meta = { ...snapshotMeta(snapshot), count: data.length, total: snapshot.assets.size };
+    const meta = { ...snapshotMeta(snapshot, mode()), count: data.length, total: snapshot.assets.size };
     return ok(data, meta, snapshotCache(snapshot));
   });
 }
 
 /** `GET /api/v1/assets/{address}`: one listed token. */
-export function assetHandler(marketData: () => MarketData) {
+export function assetHandler({ marketData, mode }: AssetApiOptions) {
   return route(async (request: Request, context: { params: Promise<{ address: string }> }) => {
     parseQuery(request, []);
     const address = parseAddress((await context.params).address);
@@ -226,6 +242,6 @@ export function assetHandler(marketData: () => MarketData) {
     if (entry === undefined) {
       throw new ApiError(404, "asset_not_found", "No listed asset has this token address.", { address });
     }
-    return ok(toApiAsset(entry), snapshotMeta(snapshot), snapshotCache(snapshot));
+    return ok(toApiAsset(entry), snapshotMeta(snapshot, mode()), snapshotCache(snapshot));
   });
 }

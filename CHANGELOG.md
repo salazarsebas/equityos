@@ -81,6 +81,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent. Rate limited per address
   and per instance, with a 20 second deadline. The calldata verification is a browser-safe module.
 - `@equityos/sdk`: `executionPlan` for the new endpoint.
+- Public API v1.4.0: every successful response carries `meta.mode`, `live` or `replay`, which is `replay` as soon
+  as one source of the response is a replayed recording. The SDK decodes it.
 
 ### Changed
 
@@ -88,3 +90,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The home page states that indexes can be browsed and verified, and what a network without the registry shows.
 - IBM Plex Sans and IBM Plex Mono load from pinned Fontsource packages with `next/font/local`, so the build
   makes no network request.
+
+### Fixed
+
+- A deployment can no longer serve a replayed recording: `MARKET_REPLAY_DIR` and `REGISTRY_REPLAY_DIR` are
+  refused on Vercel (`VERCEL_ENV` set) and in a production build without the test-only flag
+  `EQUITYOS_REPLAY_FOR_TESTS=1`, with a typed configuration error at startup and on every request. A replayed
+  reference price is never `live` or `delayed`: it is reported as `last_close`.

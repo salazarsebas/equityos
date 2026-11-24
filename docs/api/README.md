@@ -36,12 +36,28 @@ https://<deployment>/api/v1
 A successful response is always an object with `data` and `meta`:
 
 ```json
-{ "data": {}, "meta": { "asOf": "2026-11-21T23:30:42Z" } }
+{ "data": {}, "meta": { "mode": "live", "asOf": "2026-11-21T23:30:42Z" } }
 ```
 
 - `data` is the resource, or an array of resources.
-- `meta` says what the data was built from: the time it describes (`asOf`), the market phase, the source of
-  reference prices and, per cached dataset, when it was loaded and whether it is served past its TTL.
+- `meta` says what the data was built from: whether it is current (`mode`), the time it describes (`asOf`), the
+  market phase, the source of reference prices and, per cached dataset, when it was loaded and whether it is
+  served past its TTL.
+
+### Data mode
+
+Every successful response carries `meta.mode`:
+
+- `live`: every source of the response (the asset list, Base mainnet, the index registry) is read as it is now.
+- `replay`: at least one source is a recording of a past block, served by a test build. The data is real data of
+  that past block, never current data, and no reference price of a replayed snapshot is `live` or `delayed`: a
+  usable recorded price is always `last_close`.
+
+`meta.registry.mode`, `meta.balances.mode` and the modes of `GET /api/v1/status` say which source is replayed.
+A deployment never serves a replay: a server on Vercel (`VERCEL_ENV` set), or a production build without the
+test flag `EQUITYOS_REPLAY_FOR_TESTS=1`, refuses to start when `MARKET_REPLAY_DIR` or `REGISTRY_REPLAY_DIR` is
+set, and every request then answers `500 service_misconfigured`. See
+[Market data](../architecture/market-data.md#replay-of-a-recording).
 
 A failed response is always an object with `error`:
 
@@ -150,9 +166,11 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.3.0`, which
-  added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.4.0`, which
+  added `meta.mode` to every successful response. `1.3.0` added the execution plan. `1.2.0` added the portfolio
+  endpoints. `1.1.0` added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
+- The examples in these pages are recorded responses. An example recorded before `1.4.0` has no `meta.mode`.
 
 ## The OpenAPI document is the contract
 

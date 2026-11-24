@@ -18,7 +18,7 @@ const FRIDAY_CLOSE = Date.parse("2026-11-21T01:00:00Z") / 1000;
 const SATURDAY = 1_795_288_255;
 
 function price(now: number, overrides: Partial<Parameters<typeof buildReferencePrice>[0]> = {}) {
-  return buildReferencePrice({ feed, read, now, servedStale: false, ...overrides });
+  return buildReferencePrice({ feed, read, now, servedStale: false, recorded: false, ...overrides });
 }
 
 function withRound(round: Partial<typeof ROUND>): FeedRead {
@@ -72,6 +72,15 @@ describe("buildReferencePrice", () => {
     expect(price(UPDATED_AT + 60, { servedStale: true }).status).toBe("delayed");
     expect(price(UPDATED_AT + 3_600, { servedStale: true }).status).toBe("delayed");
     expect(price(SATURDAY, { servedStale: true }).status).toBe("last_close");
+  });
+
+  test("a replayed recording is never live or delayed: it is a recorded value, reported as last_close", () => {
+    expect(price(UPDATED_AT + 60).status).toBe("live");
+    expect(price(UPDATED_AT + 60, { recorded: true })).toMatchObject({ status: "last_close", priceE8: ROUND.answer });
+    expect(price(UPDATED_AT + 3_600, { recorded: true }).status).toBe("last_close");
+    expect(price(UPDATED_AT + 60, { recorded: true, servedStale: true }).status).toBe("last_close");
+    // An unusable round stays unavailable: the cap never makes a price usable.
+    expect(price(UPDATED_AT + 60, { recorded: true, read: withRound({ answer: 0n }) }).status).toBe("unavailable");
   });
 
   test("a failed or absent feed read is unavailable, with nothing substituted", () => {

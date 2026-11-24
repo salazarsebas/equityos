@@ -193,13 +193,17 @@ test.describe("assets page on the recorded block", () => {
   }) => {
     const response = await request.get("/api/v1/assets?eligible=true");
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.3.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.4.0");
     expect(response.headers()["access-control-allow-origin"]).toBe("*");
     const { data, meta } = await response.json();
     expect(data).toHaveLength(13);
     expect(meta.datasets.onchain.blockNumber).toBe("60489401");
+    // The replay says so in every response, and no recorded price is presented as live or delayed.
+    expect(meta.mode).toBe("replay");
+    for (const asset of data) expect(["last_close", "unavailable"]).toContain(asset.referencePrice.status);
     const status = await (await request.get("/api/v1/status")).json();
     expect(status.data.marketData).toMatchObject({ mode: "replay", available: true });
+    expect(status.meta.mode).toBe("replay");
     expect(Object.keys((await (await request.get("/api/v1/openapi.json")).json()).paths)).toContain("/assets");
 
     await page.goto("/");

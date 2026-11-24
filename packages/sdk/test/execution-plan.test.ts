@@ -28,6 +28,7 @@ describe("executionPlan", () => {
     expect(data.calls?.[0]?.kind).toBe("approve");
     expect(typeof data.totals?.maxUsdcForBuys).toBe("bigint");
     expect(meta.balances.chainId).toBe(8453);
+    expect(meta.mode).toBe("replay");
   });
 
   test("a deployment that serves replayed data answers execution_unavailable", async () => {

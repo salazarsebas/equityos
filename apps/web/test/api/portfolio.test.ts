@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   CALCULATION_ISSUE_CODES,
   PLAN_STATEMENT,
+  type PortfolioApiOptions,
   portfolioHandler,
   portfolioPlanHandler,
 } from "../../src/server/api/portfolio";
@@ -21,7 +22,7 @@ const ONLY_USDC = "0x0000000000000000000000000000000000001004";
 const META = "0xb2000000000000000000008bc8786b856e61707c";
 const MSFT = "0xb200000000000000000000ab99cfa739e253872b";
 
-function options(registry: RegistryReader = recordedRegistry(), service = fixtureService()) {
+function options(registry: RegistryReader = recordedRegistry(), service = fixtureService()): PortfolioApiOptions {
   return {
     registry: () => registry,
     mode: () => "replay" as const,
@@ -93,6 +94,7 @@ describe("GET /api/v1/portfolio", () => {
       new Set(["market_closed:warning"]),
     );
     expect(meta).toMatchObject({
+      mode: "replay",
       registry: { chainId: 31_337, mode: "replay" },
       balances: { chainId: 8453, blockNumber: "60489401", blockTimestamp: "2026-11-21T19:10:55Z", mode: "replay" },
       marketPhase: "closed",
@@ -189,6 +191,25 @@ describe("GET /api/v1/portfolio", () => {
       expect(error).toMatchObject({ code: "upstream_unavailable", details: { source: "base_rpc" } });
     } finally {
       log.mockRestore();
+    }
+  });
+});
+
+describe("meta.mode of the portfolio and the plan", () => {
+  test("is replay as soon as the registry or the market data is replayed, live only when neither is", async () => {
+    const query = `address=${ABOVE}&index=${INDEX}`;
+    for (const [registry, market, expected] of [
+      ["live", "live", "live"],
+      ["replay", "live", "replay"],
+      ["live", "replay", "replay"],
+    ] as const) {
+      const opts = { ...options(), mode: () => registry, marketMode: () => market };
+      expect((await portfolio(query, opts)).meta).toMatchObject({ mode: expected, balances: { mode: market } });
+      const response = await portfolioPlanHandler(opts)(
+        get(`/api/v1/portfolio/plan?${query}&mode=rebalance`),
+        undefined,
+      );
+      expect((await body(response)).meta).toMatchObject({ mode: expected, registry: { mode: registry } });
     }
   });
 });

@@ -396,7 +396,7 @@ test.describe("states of the registry", () => {
   test("the API of the main server serves the recorded registry and says it is a replay", async ({ request }) => {
     const list = await request.get("/api/v1/indexes?limit=2");
     expect(list.status()).toBe(200);
-    expect(list.headers()["x-equityos-api-version"]).toBe("1.3.0");
+    expect(list.headers()["x-equityos-api-version"]).toBe("1.4.0");
     const { data, meta } = await list.json();
     expect(data).toHaveLength(2);
     expect(meta).toMatchObject({

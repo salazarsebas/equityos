@@ -44,10 +44,14 @@ export function fixtureServer(registry: FixtureRegistry = "recorded"): (request:
   };
   const context = <T>(params: T) => ({ params: Promise.resolve(params) });
   const routes: readonly (readonly [RegExp, Handler])[] = [
-    [/^\/assets$/, (request) => assetsHandler(service.marketData)(request, undefined)],
+    [
+      /^\/assets$/,
+      (request) => assetsHandler({ marketData: service.marketData, mode: () => "replay" })(request, undefined),
+    ],
     [
       /^\/assets\/([^/]+)$/,
-      (request, [address = ""]) => assetHandler(service.marketData)(request, context({ address })),
+      (request, [address = ""]) =>
+        assetHandler({ marketData: service.marketData, mode: () => "replay" })(request, context({ address })),
     ],
     [/^\/indexes$/, (request) => indexesHandler(options)(request, undefined)],
     [/^\/indexes\/([^/]+)$/, (request, [identifier = ""]) => indexHandler(options)(request, context({ identifier }))],
