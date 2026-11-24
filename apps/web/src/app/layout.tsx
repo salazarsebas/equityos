@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import { Footer } from "@/components/shell/footer";
 import { Header } from "@/components/shell/header";
@@ -7,20 +7,40 @@ import { site } from "@/lib/site";
 import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
-// next/font downloads the files at build time and serves them from this origin: no request to a font CDN.
-const plexSans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+// The font files come from exact-pinned Fontsource packages (SIL Open Font License 1.1) in node_modules: the build
+// makes no network request, and next/font serves the files from this origin. Latin subset only. IBM Plex Sans is
+// the variable font, one file for the three weights in use. The metric-adjusted fallback faces are declared in
+// globals.css with fixed values, so adjustFontFallback is off.
+const plexSans = localFont({
+  src: [
+    {
+      path: "../../node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2",
+      weight: "400 600",
+      style: "normal",
+    },
+  ],
   variable: "--font-plex-sans",
   display: "swap",
+  adjustFontFallback: false,
 });
 
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const plexMono = localFont({
+  src: [
+    {
+      path: "../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2",
+      weight: "500",
+      style: "normal",
+    },
+  ],
   variable: "--font-plex-mono",
   display: "swap",
   preload: false,
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
