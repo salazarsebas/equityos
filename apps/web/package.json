@@ -11,6 +11,7 @@
     "test": "bun test",
     "test:e2e": "playwright test",
     "seed:local": "bun --conditions=react-server scripts/seed-local.ts",
+    "seed:public": "bun --conditions=react-server scripts/seed-public.ts",
     "record:registry": "bun --conditions=react-server scripts/record-registry.ts",
     "record:balances": "bun --conditions=react-server scripts/record-balances.ts",
     "record:api-examples": "bun --conditions=react-server scripts/record-api-examples.ts",
