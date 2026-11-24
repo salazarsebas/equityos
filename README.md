@@ -30,7 +30,9 @@ What exists today:
   explorer and index profile pages that verify each published version against the registry, and the public API
   v1 for assets and indexes. On a network without the registry the index pages and the API say so. See
   [docs/api/README.md](docs/api/README.md) and [docs/product/index-profile.md](docs/product/index-profile.md).
-- `@equityos/sdk`: a package skeleton that exports its version and nothing else.
+- `@equityos/sdk`: a typed client of the public API v1 with amounts as `bigint`, and `verifyIndexVersion`, which
+  reads a published version from the registry contract and runs the verification checks without calling the
+  API. Built and tested in this repository, not published to a registry yet. See [docs/api/sdk.md](docs/api/sdk.md).
 
 The Index Studio drafts, validates and exports an index, and publishes it where the registry is deployed, which
 today is a local chain only. See [docs/product/index-studio.md](docs/product/index-studio.md).

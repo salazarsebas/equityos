@@ -63,6 +63,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `@equityos/core`, the commands that verify a published version, the asset universe and registry state with
   their sources and times, the portfolio comparison, the keyless API and the current limitations. Rendered on
   request. Open Graph image at `/opengraph-image`.
+- `@equityos/sdk`: a typed client of every endpoint of the public API v1 with runtime decoding, amounts as
+  `bigint` and typed errors including `registry_not_deployed`; `verifyIndexVersion`, which reads a version from
+  the registry contract and runs checks C1 to C5 without calling the API; and the methodology functions of
+  `@equityos/core` from the same entry. A test keeps its types equal to the OpenAPI document.
+- Recorded example responses of the API in `apps/web/src/server/api/examples.json`, regenerated with
+  `record:api-examples` and checked against the handlers.
 
 ### Changed
 
