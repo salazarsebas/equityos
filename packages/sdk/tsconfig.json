@@ -2,8 +2,13 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["bun"],
+    "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@equityos/contracts-abi": ["../contracts-abi/src/index.ts"],
+      "@equityos/core": ["../core/src/index.ts"]
+    }
   },
   "include": ["src", "test"]
 }
