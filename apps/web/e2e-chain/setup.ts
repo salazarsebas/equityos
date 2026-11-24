@@ -5,12 +5,15 @@ import { createPublicClient, http } from "viem";
 import { anvil } from "viem/chains";
 import { TEST_ACCOUNT } from "../e2e/wallet-support";
 import { ANVIL_PORT, ANVIL_RPC_URL } from "../playwright.chain.config";
+import { installExecutionMocks } from "./execution-chain";
 
 const contracts = fileURLToPath(new URL("../../../contracts", import.meta.url));
+const web = fileURLToPath(new URL("..", import.meta.url));
 
 /**
- * Starts a local Anvil node and deploys the contracts to it with the deployment script, from the node's first
- * unlocked development account. No key is read or created. Returns the teardown that stops the node.
+ * Starts a local Anvil node, deploys the contracts to it with the deployment script, seeds the example indexes
+ * and installs the execution mocks, from the node's first unlocked development account. No key is read or
+ * created. Returns the teardown that stops the node.
  */
 export default async function setup(): Promise<() => void> {
   const node = spawn("anvil", ["--port", String(ANVIL_PORT), "--silent"], { stdio: "ignore" });
@@ -31,6 +34,14 @@ export default async function setup(): Promise<() => void> {
     if (deploy.status !== 0) throw new Error("the deployment script failed");
     const code = await client.getCode({ address: DEPLOYMENTS[LOCAL_CHAIN_ID].registry });
     if (code === undefined || code === "0x") throw new Error("the registry was not deployed");
+    // The example indexes, as the recorded registry of the other suites holds them, then the execution mocks.
+    const seed = spawnSync("bun", ["--conditions=react-server", "scripts/seed-local.ts"], {
+      cwd: web,
+      env: { ...process.env, EQUITYOS_RPC_URL: ANVIL_RPC_URL },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    if (seed.status !== 0) throw new Error("the seed failed");
+    await installExecutionMocks(ANVIL_RPC_URL);
     return stop;
   } catch (error) {
     stop();
