@@ -115,6 +115,7 @@ async function loadComparisonFromQuery(options: PortfolioApiOptions, query: URLS
  * @throws {ApiError} for an unknown index or version, a version that is not conformant, or a constituent
  *   that is not in the asset list.
  * @throws {UpstreamError} if the balances could not be read now: an older read is never used in their place.
+ * @throws {MalformedResponseError} if the balance read has no answer for USDC or for a constituent.
  */
 export async function loadComparison(
   options: PortfolioApiOptions,
@@ -150,6 +151,14 @@ export async function loadComparison(
   const quoteBalance = balances.value.balances.get(USDC_ADDRESS);
   if (quoteBalance === undefined || quoteBalance === null) {
     throw new MalformedResponseError("base_rpc", `balanceOf(${address}) of USDC`, "did not answer a uint256");
+  }
+  // The balance read and the snapshot each read the asset list, which can change between the two after a refresh.
+  // A constituent the balance read does not hold has an unknown balance, never a zero one: valuing it at zero would
+  // make a plan propose buying a position the address may already hold.
+  for (const { token } of constituents) {
+    if (!balances.value.balances.has(token)) {
+      throw new MalformedResponseError("base_rpc", `balanceOf(${address}) of ${token}`, "was not part of the read");
+    }
   }
   const holdings: Holding[] = [];
   for (const [token, balance] of balances.value.balances) {

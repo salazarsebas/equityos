@@ -100,3 +100,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Balances are never served stale: a cache with a stale window of zero no longer serves a value that is exactly
   at its TTL when its reload fails, and the portfolio endpoints refuse a balance read served stale with `503`. Any
   response built from an input served stale is `no-store`, on every caching route.
+- A constituent missing from the balance read (the asset list changed between the snapshot and the balance read)
+  answers `502 upstream_malformed` instead of being valued at zero, so a plan can no longer propose buying a
+  position whose balance is unknown.

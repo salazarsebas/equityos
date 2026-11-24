@@ -48,8 +48,11 @@ passed to the plan as tokens to exit: no token outside the compared version is e
 | 409    | `registry_not_deployed`  | The registry has no code on the configured chain                       |
 | 409    | `version_not_conformant` | The version fails verification, so it has no target weights to compare |
 | 409    | `ineligible_token`       | A constituent is not in the asset list, so it has no decimals or price |
-| 502    | `upstream_malformed`     | The balance of USDC or of a constituent could not be decoded           |
+| 502    | `upstream_malformed`     | The balance of USDC or of a constituent is not decoded or not read     |
 | 503    | `upstream_unavailable`   | Base mainnet did not answer. The balance read is never served stale    |
+
+The balance read and the market snapshot each read the asset list, which can change between them. A constituent
+the balance read does not cover answers `upstream_malformed`: its balance is unknown, and it is never taken as zero.
 
 A missing or unusable reference price is not an error: the valuation reports it as a blocker (see below).
 

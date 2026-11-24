@@ -7,6 +7,7 @@ import {
   portfolioHandler,
   portfolioPlanHandler,
 } from "../../src/server/api/portfolio";
+import type { MarketData } from "../../src/server/market";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
@@ -189,6 +190,36 @@ describe("GET /api/v1/portfolio", () => {
       const { response, error } = await portfolio(`address=0x${"9".repeat(40)}&index=${INDEX}`);
       expect(response.status).toBe(503);
       expect(error).toMatchObject({ code: "upstream_unavailable", details: { source: "base_rpc" } });
+    } finally {
+      log.mockRestore();
+    }
+  });
+});
+
+describe("a balance read that does not cover the snapshot", () => {
+  test("a constituent missing from the balance read answers 502, never a zero balance or a plan to buy it", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const inner = fixtureService().marketData();
+      // The balance read was made for an older asset list that did not hold NVDAc yet.
+      const partial: MarketData = {
+        getSnapshot: () => inner.getSnapshot(),
+        getBalances: async (account) => {
+          const read = await inner.getBalances(account);
+          const balances = new Map(read.value.balances);
+          balances.delete(TOKENS.NVDA);
+          return { ...read, value: { ...read.value, balances } };
+        },
+      };
+      const opts = { ...options(), marketData: () => partial };
+      const compared = await portfolio(`address=${ABOVE}&index=${INDEX}`, opts);
+      expect(compared.response.status).toBe(502);
+      expect(compared.error).toMatchObject({ code: "upstream_malformed", details: { source: "base_rpc" } });
+      const planned = await plan(`address=${ABOVE}&index=${INDEX}&mode=rebalance`, opts);
+      expect(planned.response.status).toBe(502);
+      expect(planned.error?.code).toBe("upstream_malformed");
+      // The same read with NVDAc present is a valid comparison.
+      expect((await portfolio(`address=${ABOVE}&index=${INDEX}`)).response.status).toBe(200);
     } finally {
       log.mockRestore();
     }
