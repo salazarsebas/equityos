@@ -282,7 +282,8 @@ and the API reports `mode: "replay"` in `meta`, in `meta.registry` and in `GET /
 The variable is refused where it could reach people, with the rule of the market data replay
 ([Market data](./market-data.md#replay-of-a-recording)): on a Vercel deployment, and in a production build
 without `EQUITYOS_REPLAY_FOR_TESTS=1`, `registryMode()`, `getRegistryReplay()` and `getRegistryReader()` throw a
-`RegistryConfigurationError` that names `REGISTRY_REPLAY_DIR`, and the server does not start.
+`RegistryConfigurationError` that names `REGISTRY_REPLAY_DIR`; the startup hook logs it and every request answers
+500.
 
 ## Tests
 

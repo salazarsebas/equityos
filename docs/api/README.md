@@ -56,8 +56,8 @@ Every successful response carries `meta.mode`:
 
 `meta.registry.mode`, `meta.balances.mode` and the modes of `GET /api/v1/status` say which source is replayed.
 A deployment never serves a replay: a server on Vercel (`VERCEL_ENV` set), or a production build without the
-test flag `EQUITYOS_REPLAY_FOR_TESTS=1`, refuses to start when `MARKET_REPLAY_DIR` or `REGISTRY_REPLAY_DIR` is
-set, and every request then answers `500 service_misconfigured`. See
+test flag `EQUITYOS_REPLAY_FOR_TESTS=1`, fails its startup hook when `MARKET_REPLAY_DIR` or
+`REGISTRY_REPLAY_DIR` is set, and every request then answers 500 instead of data. See
 [Market data](../architecture/market-data.md#replay-of-a-recording).
 
 A failed response is always an object with `error`:

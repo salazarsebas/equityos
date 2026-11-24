@@ -78,7 +78,7 @@ describe("the process-wide sources on a deployment", () => {
     expect(() => getRegistryReader()).toThrow(RegistryConfigurationError);
   });
 
-  test("the server refuses to start", async () => {
+  test("the startup hook fails, which makes the server answer every request with a 500", async () => {
     environment({ ...deployment, NEXT_RUNTIME: "nodejs" });
     await expect(register()).rejects.toThrow(MissingConfigurationError);
     environment({ ...deployment, NEXT_RUNTIME: "nodejs", MARKET_REPLAY_DIR: "" });
