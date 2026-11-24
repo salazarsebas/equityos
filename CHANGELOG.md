@@ -51,6 +51,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `GET /api/v1/portfolio/plan` returns the reference-price rebalance plan of `@equityos/core`. Nothing is stored.
 - Balance read of the market data layer (`balanceOf` by multicall), a recorded Base mainnet fixture, a recorder,
   and constructed balances served by the market data replay for tests.
+- Portfolio page at `/portfolio`: any address compared with a published index version, with a drift table, the
+  holdings outside the index and a reference-price plan preview in rebalance or buy-only mode. Linked from the
+  index profile and the primary navigation.
 
 ### Changed
 

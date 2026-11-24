@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const routes = ["/", "/assets", "/assets?view=all", "/wallet", "/dev/components"];
+const routes = ["/", "/assets", "/assets?view=all", "/portfolio", "/wallet", "/dev/components"];
 
 /** Collects console errors and uncaught exceptions for the lifetime of the page. */
 function collectErrors(page: Page): string[] {
@@ -38,6 +38,7 @@ for (const [route, prerendered] of [
   ["/", true],
   ["/dev/components", true],
   ["/assets", false],
+  ["/portfolio", false],
   ["/wallet", false],
 ] as const) {
   test(`${route} is ${prerendered ? "prerendered at build time" : "rendered on request"}`, async ({ request }) => {

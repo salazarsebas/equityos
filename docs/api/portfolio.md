@@ -356,3 +356,7 @@ Both endpoints answer `public, max-age=N`, where `N` is what is left of the shor
 balance read, at most 15 seconds. The URL carries the address and the server keeps one balance entry per address,
 so a cached answer is only ever the answer for that address. When the market data is served stale the answer is
 `no-store`.
+
+## The page
+
+`/portfolio` is the page built on these endpoints. See [Portfolio and drift](../product/portfolio.md).
