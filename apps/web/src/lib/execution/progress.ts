@@ -6,7 +6,8 @@ import type { Hex } from "viem";
 import { TX_IDLE, type TxEvent, type TxState, txReducer } from "@/lib/tx/machine";
 import { runTransaction, type TxDriver, type Verification } from "@/lib/tx/run";
 import type { ReceiptsCheck } from "./receipts";
-import type { ExecutionRefusal, ExecutionRequest, SequentialTransaction } from "./request";
+import type { HistoryResult } from "./history";
+import type { ExecutionRequest, SequentialStop, SequentialTransaction } from "./request";
 
 /** One transaction of the sequential path, or the batch of the atomic path. */
 export type StepState = TxState<ReceiptsCheck>;
@@ -19,14 +20,14 @@ export interface SequentialProgress {
   /** One state per transaction of `request.transactions`, in order. `idle` means not sent. */
   readonly steps: readonly StepState[];
   /** Set when a recheck before a transaction refused to send it: nothing from that one on was sent. */
-  readonly stopped: { readonly before: number; readonly refusal: ExecutionRefusal } | null;
+  readonly stopped: { readonly before: number; readonly refusal: SequentialStop } | null;
   /** The optional attestation, sent separately after every transaction confirmed. */
   readonly attestation: StepState;
 }
 
 export type SequentialAction =
   | { readonly type: "step"; readonly index: number; readonly event: TxEvent<ReceiptsCheck> }
-  | { readonly type: "stopped"; readonly before: number; readonly refusal: ExecutionRefusal }
+  | { readonly type: "stopped"; readonly before: number; readonly refusal: SequentialStop }
   | { readonly type: "attestation"; readonly event: TxEvent<ReceiptsCheck> };
 
 export function sequentialStart(count: number): SequentialProgress {
@@ -88,10 +89,10 @@ export function summarizeSequential(progress: SequentialProgress): SequentialSum
 
 export interface SequentialDependencies<Receipt extends { readonly status: "success" | "reverted" }> {
   /**
-   * Rechecks the plan before each transaction: the expiry by chain time, the account and the network, read at
-   * that moment. Returns the refusal, or `null` to proceed.
+   * Rechecks the plan before each transaction: whether the page is still open, then the expiry by chain time,
+   * the account and the network, read at that moment. Returns why it stops, or `null` to proceed.
    */
-  recheck(index: number): Promise<ExecutionRefusal | null>;
+  recheck(index: number): Promise<SequentialStop | null>;
   /** The driver of one transaction: send it, wait for its receipt and check the receipt. */
   driver(transaction: SequentialTransaction, index: number): TxDriver<Receipt, ReceiptsCheck>;
   dispatch(action: SequentialAction): void;
@@ -138,11 +139,22 @@ export function sentHashes(progress: SequentialProgress): Hex[] {
   return [...progress.steps, progress.attestation].flatMap((step) => ("hash" in step ? [step.hash] : []));
 }
 
+/**
+ * What a final batch status says took effect (EIP-5792 status codes).
+ * - `confirmed`: 2xx and every receipt succeeded.
+ * - `not_included`: 4xx, the batch failed offchain and was not included: nothing took effect.
+ * - `reverted`: 5xx, the batch reverted completely: nothing took effect.
+ * - `partial`: 6xx (partially reverted), or any other final status whose receipts do not all succeed: some calls
+ *   may have taken effect, so the balances are read again before anything is said.
+ */
+export type BatchKind = "confirmed" | "not_included" | "reverted" | "partial";
+
 /** The outcome of an atomic batch, as `waitForCallsStatus` reports it, reduced to what the state machine needs. */
 export interface BatchReceipt {
-  /** `success` only when the wallet reports the batch as succeeded (2xx) and every receipt succeeded. */
+  /** `success` only for a `confirmed` batch. */
   readonly status: "success" | "reverted";
-  /** The wallet's status code (EIP-5792): 2xx succeeded, 4xx failed offchain, 5xx reverted, 6xx partially. */
+  readonly kind: BatchKind;
+  /** The wallet's status code (EIP-5792). */
   readonly statusCode: number;
   readonly receipts: readonly {
     readonly status: "success" | "reverted";
@@ -152,9 +164,17 @@ export interface BatchReceipt {
   }[];
 }
 
+function kindOf(statusCode: number, receipts: BatchReceipt["receipts"]): BatchKind {
+  const allSucceeded = receipts.length > 0 && receipts.every((receipt) => receipt.status === "success");
+  if (statusCode >= 200 && statusCode < 300 && allSucceeded) return "confirmed";
+  if (statusCode >= 400 && statusCode < 500) return "not_included";
+  if (statusCode >= 500 && statusCode < 600) return "reverted";
+  return "partial";
+}
+
 /**
  * Reads a final batch status. Pending, or a status the EIP does not define, is `null`: no outcome yet, which the
- * machine reports as not found in time. A batch is a success only with a 2xx code and every receipt successful.
+ * machine reports as not found in time.
  */
 export function batchOutcome(status: {
   readonly statusCode: number;
@@ -163,7 +183,36 @@ export function batchOutcome(status: {
   const { statusCode } = status;
   const receipts = status.receipts ?? [];
   if (!Number.isInteger(statusCode) || statusCode < 200 || statusCode >= 700) return null;
-  const succeeded =
-    statusCode < 300 && receipts.length > 0 && receipts.every((receipt) => receipt.status === "success");
-  return { status: succeeded ? "success" : "reverted", statusCode, receipts };
+  const kind = kindOf(statusCode, receipts);
+  return { status: kind === "confirmed" ? "success" : "reverted", kind, statusCode, receipts };
+}
+
+/** The result of a settled sequential run, for the history; `null` while it is not settled. */
+export function sequentialResult(progress: SequentialProgress): HistoryResult | null {
+  const summary = summarizeSequential(progress);
+  if (!summary.settled) return null;
+  if (summary.complete) return "complete";
+  if (summary.failed?.state.status === "unverified") return "unverified";
+  if (summary.failed?.state.status === "dropped") return "unknown";
+  return summary.confirmed.length > 0 ? "partial" : "none";
+}
+
+/**
+ * The result of a settled batch, for the history; `null` while it is not settled or when nothing was sent.
+ * Only a batch the wallet reported as not included or reverted is `none`.
+ */
+export function batchResult(state: BatchState, kind: BatchKind | null): HistoryResult | null {
+  switch (state.status) {
+    case "confirmed":
+      return "complete";
+    case "unverified":
+      return "unverified";
+    case "reverted":
+      return kind === "not_included" || kind === "reverted" ? "none" : "partial";
+    case "dropped":
+    case "replaced":
+      return "unknown";
+    default:
+      return null;
+  }
 }

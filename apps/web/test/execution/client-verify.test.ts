@@ -1,8 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { type Address, concat, decodeFunctionData, encodeFunctionData, type Hex, parseAbi } from "viem";
-import { AMZN, buildBlockedPlan, buildReadyPlan, NVDA, TSLA, testSwapCalldata, USDC } from "../../e2e/execution-plans";
+import {
+  AMZN,
+  buildBlockedPlan,
+  buildReadyPlan,
+  chainReadsFor,
+  DIVERSIFIED,
+  NVDA,
+  OPEN_MARKET_TIME,
+  TSLA,
+  testSwapCalldata,
+  USDC,
+} from "../../e2e/execution-plans";
 import { KYBERSWAP_ROUTER, kyberswapRouterAbi } from "../../src/lib/execution/calldata";
+import { adverseDeviationBps, type ChainReads, CLIENT_PRICE_BOUND_BPS } from "../../src/lib/execution/market";
 import { executionNetwork } from "../../src/lib/execution/networks";
 import { type ExecutionPlanView, parseExecutionPlan, PlanShapeError } from "../../src/lib/execution/response";
 import { type PlanVerification, verifyExecutionPlan } from "../../src/lib/execution/verify";
@@ -41,8 +53,18 @@ function rebalanceBody() {
 
 type Body = ReturnType<typeof rebalanceBody>;
 
-function verify(body: unknown, account: Address = ACCOUNT, network = base): PlanVerification {
-  return verifyExecutionPlan(parseExecutionPlan(body), { account, network, constituents: CONSTITUENTS });
+const INDEX = { indexId: DIVERSIFIED.indexId, version: DIVERSIFIED.version };
+
+/** Verifies an answer with what the browser would read for it, unless `market` replaces that. */
+function verify(body: unknown, account: Address = ACCOUNT, network = base, market?: ChainReads): PlanVerification {
+  const plan = parseExecutionPlan(body);
+  return verifyExecutionPlan(plan, {
+    account,
+    network,
+    constituents: CONSTITUENTS,
+    index: INDEX,
+    market: market ?? chainReadsFor(plan),
+  });
 }
 
 function codes(outcome: PlanVerification): string[] {
@@ -70,7 +92,13 @@ describe("the recorded answer of the server", () => {
     const plan = parseExecutionPlan(recorded.body);
     expect(plan.chainId).toBe(8453);
     expect(plan.calls).toHaveLength(6);
-    const outcome = verifyExecutionPlan(plan, { account: RECORDED_ACCOUNT, network: base, constituents: CONSTITUENTS });
+    const outcome = verifyExecutionPlan(plan, {
+      account: RECORDED_ACCOUNT,
+      network: base,
+      constituents: CONSTITUENTS,
+      index: INDEX,
+      market: chainReadsFor(parseExecutionPlan(recorded.body)),
+    });
     if (!outcome.ok) throw new Error(codes(outcome).join(" "));
     expect(outcome.hashMatches).toBe(true);
     expect(outcome.localPlanHash).toBe(plan.planHash ?? "0x");
@@ -84,6 +112,8 @@ describe("the recorded answer of the server", () => {
       account: ACCOUNT,
       network: base,
       constituents: CONSTITUENTS,
+      index: INDEX,
+      market: chainReadsFor(parseExecutionPlan(recorded.body)),
     });
     expect(codes(outcome)).toEqual(["account_mismatch"]);
   });
@@ -392,5 +422,119 @@ describe("the answer is parsed strictly", () => {
     expect(plan.address).toBe(ACCOUNT.toLowerCase() as Address);
     expect(plan.totals?.usdcBalance).toBe(250_500_000n);
     expect(plan.expiresAt).toBe(EXPIRES);
+  });
+});
+
+describe("the browser bounds prices and decimals with its own reads", () => {
+  const plan = () => parseExecutionPlan(rebalanceBody());
+
+  test("a plan whose minimums are within the bound of the feeds read in the browser verifies, with each leg's deviation", () => {
+    const outcome = verify(rebalanceBody());
+    if (!outcome.ok) throw new Error(codes(outcome).join(" "));
+    // Each minimum is the 50 bps slippage under a quote at exactly the feed's price.
+    expect(outcome.market.map(({ adverseBps }) => adverseBps)).toEqual([50n, 51n, 51n]);
+  });
+
+  test("a sale at a price the feed contradicts is refused, whatever the server's quote and minimum say", () => {
+    // The answer quotes 519 USDC for 4 NVDAc; the feed read in the browser says 134 USD a token.
+    const market = chainReadsFor(plan(), { prices: { [NVDA]: 13_400_000_000n } });
+    expect(codes(verify(rebalanceBody(), ACCOUNT, base, market))).toEqual(["price_out_of_bounds:366"]);
+  });
+
+  test("a buy that pays more per token than the bound allows is refused", () => {
+    const market = chainReadsFor(plan(), { prices: { [TSLA]: 37_000_000_000n } });
+    expect(codes(verify(rebalanceBody(), ACCOUNT, base, market))[0]?.startsWith("price_out_of_bounds")).toBe(true);
+  });
+
+  test("the bound is the server's default band plus its default slippage, and is inclusive", () => {
+    expect(CLIENT_PRICE_BOUND_BPS).toBe(200);
+    const sell = {
+      kind: "swap" as const,
+      to: KYBERSWAP_ROUTER,
+      data: "0x" as Hex,
+      value: 0n as const,
+      leg: 0,
+      side: "sell" as const,
+      tokenIn: NVDA,
+      tokenOut: USDC,
+      amountIn: 100_000_000n,
+      minAmountOut: 98_000_000n,
+      quotedAmountOut: 99_000_000n,
+      deadline: 1,
+    };
+    expect(adverseDeviationBps(sell, 8, 10_000_000_000n)).toBe(200n);
+    expect(adverseDeviationBps({ ...sell, minAmountOut: 97_999_999n }, 8, 10_000_000_000n)).toBe(201n);
+    expect(adverseDeviationBps({ ...sell, minAmountOut: 101_000_000n }, 8, 10_000_000_000n)).toBe(-100n);
+  });
+
+  const unusable: [string, () => ChainReads, string][] = [
+    [
+      "a feed that answers another description",
+      () => {
+        const market = chainReadsFor(plan());
+        const feed = market.feeds.get(NVDA);
+        return {
+          ...market,
+          feeds: new Map([
+            ...market.feeds,
+            [NVDA, { ...feed, decimals: 8, description: "Other", round: feed?.round ?? null }],
+          ]),
+        };
+      },
+      "reference_unusable:feed_mismatch",
+    ],
+    [
+      "a feed that could not be read",
+      () => {
+        const market = chainReadsFor(plan());
+        return {
+          ...market,
+          feeds: new Map([...market.feeds, [NVDA, { decimals: null, description: null, round: null }]]),
+        };
+      },
+      "reference_unusable:feed_read_failed",
+    ],
+    [
+      "a feed read while the market is closed",
+      // Saturday, 2027-01-16 15:00 UTC.
+      () => chainReadsFor(plan(), { chainTime: OPEN_MARKET_TIME + 3 * 86_400 }),
+      "reference_unusable:last_close",
+    ],
+    [
+      "a feed silent for more than its heartbeat of trading time",
+      () => {
+        const market = chainReadsFor(plan(), { chainTime: OPEN_MARKET_TIME + 7 * 86_400 });
+        const feed = market.feeds.get(NVDA);
+        if (feed?.round === null || feed === undefined) throw new Error("no feed");
+        const round = { ...feed.round, updatedAt: BigInt(OPEN_MARKET_TIME) };
+        return { ...market, feeds: new Map([...market.feeds, [NVDA, { ...feed, round }]]) };
+      },
+      "reference_unusable:stale_feed",
+    ],
+  ];
+  for (const [name, market, code] of unusable) {
+    test(`${name} leaves the leg without a reference, and the plan is refused`, () => {
+      expect(codes(verify(rebalanceBody(), ACCOUNT, base, market()))).toContain(code);
+    });
+  }
+
+  test("decimals read on the chain that differ from the plan's are refused, for a token and for USDC", () => {
+    expect(codes(verify(rebalanceBody(), ACCOUNT, base, chainReadsFor(plan(), { decimals: { [NVDA]: 18 } })))).toEqual([
+      `decimals_mismatch:${NVDA}`,
+    ]);
+    expect(codes(verify(rebalanceBody(), ACCOUNT, base, chainReadsFor(plan(), { decimals: { [USDC]: 18 } })))).toEqual([
+      `decimals_mismatch:${USDC}`,
+    ]);
+  });
+
+  test("a plan for another index or version than the comparison on the page is refused", () => {
+    const outcome = verifyExecutionPlan(plan(), {
+      account: ACCOUNT,
+      network: base,
+      constituents: CONSTITUENTS,
+      index: { indexId: DIVERSIFIED.indexId, version: 1 },
+      market: chainReadsFor(plan()),
+    });
+    expect(codes(outcome)[0]?.startsWith("index_mismatch")).toBe(true);
   });
 });

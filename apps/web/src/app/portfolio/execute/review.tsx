@@ -1,9 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfig, useConnection } from "wagmi";
-import { getConnection } from "wagmi/actions";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/field";
@@ -20,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Tag } from "@/components/ui/tag";
 import { useWalletCapabilities } from "@/components/wallet/hooks";
-import { formatCount, formatTokenQuantity } from "@/lib/format";
+import { formatCount, formatFixed, formatUsd, toIsoInstant } from "@/lib/format";
 import {
   ATTESTATION_OMISSIONS,
   EXECUTION_STATEMENTS,
@@ -28,12 +27,13 @@ import {
   verificationFailureText,
 } from "@/lib/execution/messages";
 import { type Acknowledgements, buildExecutionRequest, type ExecutionRefusal } from "@/lib/execution/request";
+import { CLIENT_PRICE_BOUND_BPS } from "@/lib/execution/market";
 import type { PlanCheck } from "@/lib/execution/response";
 import { type ExecutionSnapshot, warningKey } from "@/lib/execution/snapshot";
 import type { ApiPortfolio } from "@/lib/portfolio/api";
 import { describeBatching } from "@/lib/wallet/capabilities";
-import { chainOf, readChainTime } from "./chain";
-import { callTitle, type TokenLabels, tokenLabels } from "./labels";
+import { chainOf, readChainTime, readWallet } from "./chain";
+import { callTitle, quantity, type TokenLabels, tokenLabels } from "./labels";
 import { ExecutionProgress } from "./progress-view";
 import { executionInFlight, snapshotSpent, useExecution } from "./use-execution";
 
@@ -41,12 +41,24 @@ function Mono({ children }: { children: ReactNode }) {
   return <span className="font-mono text-sm break-all">{children}</span>;
 }
 
-function usdc(value: bigint): string {
-  return `${formatTokenQuantity(value, 6)} USDC`;
+function amount(value: bigint, token: string, tokens: TokenLabels): string {
+  return `${quantity(value, tokens.decimalsOf(token))} ${tokens.symbolOf(token)}`;
 }
 
-function amount(value: bigint, token: string, tokens: TokenLabels): string {
-  return `${formatTokenQuantity(value, tokens.decimalsOf(token))} ${tokens.symbolOf(token)}`;
+/** The reference the browser read for a swap's leg, and how far the swap's worst price is from it. */
+function PriceBound({ snapshot, leg }: { snapshot: ExecutionSnapshot; leg: number }) {
+  if (!snapshot.verification.ok) return null;
+  const market = snapshot.verification.market.find((entry) => entry.leg === leg);
+  if (market === undefined || market.reference.status === "unavailable" || market.adverseBps === null) return null;
+  const bps = market.adverseBps;
+  const percent = `${formatFixed(bps < 0n ? -bps : bps, 2, 2)}%`;
+  return (
+    <span className="block text-sm text-secondary">
+      Reference {formatUsd(market.reference.priceE8, 8)} USD a token, read in this browser from its feed (
+      {market.reference.status}): the minimum is {percent} {bps > 0n ? "worse" : "better"} than it, within the{" "}
+      {formatFixed(BigInt(CLIENT_PRICE_BOUND_BPS), 2, 2)}% this site allows
+    </span>
+  );
 }
 
 function CallsTable({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens: TokenLabels }) {
@@ -86,6 +98,10 @@ function CallsTable({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens:
                     <span className="block text-sm text-secondary">
                       Quoted {amount(call.quotedAmountOut, call.tokenOut, tokens)}, not guaranteed
                     </span>
+                    <PriceBound snapshot={snapshot} leg={call.leg} />
+                    <span className="block text-sm text-secondary">
+                      Reverts after {toIsoInstant(BigInt(call.deadline))}, the route deadline decoded from its calldata
+                    </span>
                   </>
                 )}
               </TableCell>
@@ -117,9 +133,43 @@ function CallsTable({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens:
   );
 }
 
+/**
+ * Allowances toward the router that already exceed what the plan swaps, as the server read them. The plan does not
+ * approve these tokens again; the existing allowance lets the router pull more than this plan if it were ever
+ * called with other calldata.
+ */
+function AllowancesAbovePlan({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens: TokenLabels }) {
+  const above = snapshot.plan.approvals.filter(
+    ({ required, currentAllowance, amount: planned }) => !required && currentAllowance > planned,
+  );
+  if (above.length === 0) return null;
+  return (
+    <Callout tone="warning" title="Your wallet already allows the router to spend more than this plan swaps.">
+      <ul className="flex flex-col gap-1">
+        {above.map(({ token, spender, currentAllowance, amount: planned }) => (
+          <li key={token}>
+            {tokens.symbolOf(token)}: allowed{" "}
+            <span className="num">
+              {currentAllowance >= 2n ** 255n ? "an unlimited amount" : amount(currentAllowance, token, tokens)}
+            </span>
+            , this plan swaps <span className="num">{amount(planned, token, tokens)}</span>. Spender{" "}
+            <Mono>{spender}</Mono>
+          </li>
+        ))}
+      </ul>
+      <span className="mt-1 block">
+        This plan does not approve these tokens again. The router could pull up to the allowed amount if it were ever
+        called with other calldata. To reduce it, approve a lower amount, or zero, for this spender from your wallet or
+        a token approval tool. Allowances as read by the server when it checked the plan.
+      </span>
+    </Callout>
+  );
+}
+
 function Totals({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens: TokenLabels }) {
   if (!snapshot.verification.ok) return null;
   const { totals } = snapshot.verification;
+  const usdc = (value: bigint) => amount(value, snapshot.network?.usdc ?? "", tokens);
   return (
     <div className="flex flex-col gap-3">
       <dl className="grid gap-x-8 gap-y-1 text-base sm:grid-cols-3">
@@ -152,8 +202,8 @@ function Totals({ snapshot, tokens }: { snapshot: ExecutionSnapshot; tokens: Tok
           {totals.endBalances.map(({ token, before, afterAtMinimum }) => (
             <TableRow key={token}>
               <TableRowHeader className="font-mono text-sm">{tokens.symbolOf(token)}</TableRowHeader>
-              <TableCell numeric>{formatTokenQuantity(before, tokens.decimalsOf(token))}</TableCell>
-              <TableCell numeric>{formatTokenQuantity(afterAtMinimum, tokens.decimalsOf(token))}</TableCell>
+              <TableCell numeric>{quantity(before, tokens.decimalsOf(token))}</TableCell>
+              <TableCell numeric>{quantity(afterAtMinimum, tokens.decimalsOf(token))}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -227,11 +277,11 @@ export function ExecutionReview({
   const config = useConfig();
   const { address, chainId: walletChainId } = useConnection();
   const batching = useWalletCapabilities();
-  const execution = useExecution(snapshot);
+  const tokens = useMemo(() => tokenLabels(snapshot, comparison), [snapshot, comparison]);
+  const execution = useExecution(snapshot, tokens);
   const [acknowledged, setAcknowledged] = useState<ReadonlySet<string>>(new Set());
   const [clickRefusal, setClickRefusal] = useState<ExecutionRefusal | null>(null);
   const { plan, verification } = snapshot;
-  const tokens = tokenLabels(snapshot, comparison);
   const started = execution.state.mode !== "none";
   const chainTime = useChainTime(plan.chainId, plan.status === "ready" && !started);
   const secondsLeft = useSecondsLeft(plan.expiresAt);
@@ -260,12 +310,14 @@ export function ExecutionReview({
   /** Decides again at the click, with the chain time and the connection of that moment, and sends only if allowed. */
   async function sign() {
     setClickRefusal(null);
-    const now = await readChainTime(config, plan.chainId).catch(() => null);
-    const connection = getConnection(config);
+    const [now, wallet] = await Promise.all([
+      readChainTime(config, plan.chainId).catch(() => null),
+      readWallet(config),
+    ]);
     const fresh = buildExecutionRequest(
       snapshot,
-      connection.address ?? null,
-      connection.chainId ?? null,
+      wallet.address,
+      wallet.chainId,
       batching,
       acknowledgements,
       now,
@@ -305,6 +357,10 @@ export function ExecutionReview({
           {plan.index.name} version {plan.index.version}, for <Mono>{plan.address}</Mono> on{" "}
           {chain?.name ?? `chain ${plan.chainId}`}. Nothing is sent until you sign in your wallet.
         </p>
+        <p className="mt-1 text-sm text-secondary">
+          Index id <Mono>{comparison.index.indexId}</Mono>, version {comparison.index.version}, from the comparison on
+          this page. The plan must name the same, and the attestation names these.
+        </p>
       </div>
 
       {plan.status === "blocked" ? (
@@ -339,6 +395,7 @@ export function ExecutionReview({
       {verification.ok ? (
         <>
           <CallsTable snapshot={snapshot} tokens={tokens} />
+          <AllowancesAbovePlan snapshot={snapshot} tokens={tokens} />
           <Totals snapshot={snapshot} tokens={tokens} />
           <p className="text-sm text-secondary">
             Plan hash <Mono>{verification.localPlanHash}</Mono>, recomputed in this browser from the calls above.

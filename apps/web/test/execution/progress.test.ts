@@ -6,6 +6,7 @@ import type { AttestationCall } from "../../src/lib/execution/attestation";
 import { KYBERSWAP_EXECUTOR, KYBERSWAP_ROUTER } from "../../src/lib/execution/calldata";
 import {
   batchOutcome,
+  batchResult,
   runSequential,
   type SequentialAction,
   type SequentialProgress,
@@ -20,7 +21,7 @@ import {
   type LogLike,
   type TransactionReceiptLike,
 } from "../../src/lib/execution/receipts";
-import type { ExecutionRefusal, ExecutionRequest } from "../../src/lib/execution/request";
+import type { ExecutionRequest, SequentialStop } from "../../src/lib/execution/request";
 import type { VerifiedCall } from "../../src/lib/execution/verify";
 import type { TxDriver } from "../../src/lib/tx/run";
 
@@ -195,13 +196,36 @@ describe("checkTransactionReceipt", () => {
 
 describe("batchOutcome", () => {
   const ok = { status: "success" as const, transactionHash: hash(1), blockNumber: 1n, logs: [] };
-  test("is a success only with a 2xx code and every receipt successful", () => {
+  const failed = { ...ok, status: "reverted" as const };
+  const kind = (statusCode: number, receipts: (typeof ok | typeof failed)[]) =>
+    batchOutcome({ statusCode, receipts })?.kind;
+
+  test("is confirmed only with a 2xx code and every receipt successful", () => {
     expect(batchOutcome({ statusCode: 200, receipts: [ok] })?.status).toBe("success");
-    expect(batchOutcome({ statusCode: 200, receipts: [] })?.status).toBe("reverted");
-    expect(batchOutcome({ statusCode: 200, receipts: [ok, { ...ok, status: "reverted" }] })?.status).toBe("reverted");
-    expect(batchOutcome({ statusCode: 500, receipts: [ok] })?.status).toBe("reverted");
-    expect(batchOutcome({ statusCode: 600, receipts: [ok] })?.status).toBe("reverted");
+    expect(kind(200, [ok])).toBe("confirmed");
   });
+
+  test("says nothing took effect only when the wallet says so: not included (4xx) or reverted (5xx)", () => {
+    expect(kind(400, [])).toBe("not_included");
+    expect(kind(500, [failed])).toBe("reverted");
+    expect(batchOutcome({ statusCode: 500, receipts: [failed] })?.status).toBe("reverted");
+  });
+
+  test("anything else final is partial: a 6xx, or a 2xx without every receipt successful", () => {
+    expect(kind(600, [ok, failed])).toBe("partial");
+    expect(kind(200, [])).toBe("partial");
+    expect(kind(200, [ok, failed])).toBe("partial");
+  });
+
+  test("only a batch the wallet reports as not included or reverted is recorded as nothing executed", () => {
+    const reverted = { status: "reverted" as const, hash: "batch" };
+    expect(batchResult(reverted, "reverted")).toBe("none");
+    expect(batchResult(reverted, "not_included")).toBe("none");
+    expect(batchResult(reverted, "partial")).toBe("partial");
+    expect(batchResult({ status: "dropped", hash: "batch" }, null)).toBe("unknown");
+    expect(batchResult({ status: "rejected" }, null)).toBeNull();
+  });
+
   test("pending is no outcome yet", () => {
     expect(batchOutcome({ statusCode: 100 })).toBeNull();
     expect(batchOutcome({ statusCode: 700 })).toBeNull();
@@ -229,7 +253,7 @@ function harness(
     receipt?: (index: number) => "success" | "reverted";
     verified?: (index: number) => boolean;
     reject?: (index: number) => boolean;
-    recheck?: (index: number) => ExecutionRefusal | null;
+    recheck?: (index: number) => SequentialStop | null;
   } = {},
 ) {
   let state: SequentialProgress = sequentialStart(count);
@@ -329,6 +353,13 @@ describe("runSequential", () => {
       notSent: [1, 2],
       settled: true,
     });
+  });
+
+  test("leaving the page stops the run before the next transaction", async () => {
+    const h = harness(3, { recheck: (index) => (index === 2 ? { reason: "left_page" } : null) });
+    expect(await h.run()).toBe(false);
+    expect(h.sent).toEqual([0, 1]);
+    expect(h.state().stopped).toEqual({ before: 2, refusal: { reason: "left_page" } });
   });
 
   test("a stopped run accepts no later event", () => {

@@ -1,5 +1,5 @@
 import type { AttestationOmission } from "./attestation";
-import type { AttestationRefusal, ExecutionRefusal } from "./request";
+import type { AttestationRefusal, ExecutionRefusal, SequentialStop } from "./request";
 import type { VerificationFailure, VerificationFailureCode } from "./verify";
 
 /** One sentence per refusal of the send decision. Each says what is true now and that nothing was sent. */
@@ -28,6 +28,13 @@ export function refusalMessage(refusal: ExecutionRefusal): string {
   }
 }
 
+/** Why a sequential run stopped before a transaction, in words. */
+export function stopMessage(stop: SequentialStop): string {
+  return stop.reason === "left_page"
+    ? "You left the page, so this transaction and the ones after it were not sent."
+    : refusalMessage(stop);
+}
+
 const FAILURES: Record<VerificationFailureCode, string> = {
   not_ready: "The plan is not ready to execute.",
   check_not_passed: "A pre-trade check did not pass.",
@@ -41,6 +48,12 @@ const FAILURES: Record<VerificationFailureCode, string> = {
   swap_mismatch: "A swap's decoded minimum or deadline differs from what the plan states.",
   deadline_out_of_range: "A swap's deadline does not match the plan's expiry.",
   totals_mismatch: "The plan's totals differ from the totals recomputed from its calls.",
+  index_mismatch: "The plan names another index or version than the comparison on this page.",
+  decimals_mismatch: "A token's decimals read on the chain differ from the plan's, or could not be read.",
+  reference_unusable:
+    "This browser could not read a current reference price for a leg from its feed, so it cannot bound the price.",
+  price_out_of_bounds:
+    "A swap's minimum out is further from the reference price read in this browser than this site allows.",
 };
 
 /** A failure of the client verification in words, with its code and detail for developers. */

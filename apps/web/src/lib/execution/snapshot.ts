@@ -1,5 +1,6 @@
 import type { Address, Hex } from "viem";
 import { type AttestationPlan, planAttestation } from "./attestation";
+import type { ChainReads } from "./market";
 import type { ExecutionNetwork } from "./networks";
 import type { ExecutionPlanView, PlanCheck } from "./response";
 import { type PlanVerification, verifyExecutionPlan } from "./verify";
@@ -20,6 +21,8 @@ export interface ExecutionSnapshot {
   readonly suffix: Hex | null;
   /** One key per warning of the plan, each acknowledged on its own. */
   readonly warningKeys: readonly string[];
+  /** Decimals read on the chain, keyed by lowercase token: the only decimals the review renders amounts with. */
+  readonly decimals: ReadonlyMap<string, number | null>;
 }
 
 /** The key of a warning: its check, reason, token and leg. An acknowledgement names this key. */
@@ -41,6 +44,10 @@ export interface SnapshotInput {
   readonly network: ExecutionNetwork | null;
   /** Constituents of the compared index version. */
   readonly constituents: readonly Address[];
+  /** Index id and version of the comparison on the page. The attestation names these, never the plan's. */
+  readonly index: { readonly indexId: Hex; readonly version: number };
+  /** What the browser read on the plan's chain. */
+  readonly market: ChainReads;
   /** Code read at the `RebalanceLog` address of the plan's chain; see `planAttestation`. */
   readonly logCode: Hex | undefined | null;
   readonly suffix: Hex | null;
@@ -48,12 +55,12 @@ export interface SnapshotInput {
 
 /** Verifies the plan and freezes everything a later click needs. */
 export function takeExecutionSnapshot(input: SnapshotInput): ExecutionSnapshot {
-  const { plan, account, network, constituents, logCode, suffix } = input;
-  const verification = verifyExecutionPlan(plan, { account, network, constituents });
+  const { plan, account, network, constituents, logCode, suffix, index, market } = input;
+  const verification = verifyExecutionPlan(plan, { account, network, constituents, index, market });
   const attestation: AttestationPlan =
     network === null
       ? { status: "omitted", reason: "not_deployed" }
-      : planAttestation({ network, registry: plan.registry, index: plan.index, code: logCode });
+      : planAttestation({ network, registry: plan.registry, index, code: logCode });
   return deepFreeze({
     plan,
     account,
@@ -62,5 +69,6 @@ export function takeExecutionSnapshot(input: SnapshotInput): ExecutionSnapshot {
     attestation,
     suffix,
     warningKeys: [...new Set(plan.warnings.map(warningKey))],
+    decimals: market.decimals,
   });
 }

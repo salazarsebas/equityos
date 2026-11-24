@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Address, Chain, Hex } from "viem";
 import { useConfig, useConnection } from "wagmi";
 import { Button } from "@/components/ui/button";
@@ -19,25 +19,19 @@ import {
   TableRowHeader,
 } from "@/components/ui/table";
 import { formatFixed, formatTokenQuantity, formatUtcDateTime } from "@/lib/format";
-import {
-  appendHistory,
-  browserStore,
-  type HistoryEntry,
-  type HistoryResult,
-  readHistory,
-} from "@/lib/execution/history";
-import { ATTESTATION_OMISSIONS, attestationRefusalMessage, refusalMessage } from "@/lib/execution/messages";
+import { browserStore, type HistoryEntry, readHistory } from "@/lib/execution/history";
+import { ATTESTATION_OMISSIONS, attestationRefusalMessage, stopMessage } from "@/lib/execution/messages";
 import { driftAfter } from "@/lib/execution/outcome";
-import { type StepState, summarizeSequential } from "@/lib/execution/progress";
+import { batchResult, sequentialResult, type StepState, summarizeSequential } from "@/lib/execution/progress";
 import type { RecordedAttestation } from "@/lib/execution/receipts";
-import { buildAttestationRequest } from "@/lib/execution/request";
+import { type AttestationRefusal, buildAttestationRequest } from "@/lib/execution/request";
 import type { ExecutionSnapshot } from "@/lib/execution/snapshot";
 import type { ApiPortfolio } from "@/lib/portfolio/api";
 import type { TxState } from "@/lib/tx/machine";
 import { txFailureMessage } from "@/lib/tx/errors";
-import { readBalances, transactionUrl } from "./chain";
+import { chainOf, readBalances, transactionUrl } from "./chain";
 import { callTitle, type TokenLabels } from "./labels";
-import { type ExecutionState, executionInFlight, sentTransactions, type useExecution } from "./use-execution";
+import { executionInFlight, type useExecution } from "./use-execution";
 
 type Execution = ReturnType<typeof useExecution>;
 
@@ -236,21 +230,25 @@ function AfterExecution({
   );
 }
 
-/** The executions recorded in this browser for the account. Never sent anywhere. */
+/**
+ * The executions recorded in this browser for the account on this network. Never sent anywhere. Each link goes
+ * to the explorer of the network the entry was executed on.
+ */
 export function ExecutionHistory({
   account,
-  chain,
+  chainId,
   refresh,
 }: {
   account: Address;
-  chain: Chain | undefined;
+  chainId: number;
   refresh: number;
 }) {
+  const config = useConfig();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   useEffect(() => {
     void refresh;
-    setEntries(readHistory(browserStore(), account));
-  }, [account, refresh]);
+    setEntries(readHistory(browserStore(), account).filter((entry) => entry.chainId === chainId));
+  }, [account, chainId, refresh]);
   if (entries.length === 0) return null;
   return (
     <section aria-labelledby="history-heading" className="flex flex-col gap-2">
@@ -265,9 +263,10 @@ export function ExecutionHistory({
           <li key={`${entry.at}:${entry.planHash}`} className="text-sm">
             <span className="font-medium">{formatUtcDateTime(BigInt(Math.floor(entry.at / 1000)))}</span>:{" "}
             {entry.index.name} version {entry.index.version}, {entry.mode}, {entry.result}
+            {entry.stoppedBefore === null ? null : `, stopped before transaction ${entry.stoppedBefore + 1}`}
             {entry.transactions.map(({ hash, label }) => (
               <span key={hash} className="block">
-                {label}: <TxLink chain={chain} hash={hash} />
+                {label}: <TxLink chain={chainOf(config, entry.chainId)} hash={hash} />
               </span>
             ))}
           </li>
@@ -275,23 +274,6 @@ export function ExecutionHistory({
       </ul>
     </section>
   );
-}
-
-function resultOf(state: ExecutionState): HistoryResult | null {
-  if (state.mode === "atomic") {
-    const { status } = state.batch;
-    if (status === "confirmed") return "complete";
-    if (status === "unverified") return "unverified";
-    return status === "reverted" || status === "dropped" || status === "replaced" ? "none" : null;
-  }
-  if (state.mode === "sequential") {
-    const summary = summarizeSequential(state);
-    if (!summary.settled) return null;
-    if (summary.complete) return "complete";
-    if (summary.failed?.state.status === "unverified") return "unverified";
-    return summary.confirmed.length > 0 ? "partial" : "none";
-  }
-  return null;
 }
 
 function Status({
@@ -329,43 +311,20 @@ export function ExecutionProgress({
 }) {
   const { state } = execution;
   const { address, chainId: walletChainId } = useConnection();
-  const [historyVersion, setHistoryVersion] = useState(0);
-  const recorded = useRef<string | null>(null);
+  const [attestRefusal, setAttestRefusal] = useState<AttestationRefusal | null>(null);
   const calls = snapshot.verification.ok ? snapshot.verification.calls : [];
   const label = (index: number) => {
     const call = calls[index];
     return call === undefined ? `Call ${index + 1}` : callTitle(call, tokens);
   };
-  const result = resultOf(state);
+  const result =
+    state.mode === "atomic"
+      ? batchResult(state.batch, execution.batchKind)
+      : state.mode === "sequential"
+        ? sequentialResult(state)
+        : null;
   const attestationDone =
     state.mode === "sequential" && state.attestation.status === "confirmed" ? state.attestation.result : null;
-
-  // Records the run once it settles, and again when the optional attestation is added to it.
-  useEffect(() => {
-    if (result === null || executionInFlight(state) || state.mode === "none" || snapshot.plan.planHash === null) return;
-    const transactions = sentTransactions(state, label);
-    const attestationHash =
-      state.mode === "atomic"
-        ? state.batch.status === "confirmed"
-          ? (state.batch.result.attestation?.transactionHash ?? null)
-          : null
-        : (attestationDone?.attestation?.transactionHash ?? null);
-    const key = `${result}:${transactions.length}:${attestationHash ?? ""}`;
-    if (recorded.current === key) return;
-    recorded.current = key;
-    appendHistory(browserStore(), {
-      at: Date.now(),
-      chainId: snapshot.plan.chainId,
-      account: snapshot.account,
-      index: snapshot.plan.index,
-      planHash: snapshot.plan.planHash,
-      mode: state.mode,
-      result,
-      transactions,
-      attestation: attestationHash,
-    });
-    setHistoryVersion((version) => version + 1);
-  });
 
   let body: ReactNode = null;
   let blockNumber: bigint | null = null;
@@ -433,9 +392,34 @@ export function ExecutionProgress({
         );
         break;
       case "reverted":
+        if (execution.batchKind === "not_included" || execution.batchKind === "reverted") {
+          body = (
+            <Status
+              tone="warning"
+              title={
+                execution.batchKind === "reverted"
+                  ? "The wallet reports that the batch reverted: none of its calls took effect."
+                  : "The wallet reports that the batch was not included onchain: none of its calls took effect."
+              }
+            >
+              Your holdings are unchanged, apart from any network fee. Get a new plan to try again.
+            </Status>
+          );
+          break;
+        }
+        // Partially reverted, or a final status whose receipts do not all succeed: read what is true now.
+        showAfter = true;
         body = (
-          <Status tone="warning" title="The batch failed: none of its calls took effect.">
-            Your holdings are unchanged, apart from any network fee. Get a new plan to try again.
+          <Status tone="warning" title="Some calls of the batch may have taken effect.">
+            The wallet reported a status that does not confirm the whole batch. Your position below is read from the
+            chain now. Check the batch in your wallet before preparing another plan.
+            <ul className="mt-1 flex flex-col gap-1">
+              {execution.batchHashes.map((transaction) => (
+                <li key={transaction}>
+                  <TxLink chain={chain} hash={transaction} />
+                </li>
+              ))}
+            </ul>
           </Status>
         );
         break;
@@ -460,6 +444,7 @@ export function ExecutionProgress({
     showAfter = summary.settled && summary.confirmed.length > 0;
     const confirmedApprovals = summary.confirmed.filter((index) => calls[index]?.kind === "approve");
     const unswapped = confirmedApprovals.length > 0 && !summary.complete;
+    // At render time this only enables the button; the click decides again with the connection of that moment.
     const offer =
       snapshot.attestation.status === "included"
         ? buildAttestationRequest(
@@ -467,7 +452,7 @@ export function ExecutionProgress({
             summary.confirmed.length,
             address ?? null,
             walletChainId ?? null,
-            execution.running || executionInFlight(state),
+            execution.running || executionInFlight(state) || state.attestation.status !== "idle",
           )
         : null;
     body = (
@@ -495,7 +480,7 @@ export function ExecutionProgress({
         </ol>
         {state.stopped === null ? null : (
           <Status tone="warning" title={`Stopped before transaction ${state.stopped.before + 1}.`}>
-            {refusalMessage(state.stopped.refusal)}
+            {stopMessage(state.stopped.refusal)}
           </Status>
         )}
         {summary.settled ? (
@@ -538,7 +523,17 @@ export function ExecutionProgress({
               disabled={offer === null || !offer.ok}
               loading={execution.running}
               loadingLabel="Waiting for the wallet"
-              onClick={offer?.ok ? () => void execution.attest(offer.transaction) : undefined}
+              onClick={
+                offer?.ok
+                  ? () => {
+                      setAttestRefusal(null);
+                      void execution.attest().then((refusal) => {
+                        // A second click while the first decides or sends is ignored, not reported.
+                        if (refusal?.reason !== "busy") setAttestRefusal(refusal);
+                      });
+                    }
+                  : undefined
+              }
             >
               Sign 1 more transaction to record the rebalance
             </Button>
@@ -556,6 +551,11 @@ export function ExecutionProgress({
             {offer !== null && !offer.ok && offer.refusal.reason !== "busy" ? (
               <p className="text-sm text-secondary">{attestationRefusalMessage(offer.refusal)}</p>
             ) : null}
+            {attestRefusal === null ? null : (
+              <p role="alert" className="text-sm text-negative">
+                {attestationRefusalMessage(attestRefusal)}
+              </p>
+            )}
           </div>
         ) : null}
         {summary.settled &&
@@ -587,7 +587,7 @@ export function ExecutionProgress({
       {showAfter ? (
         <AfterExecution snapshot={snapshot} comparison={comparison} tokens={tokens} blockNumber={blockNumber} />
       ) : null}
-      <ExecutionHistory account={snapshot.account} chain={chain} refresh={historyVersion} />
+      <ExecutionHistory account={snapshot.account} chainId={snapshot.plan.chainId} refresh={execution.historyVersion} />
     </section>
   );
 }

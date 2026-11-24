@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Address } from "viem";
-import { isAddressEqual } from "viem";
+import { type Address, type Hex, isAddressEqual } from "viem";
 import { useConfig, useConnection } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -10,12 +9,12 @@ import { useExecutionAvailability } from "@/components/wallet/hooks";
 import { ConnectDialog } from "@/components/wallet/connect-dialog";
 import { rebalanceLogToRead } from "@/lib/execution/attestation";
 import { builderCodeSuffix, InvalidBuilderCodeError } from "@/lib/execution/builder-code";
-import { executionNetwork } from "@/lib/execution/networks";
+import { EXECUTION_USDC, executionNetwork } from "@/lib/execution/networks";
 import { PlanShapeError, parseExecutionPlan } from "@/lib/execution/response";
 import { type ExecutionSnapshot, takeExecutionSnapshot } from "@/lib/execution/snapshot";
 import { type ApiPortfolio, isApiError, readEnvelope } from "@/lib/portfolio/api";
 import { EXECUTION_UNAVAILABLE_MESSAGES } from "@/lib/wallet/execution";
-import { readCode } from "./chain";
+import { readCode, readMarket } from "./chain";
 import { ExecutionReview } from "./review";
 
 type Mode = "rebalance" | "buy_only";
@@ -41,7 +40,7 @@ function prepareErrorText(error: unknown): string {
     case "upstream_unavailable":
       return "Base mainnet did not answer the reads the plan needs. Try again.";
     case null:
-      return "The executable plan could not be read. Nothing was signed or sent.";
+      return "The executable plan, or what this browser reads on the chain to check it, could not be read. Nothing was signed or sent.";
     default:
       return "The executable plan could not be prepared. Nothing was signed or sent.";
   }
@@ -96,13 +95,20 @@ export function ExecutePanel({
       });
       const network = executionNetwork(plan.chainId);
       const log = rebalanceLogToRead(network);
-      const logCode = log === null ? null : await readCode(config, plan.chainId, log);
+      // Read by the browser on the plan's chain, independently of the answer: decimals and reference feeds.
+      const tokens = [network?.usdc ?? EXECUTION_USDC, ...plan.legs.map(({ token }) => token)];
+      const [logCode, market] = await Promise.all([
+        log === null ? null : readCode(config, plan.chainId, log),
+        readMarket(config, plan.chainId, tokens),
+      ]);
       setSnapshot(
         takeExecutionSnapshot({
           plan,
           account,
           network,
           constituents: comparison.constituents.map(({ token }) => token as Address),
+          index: { indexId: comparison.index.indexId as Hex, version: comparison.index.version },
+          market,
           logCode,
           suffix,
         }),

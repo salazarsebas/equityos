@@ -15,8 +15,9 @@ export const MAX_HISTORY_ENTRIES = 50;
  * - `partial`: some calls confirmed and the sequence stopped.
  * - `none`: nothing confirmed.
  * - `unverified`: mined, but a check on the receipts did not pass.
+ * - `unknown`: no final status was reported in time; it may still take effect.
  */
-export type HistoryResult = "complete" | "partial" | "none" | "unverified";
+export type HistoryResult = "complete" | "partial" | "none" | "unverified" | "unknown";
 
 export interface HistoryEntry {
   /** Unix milliseconds of the record, by the device clock. */
@@ -36,6 +37,11 @@ export interface HistoryEntry {
   readonly transactions: readonly { readonly hash: Hex; readonly label: string }[];
   /** Hash of the transaction that carried the attestation, or `null` when none did. */
   readonly attestation: Hex | null;
+  /**
+   * Index of the transaction a sequential run stopped before, because a recheck refused or the page was left;
+   * `null` otherwise. Entries written before this field existed read as `null`.
+   */
+  readonly stoppedBefore: number | null;
 }
 
 /** The parts of `Storage` used here, so that tests pass a map. */
@@ -46,7 +52,7 @@ export interface KeyValueStore {
 
 const HASH = /^0x[0-9a-f]{64}$/;
 const ADDRESS = /^0x[0-9a-f]{40}$/;
-const RESULTS: readonly HistoryResult[] = ["complete", "partial", "none", "unverified"];
+const RESULTS: readonly HistoryResult[] = ["complete", "partial", "none", "unverified", "unknown"];
 const MAX_TEXT = 200;
 const MAX_TRANSACTIONS = 16;
 
@@ -65,6 +71,7 @@ function isHash(value: unknown): value is Hex {
 function entryOf(value: unknown): HistoryEntry | null {
   if (!isRecord(value) || !isRecord(value.index) || !Array.isArray(value.transactions)) return null;
   const { at, chainId, account, index, planHash, mode, result, transactions, attestation } = value;
+  const stoppedBefore = value.stoppedBefore ?? null;
   const valid =
     typeof at === "number" &&
     Number.isSafeInteger(at) &&
@@ -84,7 +91,9 @@ function entryOf(value: unknown): HistoryEntry | null {
     RESULTS.some((known) => known === result) &&
     transactions.length <= MAX_TRANSACTIONS &&
     transactions.every((item) => isRecord(item) && isHash(item.hash) && short(item.label)) &&
-    (attestation === null || isHash(attestation));
+    (attestation === null || isHash(attestation)) &&
+    (stoppedBefore === null ||
+      (typeof stoppedBefore === "number" && Number.isSafeInteger(stoppedBefore) && stoppedBefore >= 0));
   if (!valid) return null;
   return {
     at,
@@ -101,6 +110,7 @@ function entryOf(value: unknown): HistoryEntry | null {
     result: result as HistoryResult,
     transactions: transactions.map((item) => ({ hash: item.hash as Hex, label: item.label as string })),
     attestation: attestation as Hex | null,
+    stoppedBefore: stoppedBefore as number | null,
   };
 }
 
@@ -131,12 +141,16 @@ export function readHistory(store: KeyValueStore | null, account: Address): Hist
   }
 }
 
-/** Adds an entry. Storage is a convenience: when it cannot be written, nothing is recorded and nothing fails. */
+/** Adds an entry, replacing the one of the same plan and account. Storage is a convenience: when it cannot be written, nothing is recorded and nothing fails. */
 export function appendHistory(store: KeyValueStore | null, entry: HistoryEntry): void {
   if (store === null) return;
   try {
     const normalized: HistoryEntry = { ...entry, account: entry.account.toLowerCase() as Address };
-    const entries = [normalized, ...parseHistory(store.getItem(HISTORY_STORAGE_KEY))].slice(0, MAX_HISTORY_ENTRIES);
+    // One entry per plan: a later record of the same plan (its optional attestation) replaces the earlier one.
+    const earlier = parseHistory(store.getItem(HISTORY_STORAGE_KEY)).filter(
+      (other) => !(other.planHash === normalized.planHash && other.account === normalized.account),
+    );
+    const entries = [normalized, ...earlier].slice(0, MAX_HISTORY_ENTRIES);
     store.setItem(HISTORY_STORAGE_KEY, JSON.stringify({ entries }));
   } catch {
     // A full or blocked storage records nothing.

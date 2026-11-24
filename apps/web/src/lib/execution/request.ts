@@ -80,6 +80,9 @@ export type ExecutionRefusal =
   | { readonly reason: "expired"; readonly expiresAt: number; readonly chainTime: number }
   | { readonly reason: "warnings_not_acknowledged"; readonly missing: readonly string[] };
 
+/** Why a sequential run stopped before a transaction: a refusal of the recheck, or the page was left. */
+export type SequentialStop = ExecutionRefusal | { readonly reason: "left_page" };
+
 export type ExecutionDecision =
   | { readonly ok: true; readonly request: ExecutionRequest }
   | { readonly ok: false; readonly refusal: ExecutionRefusal };

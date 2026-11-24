@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { DEPLOYMENTS, LOCAL_CHAIN_ID, rebalanceLogAbi } from "@equityos/contracts-abi";
 import { type Address, decodeFunctionData, type Hex } from "viem";
-import { AMZN, buildReadyPlan, DIVERSIFIED, NVDA, TSLA, USDC } from "../../e2e/execution-plans";
+import { AMZN, buildReadyPlan, chainReadsFor, DIVERSIFIED, NVDA, TSLA, USDC } from "../../e2e/execution-plans";
 import { builderCodeSuffix } from "../../src/lib/execution/builder-code";
 import { executionNetwork } from "../../src/lib/execution/networks";
 import {
@@ -60,8 +60,11 @@ function snapshot(
   const chainId = options.chainId ?? LOCAL_CHAIN_ID;
   const answer = structuredClone(body(chainId));
   options.mutate?.(answer.data);
+  const plan = parseExecutionPlan(answer);
   return takeExecutionSnapshot({
-    plan: parseExecutionPlan(answer),
+    plan,
+    index: { indexId: DIVERSIFIED.indexId, version: DIVERSIFIED.version },
+    market: chainReadsFor(plan),
     account: ACCOUNT,
     network: executionNetwork(chainId, { NODE_ENV: "development" }),
     constituents: CONSTITUENTS,

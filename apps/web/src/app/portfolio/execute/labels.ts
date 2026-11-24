@@ -1,11 +1,12 @@
-import { shortenAddress } from "@/lib/format";
+import { formatTokenQuantity, MISSING, shortenAddress } from "@/lib/format";
 import type { ExecutionSnapshot } from "@/lib/execution/snapshot";
 import type { VerifiedCall } from "@/lib/execution/verify";
 import type { ApiPortfolio } from "@/lib/portfolio/api";
 
 export interface TokenLabels {
   readonly symbolOf: (token: string) => string;
-  readonly decimalsOf: (token: string) => number;
+  /** Decimals read on the chain by the browser, never the plan's. `null` when the read failed. */
+  readonly decimalsOf: (token: string) => number | null;
 }
 
 export function tokenLabels(snapshot: ExecutionSnapshot, comparison: ApiPortfolio): TokenLabels {
@@ -13,18 +14,18 @@ export function tokenLabels(snapshot: ExecutionSnapshot, comparison: ApiPortfoli
   const symbols = new Map<string, string>(
     comparison.constituents.map(({ token, symbol }) => [token.toLowerCase(), symbol ?? shortenAddress(token)]),
   );
-  const decimals = new Map<string, number>(
-    comparison.constituents.map(({ token, decimals: d }) => [token.toLowerCase(), d]),
-  );
-  for (const leg of snapshot.plan.legs) decimals.set(leg.token.toLowerCase(), leg.decimals);
   return {
     symbolOf: (token) =>
       usdc !== null && token.toLowerCase() === usdc
         ? "USDC"
         : (symbols.get(token.toLowerCase()) ?? shortenAddress(token)),
-    decimalsOf: (token) =>
-      usdc !== null && token.toLowerCase() === usdc ? 6 : (decimals.get(token.toLowerCase()) ?? 0),
+    decimalsOf: (token) => snapshot.decimals.get(token.toLowerCase()) ?? null,
   };
+}
+
+/** A token amount with the decimals read on the chain, or the missing marker when they could not be read. */
+export function quantity(value: bigint, decimals: number | null): string {
+  return decimals === null ? MISSING : formatTokenQuantity(value, decimals);
 }
 
 /** What one call does, in words, from its decoded calldata. */

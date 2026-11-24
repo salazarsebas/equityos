@@ -38,6 +38,7 @@ function entry(at: number, overrides: Partial<HistoryEntry> = {}): HistoryEntry 
     result: "partial",
     transactions: [{ hash: hash(1), label: "Approve NVDAc" }],
     attestation: null,
+    stoppedBefore: null,
     ...overrides,
   };
 }
@@ -46,16 +47,36 @@ describe("execution history in this browser", () => {
   test("records entries newest first, for the account that sent them", () => {
     const local = store();
     appendHistory(local, entry(1));
-    appendHistory(local, entry(2, { result: "complete" }));
+    appendHistory(local, entry(2, { result: "complete", planHash: hash(10) }));
     appendHistory(local, entry(3, { account: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" }));
     const mine = readHistory(local, ACCOUNT);
     expect(mine.map(({ at }) => at)).toEqual([2, 1]);
     expect(mine[0]?.account).toBe(ACCOUNT.toLowerCase() as Address);
   });
 
+  test("records where a run stopped, and reads entries written before that field existed", () => {
+    const local = store();
+    appendHistory(local, entry(1, { stoppedBefore: 2 }));
+    expect(readHistory(local, ACCOUNT)[0]?.stoppedBefore).toBe(2);
+    const { stoppedBefore: _, ...older } = { ...entry(2), account: ACCOUNT.toLowerCase() };
+    expect(parseHistory(JSON.stringify({ entries: [older] }))[0]?.stoppedBefore).toBeNull();
+    expect(parseHistory(JSON.stringify({ entries: [{ ...older, stoppedBefore: -1 }] }))).toEqual([]);
+  });
+
+  test("a later record of the same plan replaces the earlier one", () => {
+    const local = store();
+    appendHistory(local, entry(1, { result: "complete" }));
+    appendHistory(local, entry(2, { result: "complete", attestation: hash(5) }));
+    appendHistory(local, entry(3, { planHash: hash(8) }));
+    const kept = readHistory(local, ACCOUNT);
+    expect(kept.map(({ at }) => at)).toEqual([3, 2]);
+    expect(kept[1]?.attestation).toBe(hash(5));
+  });
+
   test("keeps the newest entries only", () => {
     const local = store();
-    for (let at = 0; at < MAX_HISTORY_ENTRIES + 5; at += 1) appendHistory(local, entry(at));
+    for (let at = 0; at < MAX_HISTORY_ENTRIES + 5; at += 1)
+      appendHistory(local, entry(at, { planHash: hash(1000 + at) }));
     const kept = readHistory(local, ACCOUNT);
     expect(kept).toHaveLength(MAX_HISTORY_ENTRIES);
     expect(kept[0]?.at).toBe(MAX_HISTORY_ENTRIES + 4);

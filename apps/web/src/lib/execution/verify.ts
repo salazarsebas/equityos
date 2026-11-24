@@ -18,6 +18,7 @@ import {
   ROUTE_DEADLINE_TOLERANCE_SECONDS,
   verifyQuote,
 } from "./calldata";
+import { type ChainReads, checkMarket, type LegMarket } from "./market";
 import type { ExecutionNetwork } from "./networks";
 import type { ExecutionPlanView, PlanLeg } from "./response";
 
@@ -46,7 +47,15 @@ export type VerificationFailureCode =
   /** A route deadline is before the plan's expiry, or more than the tolerance after it. */
   | "deadline_out_of_range"
   /** The totals of the answer differ from the totals recomputed from the decoded calls. */
-  | "totals_mismatch";
+  | "totals_mismatch"
+  /** The plan names another index id or version than the comparison on the page. */
+  | "index_mismatch"
+  /** `decimals()` read on the chain differs from the plan's, or could not be read. `detail` is the token. */
+  | "decimals_mismatch"
+  /** The browser has no usable reference price for a leg: no feed, a failed read, or a stale or closed one. */
+  | "reference_unusable"
+  /** A leg's minimum out is further from the browser's reference price than the bound allows. `detail` in bps. */
+  | "price_out_of_bounds";
 
 export interface VerificationFailure {
   readonly code: VerificationFailureCode;
@@ -112,6 +121,8 @@ export type PlanVerification =
       readonly localPlanHash: Hex;
       /** Whether it equals the server's `planHash`. A mismatch is a refusal of its own. */
       readonly hashMatches: boolean;
+      /** Per leg, the reference price the browser read and the minimum's deviation from it. */
+      readonly market: readonly LegMarket[];
     }
   | { readonly ok: false; readonly failures: readonly VerificationFailure[] };
 
@@ -122,6 +133,10 @@ export interface VerificationContext {
   readonly network: ExecutionNetwork | null;
   /** The constituents of the compared index version: no leg may trade anything else. */
   readonly constituents: readonly Address[];
+  /** The index id and version of the comparison on the page: the plan must name the same. */
+  readonly index: { readonly indexId: Hex; readonly version: number };
+  /** Decimals and reference feeds read by the browser on the plan's chain. */
+  readonly market: ChainReads;
 }
 
 function failure(
@@ -194,6 +209,12 @@ export function verifyExecutionPlan(plan: ExecutionPlanView, context: Verificati
   }
   if (network === null) return refuse(failure("unsupported_chain", { detail: String(plan.chainId) }));
   if (!isAddressEqual(plan.address, account)) return refuse(failure("account_mismatch"));
+  if (
+    plan.index.indexId.toLowerCase() !== context.index.indexId.toLowerCase() ||
+    plan.index.version !== context.index.version
+  ) {
+    return refuse(failure("index_mismatch", { detail: `${plan.index.indexId}:${plan.index.version}` }));
+  }
   if (!same(plan.providerRouter, network.router)) return refuse(failure("router_mismatch"));
 
   failures.push(...legFailures(plan, network, context.constituents));
@@ -309,6 +330,9 @@ export function verifyExecutionPlan(plan: ExecutionPlanView, context: Verificati
 
   const recomputed = recomputeTotals(plan, verified, network.usdc);
   if (recomputed.mismatch !== null) return refuse(failure("totals_mismatch", { detail: recomputed.mismatch }));
+  const swaps = verified.filter((call): call is VerifiedSwap => call.kind === "swap");
+  const market = checkMarket(plan, swaps, context.market, network.usdc);
+  if (market.failures.length > 0) return refuse(...market.failures);
 
   const localPlanHash = planHash(plan.chainId, plan.address, expiresAt, calls);
   return {
@@ -318,6 +342,7 @@ export function verifyExecutionPlan(plan: ExecutionPlanView, context: Verificati
     expiresAt,
     localPlanHash,
     hashMatches: localPlanHash === serverHash.toLowerCase(),
+    market: market.legs,
   };
 }
 

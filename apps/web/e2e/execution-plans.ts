@@ -17,6 +17,8 @@ import {
   kyberswapRouterAbi,
   planHash,
 } from "../src/lib/execution/calldata";
+import type { ChainReads, FeedReading } from "../src/lib/execution/market";
+import { REFERENCE_FEEDS } from "../src/lib/market/feeds";
 
 export const USDC: Address = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 /** Constituents of the seeded "Diversified Equity" index, version 2, and their recorded symbols. */
@@ -61,6 +63,9 @@ export interface TestPlanOptions {
   /** Warnings the plan carries, as `[check, reason, leg]`. */
   readonly warnings?: readonly (readonly [string, string, number | null])[];
   readonly registry?: { readonly chainId: number; readonly address: Address };
+  /** Allowances toward the router before the plan, by lowercase token. A token whose allowance covers what the
+   * plan swaps of it gets no approval call, as the server builds it. */
+  readonly allowances?: Readonly<Record<string, bigint>>;
 }
 
 /** The executor data the mock executor reads: header, then words; 8 is the recipient, 16 the deadline. */
@@ -131,27 +136,30 @@ export function buildReadyPlan(options: TestPlanOptions) {
   });
   const totals = new Map<Address, bigint>();
   for (const leg of legs) totals.set(leg.tokenIn, (totals.get(leg.tokenIn) ?? 0n) + leg.amountIn);
+  const allowanceOf = (token: Address) => options.allowances?.[token.toLowerCase()] ?? 0n;
   const approvals = [...totals].map(([token, amount]) => ({
     token,
     spender: KYBERSWAP_ROUTER,
-    currentAllowance: "0",
+    currentAllowance: allowanceOf(token).toString(),
     amount: amount.toString(),
-    required: true,
+    required: allowanceOf(token) < amount,
   }));
   const order = [
     ...legs.flatMap((leg, index) => (leg.side === "sell" ? [index] : [])),
     ...legs.flatMap((leg, index) => (leg.side === "buy" ? [index] : [])),
   ];
   const calls = [
-    ...[...totals].map(([token, amount]) => ({
-      kind: "approve" as const,
-      to: token,
-      data: encodeFunctionData({ abi: approveAbi, functionName: "approve", args: [KYBERSWAP_ROUTER, amount] }),
-      value: "0",
-      token,
-      leg: null,
-      minAmountOut: null,
-    })),
+    ...[...totals]
+      .flatMap(([token, amount]) => (allowanceOf(token) >= amount ? [] : [[token, amount] as const]))
+      .map(([token, amount]) => ({
+        kind: "approve" as const,
+        to: token,
+        data: encodeFunctionData({ abi: approveAbi, functionName: "approve", args: [KYBERSWAP_ROUTER, amount] }),
+        value: "0",
+        token,
+        leg: null,
+        minAmountOut: null,
+      })),
     ...order.map((index) => {
       const leg = legs[index];
       if (leg === undefined) throw new Error(`no leg ${index}`);
@@ -299,4 +307,60 @@ export function buildBlockedPlan(account: Address, chainId: number) {
       },
     },
   };
+}
+
+/** A Wednesday at 10:00 in New York: the regular session is open, so a feed round a minute old is live. */
+export const OPEN_MARKET_TIME = 1_799_852_400;
+
+/** A leg as the answer carries it or as the client parses it. */
+interface LegAmounts {
+  readonly side: string;
+  readonly token: string;
+  readonly decimals: number;
+  readonly amountIn: bigint | string;
+  readonly quote: { readonly quotedAmountOut: bigint | string } | null;
+}
+
+/** The price at which a leg's quote is exactly fair, USD per token scaled by 1e8, rounded down. */
+export function fairPriceE8(leg: LegAmounts): bigint {
+  const scale = 100n * 10n ** BigInt(leg.decimals);
+  const quoted = BigInt(leg.quote?.quotedAmountOut ?? "0");
+  const amountIn = BigInt(leg.amountIn);
+  return leg.side === "sell" ? (quoted * scale) / amountIn : (amountIn * scale) / quoted;
+}
+
+/**
+ * What the browser reads on the chain for a plan answer: the decimals the plan states, and for every leg its
+ * pinned feed answering a fair price for the leg's quote, a minute before `chainTime`. `prices` replaces a
+ * token's price; `decimals` replaces a token's decimals.
+ */
+export function chainReadsFor(
+  plan: { readonly legs: readonly LegAmounts[] },
+  options: {
+    readonly chainTime?: number;
+    readonly prices?: Readonly<Record<string, bigint>>;
+    readonly decimals?: Readonly<Record<string, number>>;
+  } = {},
+): ChainReads {
+  const chainTime = options.chainTime ?? OPEN_MARKET_TIME;
+  const decimals = new Map<string, number | null>([[USDC, 6]]);
+  const feeds = new Map<string, FeedReading>();
+  for (const leg of plan.legs) {
+    const token = leg.token.toLowerCase();
+    decimals.set(token, options.decimals?.[token] ?? leg.decimals);
+    const feed = REFERENCE_FEEDS.get(token as Address);
+    if (feed === undefined) continue;
+    feeds.set(token, {
+      decimals: 8,
+      description: feed.description,
+      round: {
+        roundId: 7n,
+        answer: options.prices?.[token] ?? fairPriceE8(leg),
+        updatedAt: BigInt(chainTime - 60),
+        answeredInRound: 7n,
+      },
+    });
+  }
+  for (const [token, value] of Object.entries(options.decimals ?? {})) decimals.set(token, value);
+  return { chainTime, decimals, feeds };
 }
