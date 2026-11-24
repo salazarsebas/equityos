@@ -20,9 +20,10 @@ type CodeBlockProps = {
 
 /**
  * Monospace text with a title bar and a copy control. The block never widens the page: long lines wrap or
- * scroll inside it.
+ * scroll inside it. A block that can scroll is keyboard focusable, so that it can be scrolled without a pointer.
  */
 export function CodeBlock({ code, title, copyLabel, overflow = "wrap", tall = false, className }: CodeBlockProps) {
+  const scrolls = overflow === "scroll" || tall;
   return (
     <figure className={cx("min-w-0 rounded-md border bg-subtle", className)}>
       <figcaption className="flex min-h-8 items-center justify-between gap-3 border-b px-3 py-1">
@@ -30,6 +31,7 @@ export function CodeBlock({ code, title, copyLabel, overflow = "wrap", tall = fa
         <CopyButton value={code} label={`Copy ${copyLabel}`} />
       </figcaption>
       <pre
+        tabIndex={scrolls ? 0 : undefined}
         className={cx(
           "overflow-auto px-3 py-2 font-mono text-sm text-primary",
           overflow === "wrap" ? "break-all whitespace-pre-wrap" : "whitespace-pre",

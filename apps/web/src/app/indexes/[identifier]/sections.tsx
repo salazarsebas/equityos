@@ -89,7 +89,7 @@ export function VersionHistory({ identifier, history, total, shown }: VersionHis
         stay readable. Changes are computed by comparing the two specs.
       </p>
       <div className="mt-3">
-        <Table label="Version history">
+        <Table label="Versions">
           <TableCaption>
             <span>Versions</span>
             <span className="num font-normal text-secondary">

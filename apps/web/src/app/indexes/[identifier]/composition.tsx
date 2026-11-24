@@ -75,7 +75,7 @@ function ConstituentRow({ row, largestBps, known }: { row: CompositionRow; large
         {known ? flags.length > 0 ? flags.join(" · ") : "Eligible" : <Missing />}
       </TableCell>
       <TableCell className="font-mono text-sm text-secondary">
-        <Link href={tokenExplorerUrl(token)} variant="quiet" aria-label={`Token ${token}`}>
+        <Link href={tokenExplorerUrl(token)} variant="quiet" aria-label={`${shortenAddress(token)}, token ${token}`}>
           <span title={token}>{shortenAddress(token)}</span>
         </Link>
       </TableCell>
