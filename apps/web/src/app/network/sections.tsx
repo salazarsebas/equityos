@@ -169,11 +169,11 @@ export function AttestationTable({ read, rows }: { read: Read; rows: readonly Cl
       <TableHead>
         <TableRow>
           <TableHeader>Transaction</TableHeader>
-          <TableHeader>Block time, UTC</TableHeader>
+          <TableHeader>Block time (UTC)</TableHeader>
           <TableHeader>Account</TableHeader>
           <TableHeader>Index</TableHeader>
           <TableHeader>Tier</TableHeader>
-          <TableHeader numeric>Reference value, USD</TableHeader>
+          <TableHeader numeric>Reference value (USD)</TableHeader>
         </TableRow>
       </TableHead>
       <TableBody>
@@ -234,12 +234,15 @@ export function Exclusions({ read }: { read: Read }) {
   );
 }
 
-/** Every definition, the thresholds, and what the figures can and cannot be trusted for. */
-export function HowTheyAreMade({ chainLabel }: { chainLabel: string }) {
+/**
+ * Every definition, the thresholds, and what the figures can and cannot be trusted for. `chainLabel` names the
+ * chain read, or is `null` when the chain could not be read.
+ */
+export function HowTheyAreMade({ chainLabel }: { chainLabel: string | null }) {
   return (
     <Region
       title="How these numbers are made"
-      lead={`Every figure is computed by this server from logs of the registry, the rebalance log and the constituent tokens of the chain it reads, ${chainLabel}, and from reads at the block of each transaction. Connected wallets, page views and API requests are never counted.`}
+      lead={`Every figure is computed by this server from logs of the registry, the rebalance log and the constituent tokens of the chain it reads${chainLabel === null ? "" : `, ${chainLabel},`} and from reads at the block of each transaction. Connected wallets, page views and API requests are never counted.`}
     >
       <dl className="flex flex-col border-b">
         {METRIC_DEFINITIONS.map(({ id, title: name, definition, source }) => (

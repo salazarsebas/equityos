@@ -97,8 +97,8 @@ export function DriftTable({ positions, thresholdBps, investedValueUsdE8, market
       <TableHead>
         <TableRow>
           <TableHeader>Asset</TableHeader>
-          <TableHeader numeric>Target</TableHeader>
-          <TableHeader numeric>Current</TableHeader>
+          <TableHeader numeric>Target weight</TableHeader>
+          <TableHeader numeric>Current weight</TableHeader>
           <TableHeader numeric>Drift (pp)</TableHeader>
           <TableHeader className="pl-0">
             <span className="sr-only">Drift bar, threshold marked</span>

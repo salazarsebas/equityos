@@ -125,7 +125,7 @@ describe("summaries", () => {
   test("label the weighting, the rebalance rule and the largest weight", () => {
     const { spec, constituents } = buildSpec({ weightsBps: [5_000, 3_000, 2_000] });
     expect(weightingLabel(spec)).toBe("Fixed weights");
-    expect(weightingLabel(buildSpec().spec)).toBe("Equal weight");
+    expect(weightingLabel(buildSpec().spec)).toBe("Equal weights");
     expect(rebalanceSummary(spec)).toBe("5.00 pp drift, 1 day apart");
     expect(rebalanceSummary({ ...spec, rebalance: { ...spec.rebalance, minIntervalSeconds: 0 } })).toBe(
       "5.00 pp drift",

@@ -3,7 +3,7 @@ import { Container } from "@/components/shell/container";
 import { StudioSlot } from "./studio-slot";
 
 export const metadata: Metadata = {
-  title: "Studio",
+  title: "Index Studio",
   description:
     "Build an index of tokenized stocks as a methodology spec: choose constituents and weights, see the composition, the canonical JSON and its hash, and publish it to the index registry.",
   alternates: { canonical: "/studio" },
