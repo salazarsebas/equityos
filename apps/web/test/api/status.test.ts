@@ -32,7 +32,7 @@ describe("GET /api/v1/status", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(await body(response)).toEqual({
       data: {
-        apiVersion: "1.5.0",
+        apiVersion: "1.6.0",
         chainId: 8453,
         marketPhase: "closed",
         executionAvailable: true,

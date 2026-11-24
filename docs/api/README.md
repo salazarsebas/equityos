@@ -172,8 +172,10 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.5.0`, which
-  added `meta.mode` to every successful response and `transferWarnings` to the portfolio and the plan. `1.4.0`
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.6.0`, in which
+  `GET /api/v1/status` answers `executionAvailable: true` wherever the jurisdiction gate allows execution and no
+  longer returns the reason `not_released`. `1.5.0` added `meta.mode` to every successful response and
+  `transferWarnings` to the portfolio and the plan. `1.4.0`
   added the network endpoint. `1.3.0` added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0`
   added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
@@ -222,7 +224,7 @@ reason:
 | `restricted_jurisdiction`    | The request is located in the United States or one of its territories |
 | `jurisdiction_unknown`       | The location of the request could not be established                  |
 
-Earlier versions answered `false` with `not_released` for every request the gate let through. A client that still
+Before `1.6.0` the status answered `false` with `not_released` for every request the gate let through. A client that still
 receives that value treats execution as unavailable.
 
 The gate is `classifyJurisdiction` in `apps/web/src/server/jurisdiction.ts`. It reads the country the hosting

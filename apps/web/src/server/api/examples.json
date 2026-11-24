@@ -1928,7 +1928,7 @@
       "status": 200,
       "body": {
         "data": {
-          "apiVersion": "1.5.0",
+          "apiVersion": "1.6.0",
           "chainId": 8453,
           "marketPhase": "closed",
           "executionAvailable": true,

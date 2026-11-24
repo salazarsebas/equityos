@@ -111,7 +111,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- `GET /api/v1/status` answers `executionAvailable: true` for every request the jurisdiction gate lets through.
+- Public API v1.6.0: `GET /api/v1/status` answers `executionAvailable: true` for every request the jurisdiction
+  gate lets through.
   The `not_released` reason is no longer returned, and the SDK and the OpenAPI document no longer list it.
 
 - The home page uses the application shell and the design tokens.
