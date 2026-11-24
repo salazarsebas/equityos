@@ -43,5 +43,8 @@
   "dependencies": {
     "@equityos/contracts-abi": "workspace:*",
     "@equityos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "viem": "2.58.4"
   }
 }

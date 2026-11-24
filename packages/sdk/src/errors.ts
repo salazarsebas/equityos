@@ -86,3 +86,28 @@ export class ResponseShapeError extends EquityOSError {
     this.path = path;
   }
 }
+
+export type RegistryReadErrorCode =
+  /** The RPC endpoint is on another chain than the one asked for. */
+  | "chain_mismatch"
+  /** The registry address holds no code on the chain at the block read. */
+  | "registry_not_deployed"
+  /** The registry holds no index with this id. */
+  | "index_not_found"
+  /** The index has no version with this number. */
+  | "version_not_found"
+  /** The RPC endpoint failed, timed out or answered with a JSON-RPC error. */
+  | "rpc_failure"
+  /** The chain answered with something the registry cannot have stored. */
+  | "malformed_response";
+
+/** `verifyIndexVersion` could not read the version from the chain. A version that fails a check is not an error. */
+export class RegistryReadError extends EquityOSError {
+  readonly code: RegistryReadErrorCode;
+
+  constructor(code: RegistryReadErrorCode, message: string, options?: { readonly cause?: unknown }) {
+    super(message, options);
+    this.name = "RegistryReadError";
+    this.code = code;
+  }
+}

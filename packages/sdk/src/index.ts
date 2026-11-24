@@ -22,6 +22,7 @@ export {
   verifyVersion,
 } from "@equityos/core";
 export { DEPLOYMENTS, type Deployment, INDEX_REGISTRY_ADDRESS, type SupportedChainId } from "@equityos/contracts-abi";
+export type { Composition } from "./abi.ts";
 export {
   type ApiResponse,
   type ClientOptions,
@@ -36,6 +37,8 @@ export {
   ApiError,
   EquityOSError,
   RegistryNotDeployedError,
+  RegistryReadError,
+  type RegistryReadErrorCode,
   ResponseShapeError,
   TransportError,
 } from "./errors.ts";
@@ -83,3 +86,10 @@ export {
   type VersionSummary,
 } from "./schemas.ts";
 export { SDK_VERSION, type SemverString } from "./version.ts";
+export {
+  type IndexVersionVerification,
+  jsonRpcClient,
+  type PublicClientLike,
+  type VerifyIndexVersionOptions,
+  verifyIndexVersion,
+} from "./verify.ts";
