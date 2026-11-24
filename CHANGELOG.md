@@ -78,7 +78,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Base mainnet through the KyberSwap aggregator, verifies the calldata against an allowlisted router, runs
   pre-trade checks at one block (jurisdiction, reference freshness, price deviation, pause, B20 policies,
   pending multiplier, balances at minimum amounts out, exact approvals), simulates the calls and returns either
-  the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent.
+  the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent. Rate limited per address
+  and per instance, with a 20 second deadline. The calldata verification is a browser-safe module.
+- `@equityos/sdk`: `executionPlan` for the new endpoint.
 
 ### Changed
 

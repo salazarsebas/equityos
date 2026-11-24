@@ -12,20 +12,20 @@ Conventions (envelope, errors, amounts as decimal strings, versioning) are in th
 ## Request
 
 `POST` with a JSON body and `Content-Type: application/json`. It is a POST because the answer depends on the
-caller and expires within a minute: it is never cached. The body is at most 4096 bytes, and an unknown field is
+caller and expires within two minutes: it is never cached. The body is at most 4096 bytes, and an unknown field is
 an error.
 
-| Field              | Type    | Values                                   | Default     |
-| ------------------ | ------- | ---------------------------------------- | ----------- |
-| `address`          | string  | `0x` and 40 hex digits, any letter case  | required    |
-| `index`            | string  | An index identifier or index id          | required    |
-| `version`          | integer | 1 to the latest version                  | latest      |
-| `mode`             | string  | `rebalance` or `buy_only`                | required    |
-| `reserveBps`       | integer | 0 to 2000                                | `50`        |
-| `minLegValueUsdE8` | string  | Decimal digits, 0 to `100000000000000`   | `100000000` |
-| `slippageBps`      | integer | 0 to 200                                 | `50`        |
-| `maxDeviationBps`  | integer | 0 to 500                                 | `100`       |
-| `allowUnsimulated` | boolean | Accept calls that could not be simulated | `false`     |
+| Field              | Type    | Values                                                     | Default     |
+| ------------------ | ------- | ---------------------------------------------------------- | ----------- |
+| `address`          | string  | `0x` and 40 hex digits, any letter case                    | required    |
+| `index`            | string  | An index identifier or index id                            | required    |
+| `version`          | integer | 1 to the latest version                                    | latest      |
+| `mode`             | string  | `rebalance` or `buy_only`                                  | required    |
+| `reserveBps`       | integer | 0 to 2000                                                  | `50`        |
+| `minLegValueUsdE8` | string  | Decimal digits, 0 to `100000000000000`                     | `100000000` |
+| `slippageBps`      | integer | 0 to 200                                                   | `50`        |
+| `maxDeviationBps`  | integer | 0 to 500, applied to the quoted and the minimum-out prices | `150`       |
+| `allowUnsimulated` | boolean | Accept calls whose sequence could not be simulated         | `false`     |
 
 There is no deposit: execution spends what the address holds on Base mainnet.
 
@@ -34,6 +34,21 @@ curl -X POST "http://localhost:3000/api/v1/portfolio/execution-plan" \
   -H "Content-Type: application/json" \
   -d '{"address":"0x9696f59e4d72e237be84ffd425dcad154bf96976","index":"diversified-equity-d622e2a5","mode":"buy_only"}'
 ```
+
+## Rate limits and deadline
+
+Each server instance applies these limits with in-process token buckets. Several instances each apply their own,
+so a deployment should also limit the route in front of the app.
+
+| Limit             | Value                                                                                 | Answer                                           |
+| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Per address       | 3 plans at once, then one every 20 seconds, keyed by `x-real-ip` or `x-forwarded-for` | 429 `rate_limited`, `Retry-After`                |
+| Provider requests | 10 at once, refilled at one per second; a plan takes two per leg before quoting       | 503 `provider_rate_limited`, `Retry-After`       |
+| Provider 429      | Never retried or waited on                                                            | 503 `provider_rate_limited`, the provider's wait |
+| Deadline          | 20 seconds per request; pending provider requests are aborted                         | 503 `deadline_exceeded`, `Retry-After: 15`       |
+
+A plan has at most 5 legs, so that it fits in the provider's limit of 10 requests per 10 seconds. Two legs are
+quoted at a time.
 
 ## Errors
 
@@ -48,8 +63,11 @@ curl -X POST "http://localhost:3000/api/v1/portfolio/execution-plan" \
 | 409    | `version_not_conformant` | The version fails verification                                                 |
 | 409    | `ineligible_token`       | A constituent is not in the asset list                                         |
 | 409    | `execution_unavailable`  | The server serves replayed market data (`details.reason: market_data_replay`)  |
+| 429    | `rate_limited`           | Too many plans from one address                                                |
 | 502    | `upstream_malformed`     | A balance could not be decoded                                                 |
 | 503    | `upstream_unavailable`   | Base mainnet did not answer the balance read or the pre-trade read             |
+| 503    | `provider_rate_limited`  | The provider's limit or the instance budget does not allow quoting now         |
+| 503    | `deadline_exceeded`      | The plan was not built within 20 seconds                                       |
 
 A restricted request, a closed market, a failed quote, a paused token or a failed simulation is not an error: the
 answer is `200` with `status: "blocked"` and the checks that block.
@@ -63,31 +81,43 @@ answer is `200` with `status: "blocked"` and the checks that block.
 | `executable`       | `true` only when every check passed or warned. `false` for a blocked plan, and for a ready plan that was accepted unsimulated |
 | `priceBasis`       | Always `"executable_quote"`                                                                                                   |
 | `statement`        | A fixed sentence on what the plan is and is not                                                                               |
-| `expiresAt`        | The plan must be quoted again after this time: 60 seconds after its first quote                                               |
+| `expiresAt`        | 120 seconds after the first quote, or the earliest route deadline when sooner. Nothing may be sent after it                   |
 | `checkedAtBlock`   | The Base mainnet block of the pre-trade read and of the simulation                                                            |
 | `simulationMethod` | `eth_simulateV1` (the sequence) or `eth_call` (calls alone), `null` when nothing was simulated                                |
 | `legs`             | The legs of the reference plan, each with its quote, or `null` when it has none                                               |
 | `checks`           | Every check that ran, in order: `check`, `status`, `reason`, `token`, `leg`, `detail`                                         |
 | `blockedBy`        | The checks that block. Empty when `ready`                                                                                     |
+| `warnings`         | Every check that passed with a warning. A client shows each one and asks the user to acknowledge it                           |
 | `approvals`        | Per token sold: current allowance toward the router, the exact amount, and whether it is required                             |
 | `calls`            | `ready` only: approvals, then sells, then buys. `to`, `data` and `value` are what a wallet sends                              |
 | `totals`           | `ready` only: USDC held, minimum USDC from sells, USDC the buys spend, balances after at minimum outs                         |
-| `planHash`         | `ready` only: keccak256 of `abi.encode("equityos.execution-plan/1", 8453, address, (to, value, data)[])`                      |
+| `planHash`         | `ready` only: keccak256 of `abi.encode("equityos.execution-plan/1", 8453, address, expiresAt, (to, value, data)[])`           |
 
 In a leg, `amountIn` is exact, `quotedAmountOut` is the provider's quote and is not guaranteed, `minAmountOut`
-is decoded from the calldata and enforced by the router, and `deviationBps` is the executable price against the
-reference, signed and rounded away from zero. `referenceAmountOut` is what the same amount buys or returns at the
+is decoded from the calldata and enforced by the router, `deadline` is decoded from the route and enforced onchain,
+`deviationBps` is the quoted price against the reference and `minimumDeviationBps` the minimum-out price against it,
+both signed and rounded away from zero. `referenceAmountOut` is what the same amount buys or returns at the
 reference price.
 
-A client that sends the calls recomputes `planHash` from exactly the calls it sends and compares it with the one
-it showed.
+### What a client that sends the calls must do
+
+The next step of the product sends these calls. A client that sends them:
+
+1. verifies every swap again in the browser with the same module the server uses,
+   `apps/web/src/lib/execution/calldata.ts` (`verifyQuote`, pure and browser-safe), and every approval for its
+   exact amount and spender;
+2. recomputes `planHash` from exactly the calls it is about to send and `expiresAt`, and sends nothing when it
+   differs from the hash it showed;
+3. refuses to send after `expiresAt`, measured by chain time (the latest block), not by the device clock;
+4. shows every entry of `warnings` and asks for an acknowledgement of each.
 
 ## Example
 
 Produced by the endpoint on 2026-11-24 against Base mainnet and the live KyberSwap API, for an address that held
 USDC, with the recorded local registry of the tests (`meta.registry.mode` is `replay`). The plan buys the five
-constituents; one leg is shown, with its checks, the approval and its swap; calldata is shortened after 74
-characters. The market was in its overnight session, so two references were `delayed` and warned.
+constituents; one leg is shown, with its checks, one warning, the approval and its swap; calldata is shortened
+after 74 characters. The market was in its overnight session, so four references were `delayed` and warned.
+The complete response is `packages/sdk/test/fixtures/execution-plan.json`.
 
 ```
 HTTP/1.1 200 OK
@@ -118,7 +148,7 @@ x-equityos-api-version: 1.3.0
     "reserveBps": 50,
     "minLegValueUsdE8": "100000000",
     "slippageBps": 50,
-    "maxDeviationBps": 100,
+    "maxDeviationBps": 150,
     "allowUnsimulated": false,
     "provider": {
       "name": "kyberswap",
@@ -126,10 +156,10 @@ x-equityos-api-version: 1.3.0
     },
     "status": "ready",
     "executable": true,
-    "expiresAt": "2026-11-24T06:51:15Z",
+    "expiresAt": "2026-11-24T07:21:57Z",
     "checkedAtBlock": {
-      "number": "61563207",
-      "timestamp": "2026-11-24T06:50:17Z"
+      "number": "61572114",
+      "timestamp": "2026-11-24T07:19:58Z"
     },
     "simulationMethod": "eth_simulateV1",
     "legs": [
@@ -141,19 +171,21 @@ x-equityos-api-version: 1.3.0
         "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         "tokenOut": "0xb20000000000000000000078ee7ce2fe4908108c",
         "amountIn": "183909739",
-        "referencePriceE8": "16290003367",
+        "referencePriceE8": "16374374608",
         "referenceStatus": "live",
-        "referenceAmountOut": "112897299",
+        "referenceAmountOut": "112315580",
         "quote": {
           "provider": "kyberswap",
           "router": "0x6131b5fae19ea4f9d964eac0408e4408b66337b5",
           "functionName": "swap",
-          "quotedAmountOut": "112336332",
-          "minAmountOut": "111774650",
-          "deviationBps": 50,
-          "gasEstimate": "381331",
-          "quotedAt": "2026-11-24T06:50:16Z",
-          "routeId": "879ad073CzVK2r26"
+          "quotedAmountOut": "112528617",
+          "minAmountOut": "111965973",
+          "deviationBps": -19,
+          "minimumDeviationBps": 32,
+          "deadline": "2026-11-24T07:21:57Z",
+          "gasEstimate": "925081",
+          "quotedAt": "2026-11-24T07:19:58Z",
+          "routeId": "c9399a171RJExpLg"
         }
       }
     ],
@@ -188,7 +220,7 @@ x-equityos-api-version: 1.3.0
         "reason": "verified",
         "token": "0xb20000000000000000000078ee7ce2fe4908108c",
         "leg": 2,
-        "detail": "879ad073CzVK2r26"
+        "detail": "c9399a171RJExpLg"
       },
       {
         "check": "price_deviation",
@@ -196,7 +228,7 @@ x-equityos-api-version: 1.3.0
         "reason": "within_band",
         "token": "0xb20000000000000000000078ee7ce2fe4908108c",
         "leg": 2,
-        "detail": "50"
+        "detail": "-19/32"
       },
       {
         "check": "transfers_not_paused",
@@ -223,6 +255,14 @@ x-equityos-api-version: 1.3.0
         "detail": null
       },
       {
+        "check": "allowance",
+        "status": "pass",
+        "reason": "within_plan",
+        "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "leg": null,
+        "detail": "0"
+      },
+      {
         "check": "balance",
         "status": "pass",
         "reason": "sufficient",
@@ -244,10 +284,20 @@ x-equityos-api-version: 1.3.0
         "reason": "current",
         "token": null,
         "leg": null,
-        "detail": "1795503075"
+        "detail": "1795504917"
       }
     ],
     "blockedBy": [],
+    "warnings": [
+      {
+        "check": "reference_freshness",
+        "status": "warn",
+        "reason": "delayed",
+        "token": "0xb2000000000000000000001e800a7f5189430cd0",
+        "leg": 0,
+        "detail": null
+      }
+    ],
     "approvals": [
       {
         "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
@@ -274,7 +324,7 @@ x-equityos-api-version: 1.3.0
         "value": "0",
         "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         "leg": 2,
-        "minAmountOut": "111774650"
+        "minAmountOut": "111965973"
       }
     ],
     "totals": {
@@ -290,32 +340,32 @@ x-equityos-api-version: 1.3.0
         {
           "token": "0xb20000000000000000000078ee7ce2fe4908108c",
           "before": "0",
-          "after": "111774650"
+          "after": "111965973"
         }
       ]
     },
-    "planHash": "0xdc46a75c5e4fbac6e5d97241cd3d809bacbd7387659babe68fc9b7f5307db3b6"
+    "planHash": "0x9996eed2d36c99858bb540b4e13d56a5f70da2cd7cd3a5543b51eac66f5a74b8"
   },
   "meta": {
-    "asOf": "2026-11-24T06:50:15Z",
+    "asOf": "2026-11-24T07:19:57Z",
     "marketPhase": "extended",
     "referencePriceSource": "chainlink",
     "datasets": {
       "assetList": {
         "source": "coinbase_api",
-        "fetchedAt": "2026-11-24T06:50:13Z",
+        "fetchedAt": "2026-11-24T07:19:55Z",
         "ageSeconds": 2,
         "servedStale": false,
         "failure": null
       },
       "onchain": {
         "source": "base_rpc",
-        "fetchedAt": "2026-11-24T06:50:13Z",
+        "fetchedAt": "2026-11-24T07:19:55Z",
         "ageSeconds": 2,
         "servedStale": false,
         "failure": null,
-        "blockNumber": "61563195",
-        "blockTimestamp": "2026-11-24T06:50:14Z"
+        "blockNumber": "61572104",
+        "blockTimestamp": "2026-11-24T07:19:56Z"
       }
     },
     "registry": {
@@ -325,8 +375,8 @@ x-equityos-api-version: 1.3.0
     },
     "balances": {
       "chainId": 8453,
-      "blockNumber": "61563199",
-      "blockTimestamp": "2026-11-24T06:50:15Z",
+      "blockNumber": "61572109",
+      "blockTimestamp": "2026-11-24T07:19:57Z",
       "mode": "live"
     }
   }

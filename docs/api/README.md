@@ -80,15 +80,20 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
 | 409    | `missing_feed`           | The token has no usable reference feed                                       |
 | 409    | `stale_feed`             | The reference feed of the token missed its heartbeat                         |
 | 409    | `execution_unavailable`  | An execution plan was asked of a server that serves replayed market data     |
+| 429    | `rate_limited`           | Too many execution plans from one address. Carries `Retry-After`             |
 | 500    | `service_misconfigured`  | The server is not configured to read its data sources                        |
 | 500    | `internal_error`         | Anything unexpected                                                          |
 | 502    | `upstream_malformed`     | A data source answered with a payload of an unexpected shape                 |
 | 503    | `upstream_unavailable`   | A data source did not answer and no recent copy of its data is cached        |
+| 503    | `provider_rate_limited`  | The quote provider's limit does not allow an execution plan now              |
+| 503    | `deadline_exceeded`      | An execution plan was not built within 20 seconds                            |
 
 - An unknown query parameter is an error and is not ignored, so a misspelled filter cannot return unfiltered data.
-- A 503 carries `Retry-After: 15`. A 502 and a 503 carry `details.source`: `coinbase_api`, `base_rpc` or
-  `registry_rpc`.
-- A 500 never says what is misconfigured or what failed. The cause is written to the server log.
+- A 503 carries `Retry-After`: 15 seconds, or for `provider_rate_limited` the wait the limit asks for. A 429
+  carries it too. A 502 and an `upstream_unavailable` 503 carry `details.source`: `coinbase_api`, `base_rpc` or
+  `registry_rpc`; `provider_rate_limited` carries `kyberswap_api`.
+- A 500 never says what is misconfigured or what failed. The server log gets one line with the error classes and
+  a redacted host, never an error message or a URL.
 - `ineligible_token`, `token_paused`, `missing_feed` and `stale_feed` are the per-token conditions of the market
   data layer. The asset endpoints report these conditions as data. The portfolio endpoints answer
   `ineligible_token` when a constituent is not in the asset list. The others are reserved for endpoints that need
@@ -128,7 +133,7 @@ guaranteed at it.
 | Assets, built from a snapshot served stale | `no-store`                                             |
 | Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
 | Portfolio and plan                         | `public, max-age=N`: at most 15 s, keyed by the URL    |
-| Execution plan                             | `no-store`: per request, and it expires within 60 s    |
+| Execution plan                             | `no-store`: per request, and it expires within 120 s   |
 | Status                                     | `no-store`: it depends on where the request comes from |
 | OpenAPI document                           | `public, max-age=3600`                                 |
 | Any error                                  | `no-store`                                             |
