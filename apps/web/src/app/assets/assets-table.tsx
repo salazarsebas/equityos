@@ -77,7 +77,7 @@ function AssetRow({ entry, showEligibility }: { entry: AssetMarketData; showElig
         <Link
           href={tokenExplorerUrl(asset.address)}
           variant="quiet"
-          aria-label={`${asset.symbol} token ${asset.address}`}
+          aria-label={`${shortenAddress(asset.address)}, ${asset.symbol} token ${asset.address}`}
         >
           <span title={asset.address}>{shortenAddress(asset.address)}</span>
         </Link>

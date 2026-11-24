@@ -37,7 +37,7 @@ address was compared with in that browser, and nothing else.
   the index are not in it, so the current weights sum to 100.00% and compare directly with the target weights.
 - **Drift** is current weight minus target weight, in percentage points: `+15.00` means 15 points above target.
   Being above or below target is neither good nor bad, so the bars use the neutral tone inside the threshold and
-  the accent tone from the threshold on, never the colors of a return. The short ticks mark the threshold on each
+  the warning tone from the threshold on, never the colors of a return. The short ticks mark the threshold on each
   side of zero, and every bar of the table shares one scale.
 - **Largest drift** is compared with the drift threshold of the spec, in words: "Within threshold" or "Above
   threshold by X pp". A drift equal to the threshold reaches it.

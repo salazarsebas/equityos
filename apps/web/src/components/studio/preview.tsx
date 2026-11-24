@@ -71,7 +71,9 @@ export function CompositionTable({
       <TableHead>
         <TableRow>
           <TableHeader>Asset</TableHeader>
-          <TableHeader className="w-full" aria-label="Share of the index" />
+          <TableHeader className="w-full">
+            <span className="sr-only">Share of the index</span>
+          </TableHeader>
           <TableHeader numeric>Target weight</TableHeader>
         </TableRow>
       </TableHead>

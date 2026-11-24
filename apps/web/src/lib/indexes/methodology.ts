@@ -47,9 +47,9 @@ function plural(count: number, singular: string): string {
   return `${formatCount(BigInt(count))} ${singular}${count === 1 ? "" : "s"}`;
 }
 
-/** `Equal weight` or `Fixed weights`. */
+/** `Equal weights` or `Fixed weights`. */
 export function weightingLabel(spec: IndexSpec): string {
-  return spec.weighting.type === "equal" ? "Equal weight" : "Fixed weights";
+  return spec.weighting.type === "equal" ? "Equal weights" : "Fixed weights";
 }
 
 /** The largest target weight among the constituents of a version, in basis points. */

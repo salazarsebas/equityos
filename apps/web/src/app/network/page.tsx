@@ -159,8 +159,7 @@ function NotDeployed({ read }: { read: Extract<NetworkRead, { status: "registry_
 
 export default async function NetworkPage() {
   const read = await load();
-  const chainLabel =
-    read === "unavailable" ? "the configured chain" : `${chainName(read.chainId)} (chain id ${read.chainId})`;
+  const chainLabel = read === "unavailable" ? null : `${chainName(read.chainId)} (chain id ${read.chainId})`;
   return (
     <Container className="flex flex-col gap-8 py-8 md:py-12">
       <div>

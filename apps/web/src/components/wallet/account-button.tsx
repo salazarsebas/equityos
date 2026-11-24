@@ -13,7 +13,11 @@ type AccountButtonProps = Omit<ComponentProps<typeof Button>, "children" | "vari
 /** Width of the account control in the top bar, whatever it shows, so that nothing next to it ever moves. */
 export const ACCOUNT_SLOT = "relative w-44";
 
-/** The button of the account control: "Connect wallet", or the shortened account. It fills `ACCOUNT_SLOT`. */
+/**
+ * The button of the account control: "Connect wallet", or the shortened account. It fills `ACCOUNT_SLOT`. Its name
+ * contains the shortened account it shows, so that it can be named by what is on screen; the menu it opens shows
+ * the full one.
+ */
 export function AccountButton({ account, wrongNetwork = false, ...rest }: AccountButtonProps) {
   if (account === null) {
     return (
@@ -26,7 +30,7 @@ export function AccountButton({ account, wrongNetwork = false, ...rest }: Accoun
     <Button
       {...rest}
       className="w-full justify-between"
-      aria-label={`Account ${account}${wrongNetwork ? ", unsupported network" : ""}`}
+      aria-label={`Account ${shortenAddress(account)}${wrongNetwork ? ", unsupported network" : ""}`}
     >
       {wrongNetwork ? <WarningIcon className="shrink-0 text-warning" /> : null}
       <span className="num font-mono text-sm">{shortenAddress(account)}</span>

@@ -13,15 +13,15 @@ describe("AccountButton", () => {
     expect(html).not.toContain("aria-label");
   });
 
-  test("shows the shortened account in tabular mono and names the full one", () => {
+  test("shows the shortened account in tabular mono and names it as shown", () => {
     const html = renderToStaticMarkup(createElement(AccountButton, { account: ACCOUNT }));
     expect(html).toContain('<span class="num font-mono text-sm">0xf39F...2266</span>');
-    expect(html).toContain(`aria-label="Account ${ACCOUNT}"`);
+    expect(html).toContain('aria-label="Account 0xf39F...2266"');
   });
 
   test("marks an unsupported network in the name, not by color alone", () => {
     const html = renderToStaticMarkup(createElement(AccountButton, { account: ACCOUNT, wrongNetwork: true }));
-    expect(html).toContain(`aria-label="Account ${ACCOUNT}, unsupported network"`);
+    expect(html).toContain('aria-label="Account 0xf39F...2266, unsupported network"');
     expect(html).toContain("text-warning");
   });
 });

@@ -115,7 +115,7 @@ test("connect, wrong network, switch to Base, reload and disconnect", async ({ p
   await connect(page);
 
   // Connected on Ethereum mainnet, which the app does not use.
-  await expect(accountButton(page)).toHaveAccessibleName(`Account ${TEST_ACCOUNT}, unsupported network`);
+  await expect(accountButton(page)).toHaveAccessibleName("Account 0xf39F...2266, unsupported network");
   await accountButton(page).click();
   const menu = accountMenu(page);
   await expect(menu).toContainText(TEST_ACCOUNT);
@@ -130,7 +130,7 @@ test("connect, wrong network, switch to Base, reload and disconnect", async ({ p
   await menu.getByRole("button", { name: "Switch to Base" }).click();
   await expect(menu).not.toContainText("Unsupported");
   await expect(menu.getByRole("button", { name: "Switch to Base" })).toHaveCount(0);
-  await expect(accountButton(page)).toHaveAccessibleName(`Account ${TEST_ACCOUNT}`);
+  await expect(accountButton(page)).toHaveAccessibleName("Account 0xf39F...2266");
 
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();

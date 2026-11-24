@@ -303,7 +303,7 @@ export default function ApiReferencePage() {
               wrote it.
             </p>
             {Object.entries(components.schemas).map(([name, schema]) => (
-              <section
+              <article
                 key={name}
                 id={schemaAnchor(name)}
                 aria-labelledby={`${schemaAnchor(name)}-heading`}
@@ -324,7 +324,7 @@ export default function ApiReferencePage() {
                     <FieldList rows={fieldRows(schema)} label={`Fields of ${name}`} />
                   )}
                 </div>
-              </section>
+              </article>
             ))}
           </section>
         </div>

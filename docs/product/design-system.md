@@ -191,3 +191,6 @@ that adds its page: `apps/web/test/navigation.test.ts` fails when an entry point
   console errors, static pages are still prerendered, there is no horizontal overflow at 375 px, the theme
   toggle persists, fonts are served from
   the app's origin, and tabs and the dialog respond to the keyboard. Run `bun run build` first.
+- `apps/web/e2e/accessibility.e2e.ts`, part of `bun run test:e2e`, runs axe-core on every route, in the light and
+  the dark theme, in each registry state, with the connect dialog open and on the execution review. It fails on
+  any serious or critical violation of WCAG 2.2 A and AA or of the axe best practices.
