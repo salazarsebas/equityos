@@ -6,6 +6,7 @@ The endpoints are described in:
 - [Assets](./assets.md): the tokenized stock universe and the API status.
 - [Indexes](./indexes.md): the published indexes, their versions, their verification and their composition.
 - [Portfolio](./portfolio.md): any address compared with a published index, and a reference-price plan.
+- [Execution plan](./execution.md): the plan quoted and checked for execution on Base mainnet. Nothing is sent.
 - The OpenAPI 3.1 document, served by every deployment at `/api/v1/openapi.json`.
 
 The implementation lives in `apps/web/src/server/api` (envelope, errors, validation, OpenAPI document, handlers)
@@ -22,9 +23,10 @@ EquityOS is not affiliated with their operators. Nothing the API returns is inve
 https://<deployment>/api/v1
 ```
 
-- No API key and no authentication. Every endpoint is a `GET`.
+- No API key and no authentication. Every endpoint is a `GET`, except `POST /portfolio/execution-plan`, which
+  takes a JSON body and is never cached.
 - CORS is open: every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` answers a preflight for
-  `GET`.
+  `GET`, or for `POST` on the execution plan.
 - There is no rate limit in the application. A deployment may apply one in front of it.
 
 ## Envelope
@@ -65,6 +67,7 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
 | 400    | `invalid_parameter`      | A query parameter is unknown, given twice or has a value that is not allowed |
 | 400    | `invalid_address`        | A path address is not `0x` followed by 40 hex digits                         |
 | 400    | `invalid_identifier`     | An index identifier is neither an index id nor a slug with an id prefix      |
+| 400    | `invalid_body`           | A request body is not a JSON object sent as `application/json`, or too large |
 | 404    | `asset_not_found`        | The address is well formed and no listed asset has it                        |
 | 404    | `index_not_found`        | The registry holds no index with the identifier                              |
 | 404    | `version_not_found`      | The index has no version with the number                                     |
@@ -74,6 +77,7 @@ says why. Nothing is replaced by zero, an empty string or the last known value.
 | 409    | `token_paused`           | The issuer paused transfers of the token                                     |
 | 409    | `missing_feed`           | The token has no usable reference feed                                       |
 | 409    | `stale_feed`             | The reference feed of the token missed its heartbeat                         |
+| 409    | `execution_unavailable`  | An execution plan was asked of a server that serves replayed market data     |
 | 500    | `service_misconfigured`  | The server is not configured to read its data sources                        |
 | 500    | `internal_error`         | Anything unexpected                                                          |
 | 502    | `upstream_malformed`     | A data source answered with a payload of an unexpected shape                 |
@@ -122,6 +126,7 @@ guaranteed at it.
 | Assets, built from a snapshot served stale | `no-store`                                             |
 | Indexes, built from the registry           | `public, max-age=10`: the lifetime of the reader cache |
 | Portfolio and plan                         | `public, max-age=N`: at most 15 s, keyed by the URL    |
+| Execution plan                             | `no-store`: per request, and it expires within 60 s    |
 | Status                                     | `no-store`: it depends on where the request comes from |
 | OpenAPI document                           | `public, max-age=3600`                                 |
 | Any error                                  | `no-store`                                             |
@@ -138,8 +143,8 @@ reference price is computed for the time of each response.
   error code or an ineligibility reason. Clients must ignore fields they do not know and must treat an unknown
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
-  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.2.0`, which
-  added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
+  `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.3.0`, which
+  added the execution plan. `1.2.0` added the portfolio endpoints. `1.1.0` added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
 
 ## The OpenAPI document is the contract
@@ -157,14 +162,15 @@ responses to the validation test.
 
 ## Execution availability and the jurisdiction gate
 
-No endpoint executes or prepares a trade. `GET /api/v1/status` already reports `executionAvailable`, which is
-`false` for every request in this version, with a reason:
+No endpoint executes a trade. `POST /portfolio/execution-plan` prepares calls and applies the gate below as its
+first check, but nothing is signed or sent. `GET /api/v1/status` reports `executionAvailable`, which is `false`
+for every request in this version, with a reason:
 
-| `executionUnavailableReason` | Meaning                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------ |
-| `restricted_jurisdiction`    | The request is located in the United States or one of its territories          |
-| `jurisdiction_unknown`       | The location of the request could not be established                           |
-| `not_released`               | The gate would let the request through. This version has no execution endpoint |
+| `executionUnavailableReason` | Meaning                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `restricted_jurisdiction`    | The request is located in the United States or one of its territories     |
+| `jurisdiction_unknown`       | The location of the request could not be established                      |
+| `not_released`               | The gate would let the request through. This version sends no transaction |
 
 The gate is `classifyJurisdiction` in `apps/web/src/server/jurisdiction.ts`. It reads the country the hosting
 platform reports in the `x-vercel-ip-country` header.
@@ -178,7 +184,7 @@ platform reports in the `x-vercel-ip-country` header.
 - A header that is not a two-letter code is `jurisdiction_unknown` in every environment.
 
 The gate does not block any read endpoint and must not be used for that: public data stays public everywhere.
-It will guard execution endpoints and the execution interface when they are added.
+It guards the execution plan, and will guard the execution interface when it is added.
 
 It is a coarse network signal and not a compliance control. It reflects the address a request arrives from,
 which a VPN changes. It says nothing about the residence or the eligibility of a person. It can be forged when

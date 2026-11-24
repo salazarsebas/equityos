@@ -59,6 +59,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Portfolio page at `/portfolio`: any address compared with a published index version, with a drift table, the
   holdings outside the index and a reference-price plan preview in rebalance or buy-only mode. Linked from the
   index profile and the primary navigation.
+- Public API v1.3.0: `POST /api/v1/portfolio/execution-plan` quotes the reference-price plan for execution on
+  Base mainnet through the KyberSwap aggregator, verifies the calldata against an allowlisted router, runs
+  pre-trade checks at one block (jurisdiction, reference freshness, price deviation, pause, B20 policies,
+  pending multiplier, balances at minimum amounts out, exact approvals), simulates the calls and returns either
+  the blocking checks or the ordered calls with `planHash`. Nothing is signed or sent.
 
 ### Changed
 

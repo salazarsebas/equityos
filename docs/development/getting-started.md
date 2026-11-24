@@ -90,6 +90,7 @@ bun run --filter @equityos/core test
 | `EQUITYOS_CHAIN_ID`                    | `apps/web` | Chain the index registry is read from: 8453 (default), 84532 or 31337.                 |
 | `EQUITYOS_RPC_URL`                     | `apps/web` | JSON-RPC endpoint of the registry chain when it is 84532 or 31337.                     |
 | `EQUITYOS_LOG_CHUNK_BLOCKS`            | `apps/web` | Blocks per `eth_getLogs` request of the registry event scan. Defaults to 2000.         |
+| `KYBERSWAP_CLIENT_ID`                  | `apps/web` | `x-client-id` sent to the KyberSwap API for execution plans. Defaults to `equityos`.   |
 | `NEXT_PUBLIC_BASE_RPC_URL`             | `apps/web` | Base mainnet JSON-RPC endpoint the browser reads balances from. Set it in production.  |
 | `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`     | `apps/web` | Base Sepolia JSON-RPC endpoint for the browser. Set it in production.                  |
 | `NEXT_PUBLIC_ANVIL_RPC_URL`            | `apps/web` | Local Anvil endpoint, development builds only. Defaults to `http://127.0.0.1:8545`.    |
