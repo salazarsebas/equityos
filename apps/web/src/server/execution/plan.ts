@@ -1,7 +1,13 @@
 import "server-only";
 import type { PriceStatus } from "@equityos/core";
 import { type Address, encodeFunctionData, type Hex, parseAbi } from "viem";
-import { type ExecutableQuote, KYBERSWAP_ROUTER, planHash, verifyQuote } from "@/lib/execution/calldata";
+import {
+  type ExecutableQuote,
+  KYBERSWAP_ROUTER,
+  planHash,
+  ROUTE_DEADLINE_TOLERANCE_SECONDS,
+  verifyQuote,
+} from "@/lib/execution/calldata";
 import type { Jurisdiction } from "@/server/jurisdiction";
 import { USDC_ADDRESS } from "@/server/market";
 import {
@@ -50,7 +56,7 @@ export const MULTIPLIER_WINDOW_SECONDS = 86_400;
  */
 export const PLAN_TTL_SECONDS = 120;
 /** A route's deadline may exceed the plan's expiry by at most this many seconds, the clock skew allowed. */
-export const DEADLINE_TOLERANCE_SECONDS = 15;
+export const DEADLINE_TOLERANCE_SECONDS = ROUTE_DEADLINE_TOLERANCE_SECONDS;
 /**
  * Most legs one plan quotes: five. Each takes two provider requests, and the keyless limit is 10 requests per
  * 10 seconds, so a larger plan could not be quoted within one window.

@@ -9,7 +9,8 @@
  * account that held USDC on Base mainnet when this test was written; `LIVE_ACCOUNT` replaces it.
  */
 import { describe, expect, test } from "bun:test";
-import { type Address, createPublicClient, http, isAddress, parseAbi } from "viem";
+import { type Address, concat, createPublicClient, encodeFunctionData, http, isAddress, parseAbi, toHex } from "viem";
+import { builderCodeSuffix } from "../../src/lib/execution/builder-code";
 import { createKyberSwapProvider, resolveClientId } from "../../src/server/execution/kyberswap";
 import { createExecutionLimits } from "../../src/server/execution/limits";
 import { buildExecutionPlan, type ExecutionLeg } from "../../src/server/execution/plan";
@@ -130,5 +131,57 @@ describe.skipIf(!live)("live: KyberSwap and Base mainnet", () => {
     }
     expect(plan.simulationMethod).toBe("eth_simulateV1");
     expect(plan.checks.find((check) => check.check === "simulation")?.reason).toBe("sequence_simulated");
+  }, 60_000);
+
+  test("the router and the tokens accept the ERC-8021 suffix: a suffixed sequence returns what the plain one does", async () => {
+    // Approve USDC, buy NVDA, approve NVDA, sell what the buy returns at minimum: every call once without and
+    // once with the Builder Code suffix appended, on one simulated block each, read-only.
+    const quote = async (tokenIn: Address, tokenOut: Address, amountIn: bigint) => {
+      const request = { tokenIn, tokenOut, amountIn, account: ACCOUNT, slippageBps: 50, deadline: now() + 300 };
+      const answer = await provider.quote(request, { signal: AbortSignal.timeout(20_000), takeRetry: () => false });
+      if (answer.status !== "ok") throw new Error(`quote failed: ${answer.reason} ${answer.detail}`);
+      const verified = verifyQuote(request, answer.quote);
+      if (verified.status !== "ok") throw new Error(`verification failed: ${verified.reason} ${verified.detail}`);
+      return verified.quote;
+    };
+    const approveAbi = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
+    const approve = (amount: bigint) => encodeFunctionData({ abi: approveAbi, args: [KYBERSWAP_ROUTER, amount] });
+    const buy = await quote(USDC_ADDRESS, NVDA, 5_000_000n);
+    const sell = await quote(NVDA, USDC_ADDRESS, buy.minAmountOut);
+    const calls = [
+      { to: USDC_ADDRESS, data: approve(5_000_000n) },
+      { to: KYBERSWAP_ROUTER, data: buy.calldata },
+      { to: NVDA, data: approve(buy.minAmountOut) },
+      { to: KYBERSWAP_ROUTER, data: sell.calldata },
+    ];
+    const suffix = builderCodeSuffix("equityos");
+    if (suffix === null) throw new Error("no suffix");
+    const block = toHex(await client.getBlockNumber());
+    const simulate = async (appended: boolean) => {
+      const answer = (await client.request({
+        method: "eth_simulateV1" as never,
+        params: [
+          {
+            blockStateCalls: [
+              {
+                calls: calls.map((call) => ({
+                  from: ACCOUNT,
+                  to: call.to,
+                  data: appended ? concat([call.data, suffix]) : call.data,
+                })),
+              },
+            ],
+            validation: false,
+          },
+          block,
+        ] as never,
+      })) as { calls: { status: string; returnData: string }[] }[];
+      return answer[0]?.calls.map(({ status, returnData }) => `${status}:${returnData}`) ?? [];
+    };
+    const plain = await simulate(false);
+    const suffixed = await simulate(true);
+    console.log(`suffix ${suffix} at block ${block}: ${suffixed.join(" ")}`);
+    expect(plain.every((result) => result.startsWith("0x1:"))).toBe(true);
+    expect(suffixed).toEqual(plain);
   }, 60_000);
 });

@@ -24,6 +24,12 @@ import {
 export const EXECUTION_CHAIN_ID = 8453;
 
 /**
+ * A route's deadline may exceed the plan's expiry by at most this many seconds, the clock skew allowed. The
+ * server blocks a plan with a later deadline, and a client that sends a plan refuses one.
+ */
+export const ROUTE_DEADLINE_TOLERANCE_SECONDS = 15;
+
+/**
  * KyberSwap `MetaAggregationRouterV2` on Base mainnet, lowercase. Listed for chain 8453 in the KyberSwap
  * contract documentation, returned as `routerAddress` by the aggregator API for Base, verified on Sourcify for
  * chain 8453 (solc 0.8.9) and answering `WETH()` with the Base WETH predeploy. Calldata addressed to any other
