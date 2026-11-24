@@ -1,3 +1,4 @@
+import { LOCAL_CHAIN_ID } from "@equityos/contracts-abi";
 import { defineConfig, devices } from "@playwright/test";
 
 /** Ports of this suite, apart from the ones of local development and of the other suites. */
@@ -31,7 +32,13 @@ export default defineConfig({
   webServer: {
     command: `bun run dev --port ${port}`,
     url: `http://localhost:${port}/studio`,
-    env: { MARKET_REPLAY_DIR: "test/fixtures/market", NEXT_PUBLIC_ANVIL_RPC_URL: ANVIL_RPC_URL },
+    env: {
+      MARKET_REPLAY_DIR: "test/fixtures/market",
+      NEXT_PUBLIC_ANVIL_RPC_URL: ANVIL_RPC_URL,
+      // The server reads the same local registry, so the link to the new index resolves.
+      EQUITYOS_CHAIN_ID: String(LOCAL_CHAIN_ID),
+      EQUITYOS_RPC_URL: ANVIL_RPC_URL,
+    },
     reuseExistingServer: false,
     timeout: 120_000,
   },

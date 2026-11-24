@@ -127,6 +127,11 @@ test("an index is created, confirmed and verified, and what was sent is what was
     args: [shown.indexId],
   });
   expect(index).toMatchObject({ creator: TEST_ACCOUNT, latestVersion: 1 });
+
+  // The confirmed state links to the profile of the new index, which the server reads from the same chain.
+  await page.getByRole("link", { name: "Open the index page" }).click();
+  await expect(page).toHaveURL(new RegExp(`/indexes/${shown.identifier}$`));
+  await expect(page.getByRole("heading", { level: 1, name: "Local Chips" })).toBeVisible();
 });
 
 test("publishing the same draft again is refused with the decoded error, until the salt is changed on purpose", async ({

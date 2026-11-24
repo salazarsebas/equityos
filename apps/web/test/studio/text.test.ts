@@ -1,48 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ineligibilityText, parseAssetsResponse } from "../../src/lib/studio/assets";
-import { evaluateDraft } from "../../src/lib/studio/evaluate";
 import { publishFailureText } from "../../src/lib/studio/messages";
-import { durationText, methodologyText } from "../../src/lib/studio/methodology-text";
-import { ASSETS, TOKENS, validDraft } from "./support";
-
-function text(overrides: Parameters<typeof validDraft>[0] = {}): string[] {
-  const { valid } = evaluateDraft(validDraft(overrides), ASSETS);
-  if (valid === null) throw new Error("expected a valid draft");
-  return methodologyText(valid.spec, valid.constituents);
-}
-
-describe("methodologyText", () => {
-  test("states the weighting, the bounds and the rebalance rule with their numbers", () => {
-    expect(text()).toEqual([
-      "Equal weight across 3 tokenized stocks: from 33.33% to 33.34%.",
-      "A rebalance is due when a constituent is more than 5.00 percentage points away from its target weight, and at least 7 days have passed since the last rebalance.",
-      "Weights are targets. They are measured with reference prices from one oracle feed per constituent.",
-    ]);
-    expect(
-      text({ tokens: TOKENS.slice(0, 2), maxWeight: "60", minWeight: "40", minInterval: "0" }).slice(0, 3),
-    ).toEqual([
-      "Equal weight across 2 tokenized stocks: 50.00% each.",
-      "Every weight must stay between 40.00% and 60.00%.",
-      "A rebalance is due when a constituent is more than 5.00 percentage points away from its target weight, with no minimum time between two rebalances.",
-    ]);
-    const [first, cap] = text({
-      tokens: TOKENS.slice(0, 2),
-      weighting: "fixed",
-      weights: { [TOKENS[0] ?? ""]: "70", [TOKENS[1] ?? ""]: "30" },
-      maxWeight: "70",
-    });
-    expect(first).toBe("Fixed weights across 2 tokenized stocks: from 30.00% to 70.00%.");
-    expect(cap).toBe("No weight may be above 70.00%.");
-    expect(text({ tokens: TOKENS.slice(0, 1), minWeight: "100" })[1]).toBe("No weight may be below 100.00%.");
-  });
-
-  test("durations use the largest unit that divides them", () => {
-    expect(durationText(604_800)).toBe("7 days");
-    expect(durationText(86_400)).toBe("1 day");
-    expect(durationText(129_600)).toBe("36 hours");
-    expect(durationText(90)).toBe("90 seconds");
-  });
-});
+import { TOKENS } from "./support";
 
 describe("publishFailureText", () => {
   test("explains an index that already exists and offers a new salt, never a silent one", () => {

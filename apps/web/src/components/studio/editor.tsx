@@ -18,7 +18,7 @@ import {
   toggleToken,
 } from "@/lib/studio/draft";
 import { type FieldIssue, issuesFor } from "@/lib/studio/evaluate";
-import { rebalanceSentence } from "@/lib/studio/methodology-text";
+import { rebalanceRules } from "@/lib/indexes/methodology";
 import { bpsToPercentText, percentTextToBps } from "@/lib/studio/weights";
 import { fieldMessage, Section, UnitInput } from "./parts";
 import { WeightEditor } from "./weight-editor";
@@ -422,7 +422,9 @@ function Rebalance({ draft, update, issues }: EditorProps) {
       </div>
       {driftBps !== null && driftBps > 0 && seconds !== null ? (
         <p className="max-w-measure border-l-2 border-strong pl-3 text-primary">
-          {rebalanceSentence(driftBps, seconds)}
+          {rebalanceRules({ driftThresholdBps: driftBps, minIntervalSeconds: seconds })
+            .map(({ reading }) => reading)
+            .join(" ")}
         </p>
       ) : null}
     </Section>

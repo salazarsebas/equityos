@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { formatCount, formatPercent } from "@/lib/format";
 import { publishFailureText } from "@/lib/studio/messages";
-import { methodologyText } from "@/lib/studio/methodology-text";
+import { describeMethodology } from "@/lib/indexes/methodology";
 import { type ChecklistItem, publishChecklist, type RegistryPresence } from "@/lib/studio/preflight";
 import {
   buildPublishPlan,
@@ -56,6 +56,11 @@ type ReviewProps = {
   onNewSalt: () => void;
   onNewDraft: () => void;
 };
+
+/** The profile page of an index on this site. */
+function indexPage(identifier: string): string {
+  return `/indexes/${identifier}`;
+}
 
 function explorerLink(chain: Chain, kind: "tx" | "address", value: string): string | null {
   const explorer = chain.blockExplorers?.default;
@@ -317,7 +322,9 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
         </div>
         <dl className="border-y text-base">
           <Fact term="Identifier">
-            <Mono>{result.identifier}</Mono>
+            <Link href={indexPage(result.identifier)} className="font-mono text-sm break-all">
+              {result.identifier}
+            </Link>
           </Fact>
           <Fact term="Index id">
             <Mono>{result.plan.indexId}</Mono>
@@ -342,8 +349,12 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
             </li>
           ))}
         </ul>
+        <p className="max-w-measure text-secondary">
+          <Link href={indexPage(result.identifier)}>Open the index page</Link>. The explorer lists the index once it has
+          read the registry again, within ten seconds, when this site reads {chain.name}.
+        </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" size="lg" onClick={onNewDraft}>
+          <Button size="lg" onClick={onNewDraft}>
             Start a new draft
           </Button>
           <Button size="lg" onClick={() => exportSpec(valid)}>
@@ -450,8 +461,8 @@ export function Review({ snapshot, chain, policy, presence, onBack, onNewSalt, o
               </TableBody>
             </Table>
             <ul className="flex flex-col gap-1 text-primary">
-              {methodologyText(valid.spec, valid.constituents).map((sentence) => (
-                <li key={sentence}>{sentence}</li>
+              {describeMethodology(valid.spec).map(({ rule, reading }) => (
+                <li key={rule}>{reading}</li>
               ))}
             </ul>
           </section>

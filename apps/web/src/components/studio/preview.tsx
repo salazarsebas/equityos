@@ -18,7 +18,7 @@ import {
 import { formatCount, formatPercent } from "@/lib/format";
 import type { StudioAsset } from "@/lib/studio/assets";
 import type { Evaluation, FieldIssue, ValidDraft } from "@/lib/studio/evaluate";
-import { methodologyText } from "@/lib/studio/methodology-text";
+import { describeMethodology } from "@/lib/indexes/methodology";
 import { sumBps } from "@/lib/studio/weights";
 import { issueSummary, StatusMark } from "./parts";
 
@@ -198,8 +198,8 @@ export function Preview({ evaluation, assets, assetsFailed }: PreviewProps) {
         <>
           <Block title="Methodology">
             <ul className="flex flex-col gap-1 text-primary">
-              {methodologyText(valid.spec, valid.constituents).map((sentence) => (
-                <li key={sentence}>{sentence}</li>
+              {describeMethodology(valid.spec).map(({ rule, reading }) => (
+                <li key={rule}>{reading}</li>
               ))}
             </ul>
           </Block>
