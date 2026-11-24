@@ -228,6 +228,9 @@ const readAbi = parseAbi([
   "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
 ]);
 
+/** Number of the latest block the mock reports: a Base mainnet height, after Multicall3 was deployed there. */
+const BLOCK_NUMBER = "0x3abe17e";
+
 /** USDC on Base mainnet, lowercase: 6 decimals. Every other token in these tests has 8. */
 const USDC_TOKEN = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 
@@ -264,10 +267,10 @@ export async function mockBaseRpc(
   function answer({ method, params }: RpcRequest): unknown {
     methods.push(method);
     if (method === "eth_chainId") return "0x2105";
-    if (method === "eth_blockNumber") return "0x3e8";
+    if (method === "eth_blockNumber") return BLOCK_NUMBER;
     if (method === "eth_getBlockByNumber") {
       return {
-        number: "0x3e8",
+        number: BLOCK_NUMBER,
         hash: `0x${"11".repeat(32)}`,
         parentHash: `0x${"22".repeat(32)}`,
         timestamp: `0x${blockTimestamp.toString(16)}`,

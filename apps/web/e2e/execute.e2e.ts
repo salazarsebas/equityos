@@ -75,7 +75,7 @@ test.describe("execution review", () => {
       "Reference 129.75 USD a token, read in this browser from its feed (live): the minimum is 0.50% worse than it",
     );
     await expect(calls.getByRole("row", { name: /Sell NVDAc/ })).toContainText(
-      `Reverts after ${new Date((CHAIN_TIME + 100) * 1000).toISOString().replace(".000Z", "Z")}`,
+      `Reverts after ${new Date((CHAIN_TIME + 100) * 1000).toISOString()}, the route deadline decoded from its calldata`,
     );
     await expect(review).toContainText(
       "Index id 0xd622e2a5c14a9c3da33be82cea76e20adeaf4a26ca46413ee21307d2c850d610, version 2",
@@ -130,7 +130,7 @@ test.describe("execution review", () => {
       chainId: 8453,
       expiresAt: CHAIN_TIME + 100,
       legs: [{ side: "buy", token: TSLA, symbol: "TSLAc", amountIn: 300_000_000n, quotedAmountOut: 77_000_000n }],
-      balances: { [USDC]: 250_500_000n },
+      balances: { [USDC]: 500_000_000n },
       allowances: { [USDC]: 2n ** 256n - 1n },
     });
     await answerPlan(page, plan);
