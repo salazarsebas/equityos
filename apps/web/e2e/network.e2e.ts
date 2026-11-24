@@ -93,6 +93,12 @@ test.describe("network page on the recorded local chain", () => {
     await expectNoOverflow(page, "/network");
   });
 
+  test("the current state on the landing page links to it", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Network activity, from chain events" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Network" })).toBeVisible();
+  });
+
   test("the API serves the same figures and says it is a replay", async ({ request }) => {
     const response = await request.get("/api/v1/network");
     expect(response.status()).toBe(200);

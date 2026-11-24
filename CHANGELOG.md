@@ -85,7 +85,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   versions, creators and deprecations, rebalance attestations by tier (A: matching constituent flows in the same
   transaction, B: linked within 900 seconds, unmatched), distinct accounts, accounts within tolerance and the
   reference value moved, each with its definition and block range. Excluded accounts are set with
-  `EQUITYOS_EXCLUDED_ACCOUNTS` and shown apart. Public API v1.4.0.
+  `EQUITYOS_EXCLUDED_ACCOUNTS` and shown apart. Public API v1.4.0, and `getNetworkMetrics` in `@equityos/sdk`.
+  Linked from the current state on the landing page.
 - The local seed records example usage with mock tokens and feeds, and the registry replay carries the
   requests of the network metrics.
 
