@@ -8,7 +8,7 @@ Technical documentation for EquityOS. This index lists only pages that exist.
 | `api`          | REST API and SDK reference                              | [Overview](api/README.md), [Assets](api/assets.md), [Indexes](api/indexes.md), [Portfolio](api/portfolio.md)                                                                                           |
 | `security`     | Threat model, trust assumptions and security practices  | [Index registry](security/index-registry.md), [Publishing from the Studio](security/studio-publishing.md)                                                                                              |
 | `development`  | Setting up, building and testing the project            | [Getting started](development/getting-started.md), [Local chain](development/local-chain.md)                                                                                                           |
-| `product`      | Product concepts and terminology                        | [Design system](product/design-system.md), [Index profile](product/index-profile.md), [Index Studio](product/index-studio.md)                                                                          |
+| `product`      | Product concepts and terminology                        | [Design system](product/design-system.md), [Index profile](product/index-profile.md), [Index Studio](product/index-studio.md), [Portfolio and drift](product/portfolio.md)                             |
 
 A section directory is created together with its first page.
 

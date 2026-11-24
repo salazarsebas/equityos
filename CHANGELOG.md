@@ -56,6 +56,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   bytes, and a reviewed, simulated and verified `createIndex` publication where the registry is deployed.
 - Reusable transaction state machine and contract error decoding in `apps/web/src/lib/tx`.
 - Browser test of the publish flow against a local Anvil node, run by the `integration` CI job.
+- Portfolio page at `/portfolio`: any address compared with a published index version, with a drift table, the
+  holdings outside the index and a reference-price plan preview in rebalance or buy-only mode. Linked from the
+  index profile and the primary navigation.
 
 ### Changed
 
