@@ -24,15 +24,16 @@ What exists today:
 - `contracts`: `IndexRegistry` and `RebalanceLog`, immutable and ownerless, with a deterministic deployment script.
   Not audited. See [docs/architecture/index-registry.md](docs/architecture/index-registry.md) and
   [docs/security/index-registry.md](docs/security/index-registry.md).
-- `apps/web`: a design system, the asset universe page with reference prices read from Base mainnet, and the
-  public API v1 for assets. See [docs/api/README.md](docs/api/README.md).
+- `apps/web`: a design system, the asset universe page with reference prices read from Base mainnet, an index
+  explorer and index profile pages that verify each published version against the registry, and the public API
+  v1 for assets and indexes. On a network without the registry the index pages and the API say so. See
+  [docs/api/README.md](docs/api/README.md) and [docs/product/index-profile.md](docs/product/index-profile.md).
 - `@equityos/sdk`: a package skeleton that exports its version and nothing else.
 
 The Index Studio drafts, validates and exports an index, and publishes it where the registry is deployed, which
 today is a local chain only. See [docs/product/index-studio.md](docs/product/index-studio.md).
 
-Not built yet: browsing indexes in the app, new versions of a published index, portfolio replication, rebalance
-execution.
+Not built yet: new versions of a published index from the app, portfolio replication, rebalance execution.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 

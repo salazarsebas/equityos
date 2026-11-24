@@ -101,7 +101,8 @@ All components live in `apps/web/src/components/ui`. They have no dependency bey
 | `Tag`, `StatusTag`                     | `tag.tsx`         | Five tones. `StatusTag` accepts only the fixed status set.                                |
 | `Callout`                              | `callout.tsx`     | `neutral`, `info`, `warning`, `negative`.                                                 |
 | `Table` and its parts                  | `table.tsx`       | Sticky header, pinned first column, numeric cells, dense variant, caption, totals.        |
-| `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards.                                            |
+| `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards. Four or six to a row.                      |
+| `CopyButton`                           | `copy-button.tsx` | Copies an exact value and confirms in place. Rendered only once the page is interactive.  |
 | `SourceLine`                           | `source-line.tsx` | Source name and as-of time in UTC for one data region. Warning tone when stale.           |
 | `Skeleton`                             | `skeleton.tsx`    | Static placeholder sized like the content it replaces.                                    |
 | `EmptyState`, `ErrorState`             | `state.tsx`       | Text and one action. No illustration.                                                     |
@@ -160,6 +161,7 @@ returns a string. No value passes through a floating-point number. The helpers l
 | `formatUtcMinute`        | Unix seconds            | `2026-11-20 21:00`     | minute, down        |
 | `formatRelativeTime`     | Unix seconds, now       | `4 s ago`              | largest unit, down  |
 | `shortenAddress`         | 20-byte hex address     | `0x1234...abcd`        | not applicable      |
+| `shortenHash`            | 32-byte hex value       | `0x90d5104e`           | not applicable      |
 
 - A non-zero USD amount under one cent renders as `<0.01`.
 - Prices under 1.00 use 4 decimals.

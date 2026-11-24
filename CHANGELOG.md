@@ -37,6 +37,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   document at `/api/v1/openapi.json`.
 - Assets page listing the tokenized stock universe with reference prices and their staleness.
 - Architecture, API and security documentation for the above.
+- Public API v1.1.0: `GET /api/v1/indexes`, `GET /api/v1/indexes/{identifier}`,
+  `GET /api/v1/indexes/{identifier}/versions/{version}` and `GET /api/v1/indexes/{identifier}/composition`. On a
+  chain without the registry they answer 409 `registry_not_deployed`. `GET /api/v1/status` reports the registry.
+- Index explorer at `/indexes`, and index profile pages at `/indexes/{identifier}` and
+  `/indexes/{identifier}/versions/{n}` with composition, a verification panel with reproducible commands, a
+  plain-language methodology and a version history with the changes between versions.
+- Registry replay (`REGISTRY_REPLAY_DIR`) and a recorder, so that tests serve a recorded local registry.
+- The local seed publishes an index that fails verification and a deprecated index next to the three examples.
+- Documentation of the indexes API and of the index profile and its verification checks.
 - Index Studio at `/studio`: an editor that builds a valid `equityos.index/1` spec with a live preview of the
   composition, the canonical JSON and the spec hash, a draft kept in the browser, an export of the canonical
   bytes, and a reviewed, simulated and verified `createIndex` publication where the registry is deployed.
@@ -46,3 +55,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - The home page uses the application shell and the design tokens.
+- The home page states that indexes can be browsed and verified, and what a network without the registry shows.

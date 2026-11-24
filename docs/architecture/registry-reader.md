@@ -5,7 +5,8 @@ The registry reader is the server-side, read-only view of the [index registry](i
 `RebalanceLog` with `eth_call` and `eth_getLogs`, verifies every version with `@equityos/core`, and returns typed
 values. It never sends a transaction, never holds a key and has no database: its state is an in-process cache.
 
-The reader has no HTTP surface of its own. Routes and pages call it.
+The reader has no HTTP surface of its own. Routes and pages call it: the [Indexes API](../api/indexes.md) and
+the [index pages](../product/index-profile.md).
 
 ## Packages involved
 
@@ -108,7 +109,8 @@ the reader never mistakes a failed request for "not found".
 | `listVersions(indexId, page)`    | `total`, and a page of versions in ascending order                             |
 | `getEvents()`                    | The events found so far and how far the scan has got                           |
 
-`limit` is 1 to 50 and defaults to 20. An invalid page is a `RangeError`. Every method can also return
+The reader also exposes `chainId` and `registry`, the chain it reads and the lowercase address of the registry
+on it. `limit` is 1 to 50 and defaults to 20. An invalid page is a `RangeError`. Every method can also return
 `registry_not_deployed`.
 
 The index ids are read in full, once per process, and then only the new positions: positions are stable and
@@ -259,6 +261,22 @@ layer uses for the same conditions.
 
 States a caller renders are results, not errors: `registry_not_deployed`, `invalid_identifier`,
 `index_not_found`, `version_not_found`, and a version with `conformant: false`.
+
+## Replay of a recording
+
+When `REGISTRY_REPLAY_DIR` names a directory, the process-wide reader does not read a chain. It serves the
+recording in that directory (`registry.json`, in the format of `apps/web/test/fixtures/registry`): the answer of
+every read call of the registry of a local chain at one block. The recording goes through the same decoding,
+verification, identifier and caching code as a live chain. A call it does not hold, such as the event scan, is an
+`upstream_failure`, never an empty answer.
+
+`bun run --filter @equityos/web record:registry <directory>` writes a recording from a running Anvil node. It
+reads only, and refuses any chain other than 31337.
+
+This exists for the browser tests, which run the production build without a chain. A replayed registry is a past
+state of a development chain: `registryMode()` returns `replay`, the index pages show a warning that says so,
+and the API reports `mode: "replay"` in `meta.registry` and in `GET /api/v1/status`. Never set the variable on a
+deployment.
 
 ## Tests
 

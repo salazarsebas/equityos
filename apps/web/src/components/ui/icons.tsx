@@ -47,6 +47,14 @@ export function WarningIcon({ className }: IconProps) {
   );
 }
 
+export function CrossIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="m4 4 8 8M12 4l-8 8" />
+    </Icon>
+  );
+}
+
 export function ChevronDownIcon({ className }: IconProps) {
   return (
     <Icon className={className}>
