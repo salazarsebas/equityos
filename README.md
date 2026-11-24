@@ -30,7 +30,10 @@ What exists today:
   [docs/api/README.md](docs/api/README.md) and [docs/product/index-profile.md](docs/product/index-profile.md).
 - `@equityos/sdk`: a package skeleton that exports its version and nothing else.
 
-Not built yet: publishing an index from the app, portfolio replication, rebalance execution.
+The Index Studio drafts, validates and exports an index, and publishes it where the registry is deployed, which
+today is a local chain only. See [docs/product/index-studio.md](docs/product/index-studio.md).
+
+Not built yet: new versions of a published index from the app, portfolio replication, rebalance execution.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 

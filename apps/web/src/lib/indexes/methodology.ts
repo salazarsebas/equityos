@@ -95,13 +95,37 @@ function constraintRules({ constraints, weighting }: IndexSpec): MethodologyRule
   return rules;
 }
 
+/**
+ * The two rebalance rules, from their values alone: the trigger and the minimum interval. The Studio shows them
+ * while the rest of a spec is still being written.
+ */
+export function rebalanceRules({
+  driftThresholdBps,
+  minIntervalSeconds,
+}: Pick<IndexSpec["rebalance"], "driftThresholdBps" | "minIntervalSeconds">): MethodologyRule[] {
+  return [
+    {
+      rule: "Rebalance trigger",
+      value: `Drift of ${formatPoints(driftThresholdBps)}`,
+      reading: `A rebalance is due when the weight of a constituent in a replicating wallet is ${formatPoints(driftThresholdBps)} or more away from its target weight.`,
+    },
+    {
+      rule: "Minimum interval",
+      value: minIntervalSeconds === 0 ? "None" : formatDuration(minIntervalSeconds),
+      reading:
+        minIntervalSeconds === 0
+          ? "The methodology sets no minimum time between two rebalances."
+          : `A rebalance is not due sooner than ${formatDuration(minIntervalSeconds)} after the previous one, whatever the drift.`,
+    },
+  ];
+}
+
 /** The rules of a spec, in a fixed order: universe, weighting, constraints, rebalance, pricing. */
 export function describeMethodology(spec: IndexSpec): MethodologyRule[] {
   const count = spec.universe.tokens.length;
   const weights = computeConstituents(spec).map(({ weightBps }) => weightBps);
   const largest = Math.max(...weights);
   const smallest = Math.min(...weights);
-  const { driftThresholdBps, minIntervalSeconds } = spec.rebalance;
   return [
     {
       rule: "Universe",
@@ -123,19 +147,7 @@ export function describeMethodology(spec: IndexSpec): MethodologyRule[] {
           reading: `Each constituent has the target weight its creator wrote in the methodology, from ${percent(smallest)} to ${percent(largest)}. Weights are not derived from prices, market value or any other data.`,
         },
     ...constraintRules(spec),
-    {
-      rule: "Rebalance trigger",
-      value: `Drift of ${formatPoints(driftThresholdBps)}`,
-      reading: `A rebalance is due when the weight of a constituent in a replicating wallet is ${formatPoints(driftThresholdBps)} or more away from its target weight.`,
-    },
-    {
-      rule: "Minimum interval",
-      value: minIntervalSeconds === 0 ? "None" : formatDuration(minIntervalSeconds),
-      reading:
-        minIntervalSeconds === 0
-          ? "The methodology sets no minimum time between two rebalances."
-          : `A rebalance is not due sooner than ${formatDuration(minIntervalSeconds)} after the previous one, whatever the drift.`,
-    },
+    ...rebalanceRules(spec.rebalance),
     {
       rule: "Pricing source",
       value: "One oracle feed per token",

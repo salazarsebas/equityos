@@ -1,4 +1,10 @@
-import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useId } from "react";
+import {
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+  useId,
+} from "react";
 import { cx } from "./cx";
 import { ChevronDownIcon } from "./icons";
 
@@ -49,6 +55,11 @@ const control =
 /** Text input. Pass `inputMode="decimal"` and the `num` class for amounts. */
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...rest} className={cx(control, className)} />;
+}
+
+/** Multi-line text. Grows with `rows`; the user can resize it vertically. */
+export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea {...rest} className={cx(control, "h-auto resize-y py-1.5 pointer-coarse:h-auto", className)} />;
 }
 
 /** Native select with the system picker, restyled to match the other controls. */

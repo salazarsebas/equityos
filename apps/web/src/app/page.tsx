@@ -22,7 +22,8 @@ export default function HomePage() {
               stocks listed on Base, with their onchain state, reference prices and index eligibility. And published
               indexes: each one can be browsed and its methodology verified against what the registry stores onchain. On
               a network where the index registry is not deployed, the explorer says so instead of showing an empty list.
-              No index can be created, published or replicated from this site yet.
+              An index can be drafted, validated and exported in the Studio, and published where the registry is
+              deployed. No index can be replicated from this site yet.
             </p>
             <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-md">
               <li>
@@ -30,6 +31,9 @@ export default function HomePage() {
               </li>
               <li>
                 <Link href="/assets">Assets</Link>
+              </li>
+              <li>
+                <Link href="/studio">Studio</Link>
               </li>
               <li>
                 <Link href="/api/v1/openapi.json">API description (OpenAPI)</Link>

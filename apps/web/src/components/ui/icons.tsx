@@ -111,3 +111,28 @@ export function DisconnectIcon({ className }: IconProps) {
     </Icon>
   );
 }
+
+export function ArrowLeftIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M13 8H3M7 4 3 8l4 4" />
+    </Icon>
+  );
+}
+
+export function DownloadIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M8 2.5v7.75M4.75 7.25 8 10.5l3.25-3.25M2.75 13.25h10.5" />
+    </Icon>
+  );
+}
+
+/** An open circle: a step that is not done yet. */
+export function CircleIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="8" cy="8" r="5.25" />
+    </Icon>
+  );
+}

@@ -11,16 +11,24 @@ export interface MockWallet {
   readonly capabilities?: Record<string, unknown> | null;
   /** Makes `wallet_switchEthereumChain` fail as a wallet does when the user declines. */
   readonly rejectSwitch?: boolean;
+  /**
+   * JSON-RPC endpoint of a local Anvil node. When set, `eth_sendTransaction` is forwarded to it and Anvil signs
+   * for its own unlocked development account: this provider holds no key and signs nothing itself.
+   */
+  readonly signer?: string;
+  /** Makes `eth_sendTransaction` fail as a wallet does when the user declines the transaction. */
+  readonly rejectSend?: boolean;
 }
 
 /**
  * Installs a wallet in the page before any script runs: an EIP-1193 provider announced through EIP-6963 under
- * the name "Test Wallet". It answers the account, chain and capability methods and nothing that signs or sends.
+ * the name "Test Wallet". It answers the account, chain and capability methods. It signs nothing: a transaction
+ * is refused unless `signer` names a local Anvil node, which then signs it for its unlocked development account.
  * Its state is kept in `sessionStorage`, so it survives a reload the way an extension does.
  */
 export async function installMockWallet(page: Page, wallet: MockWallet): Promise<void> {
   await page.addInitScript(
-    ({ account, chainId, capabilities, rejectSwitch }) => {
+    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend }) => {
       const KEY = "mock-wallet";
       const stored = sessionStorage.getItem(KEY);
       const state: { connected: boolean; chainId: number } = stored
@@ -55,6 +63,28 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
             case "wallet_getCapabilities":
               if (capabilities === null) throw rpcError(4200, "Unsupported method");
               return capabilities;
+            case "eth_sendTransaction": {
+              if (rejectSend) throw rpcError(4001, "User rejected the request.");
+              if (signer === null) throw rpcError(4200, "Unsupported method: eth_sendTransaction");
+              const response = await fetch(signer, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+              });
+              const body: { result?: unknown; error?: { code: number; message: string; data?: unknown } } =
+                await response.json();
+              if (body.error)
+                throw Object.assign(rpcError(body.error.code, body.error.message), { data: body.error.data });
+              return body.result;
+            }
+            // Test control, not a wallet method: changes the chain without telling the page, as a wallet whose
+            // network is changed in another tab or window may do before the page hears of it.
+            case "test_setChainSilently": {
+              const [target] = params as [number];
+              state.chainId = target;
+              save();
+              return null;
+            }
             case "wallet_revokePermissions":
               state.connected = false;
               save();
@@ -92,6 +122,8 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
       capabilities:
         wallet.capabilities === undefined ? { "0x2105": { atomic: { status: "supported" } } } : wallet.capabilities,
       rejectSwitch: wallet.rejectSwitch ?? false,
+      signer: wallet.signer ?? null,
+      rejectSend: wallet.rejectSend ?? false,
     },
   );
 }
@@ -135,4 +167,24 @@ export async function mockBaseRpc(page: Page, balances: Readonly<Record<string, 
     await route.fulfill({ json: Array.isArray(body) ? body.map(respond) : respond(body) });
   });
   return methods;
+}
+
+/**
+ * Moves the test wallet to another chain without emitting `chainChanged`, so the page still believes the old
+ * chain. Only `installMockWallet` providers understand the call.
+ */
+export async function setChainSilently(page: Page, chainId: number): Promise<void> {
+  await page.evaluate(async (target) => {
+    const provider = await new Promise<{ request(args: { method: string; params: unknown[] }): Promise<unknown> }>(
+      (resolve) => {
+        window.addEventListener(
+          "eip6963:announceProvider",
+          (event) => resolve((event as CustomEvent<{ provider: never }>).detail.provider),
+          { once: true },
+        );
+        window.dispatchEvent(new Event("eip6963:requestProvider"));
+      },
+    );
+    await provider.request({ method: "test_setChainSilently", params: [target] });
+  }, chainId);
 }

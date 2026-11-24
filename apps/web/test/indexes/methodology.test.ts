@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   describeMethodology,
+  rebalanceRules,
   formatDuration,
   formatPoints,
   largestWeightBps,
@@ -132,5 +133,19 @@ describe("summaries", () => {
     expect(formatPoints(25)).toBe("0.25 pp");
     expect(largestWeightBps(constituents)).toBe(5_000);
     expect(largestWeightBps([])).toBe(0);
+  });
+});
+
+describe("rebalanceRules", () => {
+  test("are the rebalance rules of the full description, from the two values alone", () => {
+    const { spec } = buildSpec({ tokenCount: 3 });
+    const fromSpec = describeMethodology(spec).filter(
+      ({ rule }) => rule.startsWith("Rebalance") || rule === "Minimum interval",
+    );
+    expect(rebalanceRules(spec.rebalance)).toEqual(fromSpec);
+    expect(rebalanceRules({ driftThresholdBps: 250, minIntervalSeconds: 0 }).map(({ reading }) => reading)).toEqual([
+      "A rebalance is due when the weight of a constituent in a replicating wallet is 2.50 pp or more away from its target weight.",
+      "The methodology sets no minimum time between two rebalances.",
+    ]);
   });
 });

@@ -22,7 +22,9 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "e2e/**/*.ts",
+    "e2e-chain/**/*.ts",
     "playwright.config.ts",
+    "playwright.chain.config.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

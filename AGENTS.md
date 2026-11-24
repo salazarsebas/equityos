@@ -35,7 +35,7 @@ or yarn, and do not commit any lockfile other than `bun.lock`.
 | `bun run test`                | Run unit tests with `bun test`        |
 | `bun run build`               | Build the packages and the web app    |
 | `bun run test:e2e`            | Playwright smoke test, after a build  |
-| `bun run test:integration`    | Deploy, seed and read on local Anvil  |
+| `bun run test:integration`    | Local Anvil: deploy, read and publish |
 | `bun run contracts:build`     | `forge build`                         |
 | `bun run contracts:test`      | `forge test`                          |
 | `bun run contracts:fmt:check` | `forge fmt --check`                   |

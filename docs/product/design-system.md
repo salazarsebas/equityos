@@ -100,21 +100,21 @@ origin; the build makes no network request.
 
 All components live in `apps/web/src/components/ui`. They have no dependency beyond React and Next.js.
 
-| Component                              | File              | Notes                                                                                    |
-| -------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
-| `Button`                               | `button.tsx`      | `primary`, `secondary`, `ghost`, `destructive`. Sizes `md` and `lg`. Loading, disabled.  |
-| `Link`                                 | `link.tsx`        | `inline` and `quiet`. Absolute URLs get the external link icon.                          |
-| `Field`, `Input`, `Select`, `Checkbox` | `field.tsx`       | `Field` wires label, hint and error to the control through a render prop.                |
-| `Tabs`                                 | `tabs.tsx`        | ARIA tabs pattern, automatic activation, arrow keys, Home and End.                       |
-| `Tag`, `StatusTag`                     | `tag.tsx`         | Five tones. `StatusTag` accepts only the fixed status set.                               |
-| `Callout`                              | `callout.tsx`     | `neutral`, `info`, `warning`, `negative`.                                                |
-| `Table` and its parts                  | `table.tsx`       | Sticky header, pinned first column, numeric cells, dense variant, caption, totals.       |
-| `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards. Four or six to a row.                     |
-| `CopyButton`                           | `copy-button.tsx` | Copies an exact value and confirms in place. Rendered only once the page is interactive. |
-| `SourceLine`                           | `source-line.tsx` | Source name and as-of time in UTC for one data region. Warning tone when stale.          |
-| `Skeleton`                             | `skeleton.tsx`    | Static placeholder sized like the content it replaces.                                   |
-| `EmptyState`, `ErrorState`             | `state.tsx`       | Text and one action. No illustration.                                                    |
-| `Dialog`                               | `dialog.tsx`      | Native `<dialog>`: focus trap, Escape, inert background, focus return.                   |
+| Component                              | File              | Notes                                                                                     |
+| -------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------- |
+| `Button`                               | `button.tsx`      | `primary`, `secondary`, `ghost`, `destructive`. Sizes `md` and `lg`. Loading, disabled.   |
+| `Link`                                 | `link.tsx`        | `inline` and `quiet`. Absolute URLs get the external link icon.                           |
+| `Field`, `Input`, `Textarea`, `Select` | `field.tsx`       | And `Checkbox`. `Field` wires label, hint and error to the control through a render prop. |
+| `Tabs`                                 | `tabs.tsx`        | ARIA tabs pattern, automatic activation, arrow keys, Home and End.                        |
+| `Tag`, `StatusTag`                     | `tag.tsx`         | Five tones. `StatusTag` accepts only the fixed status set.                                |
+| `Callout`                              | `callout.tsx`     | `neutral`, `info`, `warning`, `negative`.                                                 |
+| `Table` and its parts                  | `table.tsx`       | Sticky header, pinned first column, numeric cells, dense variant, caption, totals.        |
+| `Stat`, `StatGrid`                     | `stat.tsx`        | Label and value pairs on hairlines. Not cards. Four or six to a row.                      |
+| `CopyButton`                           | `copy-button.tsx` | Copies an exact value and confirms in place. Rendered only once the page is interactive.  |
+| `SourceLine`                           | `source-line.tsx` | Source name and as-of time in UTC for one data region. Warning tone when stale.           |
+| `Skeleton`                             | `skeleton.tsx`    | Static placeholder sized like the content it replaces.                                    |
+| `EmptyState`, `ErrorState`             | `state.tsx`       | Text and one action. No illustration.                                                     |
+| `Dialog`                               | `dialog.tsx`      | Native `<dialog>`: focus trap, Escape, inert background, focus return.                    |
 
 The shell is in `apps/web/src/components/shell`: `Header`, `PrimaryNav`, `ThemeToggle`, `Footer`, `Container` and
 `Grid`. The root layout adds a skip link before the header.
