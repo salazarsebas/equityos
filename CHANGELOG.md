@@ -108,3 +108,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `@equityos/core`: when the capped candidate of a rebalance is chosen, its sells are scaled again to what its
   own buys spend, so a plan no longer sells a constituent only to leave the proceeds uninvested. A deposit that
   adds less than one quote base unit no longer counts as a deposit in the tie between the two candidates.
+- The deposit field of the portfolio plan accepts at most 6 decimals, the precision of USDC, and says so,
+  instead of 8 decimals that could not be deposited.
