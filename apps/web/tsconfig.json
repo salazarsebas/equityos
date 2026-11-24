@@ -14,7 +14,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@equityos/contracts-abi": ["../../packages/contracts-abi/src/index.ts"],
-      "@equityos/core": ["../../packages/core/src/index.ts"]
+      "@equityos/core": ["../../packages/core/src/index.ts"],
+      "@equityos/sdk": ["../../packages/sdk/src/index.ts"]
     }
   },
   "include": [
