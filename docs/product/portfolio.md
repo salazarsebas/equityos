@@ -81,10 +81,13 @@ missing: a wallet to connect, or a connected wallet that is another address.
    ([API](../api/execution.md)). It quotes each leg with a third-party aggregator and checks it against the chain.
    A deposit typed in the preview is not part of it: an executable plan spends what the address holds. Preparing
    signs and sends nothing.
-2. **Review.** Built once from a frozen snapshot of the plan, verified in this browser. It shows each call in
-   order with what it does, decoded from its calldata: an approval with its exact amount and spender, a swap with
-   its side, amount in, minimum out, the provider's quote marked as not guaranteed, and the router; the attestation
-   call when there is one, or why there is none. Then the totals (minimum USDC from sells, maximum USDC spent by
+2. **Review.** Built once from a frozen snapshot of the plan, verified in this browser, which also reads the
+   decimals of every token and each leg's reference feed on the chain itself. It shows the index id and version,
+   then each call in order with what it does, decoded from its calldata: an approval with its exact amount and
+   spender, a swap with its side, amount in, minimum out, the provider's quote marked as not guaranteed, the
+   reference price read in this browser and how far the minimum is from it, the route deadline, and the router; the
+   attestation call when there is one, or why there is none. An allowance toward the router already above what
+   the plan swaps is shown with how to reduce it. Then the totals (minimum USDC from sells, maximum USDC spent by
    buys, USDC held when checked, expected balances at minimum amounts out), every pre-trade check with its result,
    a checkbox for each warning, the plan hash computed here, the expiry with a countdown by the device clock (the
    expiry itself is checked against the latest block at signing), whether the wallet batches, and three fixed
@@ -103,8 +106,8 @@ missing: a wallet to connect, or a connected wallet that is another address.
    comparison's reference prices: largest drift before and after, and each balance and drift before and after.
    Transaction hashes link to the explorer of the network.
 
-"Executions from this browser" lists earlier executions of the account, with their hashes, the index version and
-the result. It is stored only in this browser's local storage, under a versioned key, and the page says so.
+"Executions from this browser" lists earlier executions of the account on the plan's network, with their hashes
+linked to that network's explorer, the index version, the result and where a run stopped. It is stored only in this browser's local storage, under a versioned key, and the page says so.
 
 Execution is on Base mainnet. The rebalance log is not deployed there, so no attestation is recorded on Base, and
 the review says so.

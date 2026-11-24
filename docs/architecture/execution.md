@@ -253,8 +253,10 @@ The browser side lives in `apps/web/src/lib/execution` (pure) and `apps/web/src/
 
 1. **Verification in the browser.** `verifyExecutionPlan` parses nothing on trust: it decodes every call, checks it
    against the plan's legs and the connected account with the module above, checks that the legs trade
-   constituents of the compared version, recomputes the totals at minimum amounts out, and recomputes `planHash`.
-   Any failure, or a hash that differs from the server's, means nothing can be signed.
+   constituents of the compared version and names its index id and version, recomputes the totals at minimum
+   amounts out, and recomputes `planHash`. It also reads on the chain itself `decimals()` of every token and the
+   pinned Chainlink feed of every leg, and refuses a leg whose minimum out is more than 200 bps worse than that
+   reference. Any failure, or a hash that differs from the server's, means nothing can be signed.
 2. **One send decision.** `buildExecutionRequest` returns the exact wallet request or a typed refusal: no plan,
    execution unavailable, busy, verification failed, hash mismatch, wrong account, wrong network, chain time
    unknown, expired by chain time, or warnings not acknowledged. The button's click handler exists only when it

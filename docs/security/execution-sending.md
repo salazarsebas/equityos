@@ -18,8 +18,10 @@ moment could execute a stale quote, on the wrong network, from the wrong account
 ## The trust boundary
 
 The browser does not sign calldata it has not verified itself. The server's checks protect what the server
-returns; the browser takes nothing from the answer on trust and verifies it again, with the same pure module the
-server uses, against the account that will sign.
+returns; the browser verifies every call again, with the same pure module the server uses, against the account
+that will sign, and bounds what each swap can lose with reads of its own: the decimals of every token and a
+reference price for every leg, read on the chain from pinned addresses, not from the answer. What the browser
+still takes from the API is listed in [What remains trusted](#what-remains-trusted).
 
 | Step | What happens                                                                                       | Safeguard                                                                                                                                                     |
 | ---- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -60,6 +62,30 @@ version.
 - The decoded minimum equals the leg's and the call's stated minimum, the decoded deadline equals the leg's, and
   it is no earlier than the plan's expiry and at most 15 seconds after it.
 - The totals at minimum amounts out, recomputed from the decoded swaps, equal the answer's.
+- The plan names the index id and version of the comparison on the page.
+- `decimals()` of USDC and of every leg token, read on the chain by the browser, equals the plan's (6 for USDC).
+  The review renders every amount with these decimals only.
+- Every leg has a usable reference price read by the browser, and its minimum out is within the price bound.
+
+### Reads of the browser and the price bound
+
+When a plan arrives, the browser reads at the latest block of the plan's chain, through the endpoint configured
+for that chain (`app/portfolio/execute/chain.ts`, one Multicall3 request per function where the chain has
+Multicall3): `decimals()` of every token, and `decimals()`, `description()` and `latestRoundData()` of the
+Chainlink feed of every leg token. The feeds are the pinned map `REFERENCE_FEEDS` of `lib/market/feeds.ts`, the
+same constant the server's market data layer uses, so no address comes from the answer.
+
+A reference is usable by the server's rules (`lib/execution/market.ts`): the proxy answers the recorded decimals
+and description, the round is complete, positive, not carried over and not in the future, and its staleness at
+the block's timestamp, with the market calendar of `@equityos/core`, is `live` or `delayed`. `last_close` (a
+closed market), a stale feed, a failed read or a token without a feed refuses the plan (`reference_unusable`).
+
+For each swap, the worst price it accepts (its minimum out against the exact amount in) is compared with that
+reference, in exact integers rounded up: a sell that returns less USDC, or a buy that pays more per token, than
+the reference by more than `CLIENT_PRICE_BOUND_BPS` is refused (`price_out_of_bounds`). The bound is 200 basis
+points: the server's default deviation band (150) plus its default slippage (50), the parameters the page requests
+plans with. A deviation in the user's favor is not bounded. The review shows each leg's reference, its staleness
+class and the deviation of the minimum from it.
 
 The review shows the decoded values: the minimum, the amounts, the spender, the deadline. A field of the JSON next
 to the calldata is never displayed as what is signed.
@@ -111,6 +137,17 @@ account, addressed to the call's contract, and for a swap, within its transfer b
 expiry by chain time, the account and the network are read again; a refusal stops the run before anything more is
 sent. The run stops at the first transaction that does not confirm.
 
+Leaving the page stops the run before its next transaction: no further signature is asked for. A transaction
+already with the wallet when the page is left can still be confirmed and mined. The run is recorded in the
+browser's history with the transaction it stopped before.
+
+### What a batch status says
+
+A final status of `wallet_sendCalls` is read by its EIP-5792 code. Only a 4xx (not included onchain) or a 5xx
+(reverted completely) is reported as "none of its calls took effect". A 6xx (partially reverted), or any final
+status whose receipts do not all succeed, is reported as "some calls may have taken effect": the page lists the
+transactions the wallet reported and shows the position read from the chain.
+
 ## Partial execution
 
 A sequential run that stops reports exactly which transactions confirmed, which one failed and how, and which
@@ -128,9 +165,13 @@ chain and registry the log validates against: on a mismatch the log would revert
 same id, and in an atomic batch that would revert the swaps too. Today the map records no deployment on Base, so
 on Base mainnet the attestation is omitted and the review says why.
 
+Its arguments are the index id and version of the comparison on the page, never the plan's: a plan that names
+another index or version is refused (`index_mismatch`), and the review shows the index id.
+
 - **Atomic**: the attestation is the last call of the batch, so it lands with the swaps or not at all.
 - **Sequential**: it is a separate, optional transaction, offered with an explanation only after every swap
-  confirmed, and never required. It has no expiry: it names a version and does not depend on the quotes.
+  confirmed, and never required. It has no expiry: it names a version and does not depend on the quotes. The
+  click decides again with the account and network of that moment, and at most one attestation is requested.
 
 ## Builder Code (ERC-8021)
 
@@ -148,12 +189,19 @@ transactions to another code or be dropped silently.
   does not support the capability sends the batch without it. The calls themselves are unchanged.
 
 Appending bytes to the router's calldata is safe only if the router and the tokens ignore trailing calldata.
-This was established read-only on Base mainnet, before any suffix was appended in the app: the live test
-`apps/web/test/execution/live.test.ts` ("the router and the tokens accept the ERC-8021 suffix") simulates, with
-`eth_simulateV1` from an account holding USDC, an approval of USDC, a buy of NVDAc through the pinned router, an
-approval of NVDAc (a B20 token) and a sell of what the buy returned, once without and once with the suffix
-appended to every call. On block 61,583,437 every call succeeded both ways and returned the same data, including
-each swap's return amount. The test is skipped unless `LIVE_TESTS=1` and runs again whenever it is run.
+This was established read-only on Base mainnet with `eth_simulateV1`, once without and once with the suffix
+appended to every call, by two live tests in `apps/web/test/execution/live.test.ts`:
+
+- **The swap path**, from an account holding USDC: an approval of USDC, a buy of NVDAc through the pinned router,
+  an approval of NVDAc (a B20 token) and a sell of what the buy returned. At block 61,583,437 every call succeeded
+  both ways with the same return data, each swap's return amount included.
+- **Every token the app can trade**: USDC and each of the 14 tokens of the pinned feed map, an exact approval of
+  the router and a transfer of zero to itself from the account, and a `transferFrom` of zero by the router from the
+  account. At block 61,596,145 all 42 calls succeeded both ways with the same return data.
+
+So the suffix is appended to every approval and swap of the sequential path. The router's own handling of
+trailing calldata is the same whatever the tokens; its pull of a token is the `transferFrom` path proven for
+each. The tests are skipped unless `LIVE_TESTS=1` and run again whenever they are run.
 
 ## No raw error text
 
@@ -165,7 +213,9 @@ would have made a mined revert look like a transaction that was never found.
 ## Local history
 
 The executions sent from a browser are recorded in its `localStorage` under `equityos.execution.history.v1`:
-time, chain, account, index and version, plan hash, mode, result, transaction hashes and the attestation's hash.
+time, chain, account, index and version, plan hash, mode, result, transaction hashes, the attestation's hash and
+the transaction a run stopped before. There is one entry per plan: adding the optional attestation replaces it.
+The page lists the entries of the account on the plan's network, each linked to that network's explorer.
 Nothing is sent to a server, and the page says the list is stored only in this browser. A corrupted value is read
 as fewer entries and never breaks the page; a storage that cannot be written records nothing.
 
@@ -182,24 +232,32 @@ as fewer entries and never breaks the page; a storage that cannot be written rec
 - **The wallet.** It shows and signs the calls, and for an atomic batch it decides how the batch is executed and
   whether it appends the Builder Code. A compromised browser or wallet is out of scope: the page that verifies the
   calls is the page that sends them, and the wallet's confirmation screen is the independent check.
-- **The server's reads that are not repeated.** The balances before the plan and the pre-trade checks (pauses,
-  policies, multiplier windows, simulation) are the server's, at one block. The browser does not repeat them;
-  onchain, a swap that would return less than its minimum reverts.
+- **The API, for what the browser does not repeat.** The size of each leg (which tokens to trade and how much,
+  from the reference-price plan of the comparison), the quoted amounts beyond the price bound, the balances before
+  the plan, the existing allowances, the list of checks and warnings, the pre-trade checks (pauses, policies,
+  multiplier windows, simulation) and the registry the index was read from. The comparison on the page, whose
+  constituents and index id the browser checks the plan against, comes from the same server. A dishonest server
+  can therefore propose a trade the methodology would not, but not one that pays the user less than the bound
+  under the browser's own reference price, to anyone but the user, through any contract but the pinned router.
+- **The pinned feeds.** The reference prices are Chainlink's answers, read through the configured endpoint.
 
 ## Tests
 
 - `apps/web/test/execution`: the strict parser, the client verification of the recorded server answer and of a
-  plan with each field changed, the send decision with every refusal and both request shapes, the attestation
-  decision, the Builder Code encoding, the receipt checks, the sequential runner and its stop on the first failure,
-  the history store and the drift after.
+  plan with each field changed, the price bound and the decimals against the browser's reads (a feed that
+  contradicts the quote, a stale, closed, mismatched or unread feed, other decimals), the index check, the send
+  decision with every refusal and both request shapes, the attestation decision, the Builder Code encoding, the
+  receipt checks, the batch outcomes, the sequential runner and its stops, the history store and the drift after.
 - `apps/web/e2e/execute.e2e.ts`: the review states without a chain, with mocked answers: a ready plan whose button
-  enables only after the warning is acknowledged and whose decline is a calm state, a blocked plan, a plan expired
-  by chain time, a hash mismatch, calldata that does not verify, a server that builds no plan, and a restricted
-  region where the review cannot be reached.
+  enables only after the warning is acknowledged and whose decline is a calm state, with each leg's reference,
+  deadline and the index id, a sale the feed contradicts, an allowance already above the plan, a blocked plan, a
+  plan expired by chain time, a hash mismatch, calldata that does not verify, a server that builds no plan, and a
+  restricted region where the review cannot be reached.
 - `apps/web/e2e-chain/rebalance.e2e.ts`: on Anvil, an atomic batch with the attestation, its decoded event, the
   Builder Code capability, the balances and drift after; and a sequential wallet whose second swap reverts onchain,
   reported as partial execution, with the chain checked for exactly three confirmed transactions, one reverted and
-  one never sent.
+  one never sent; the optional attestation after a whole sequential run, double-clicked and sent once; and leaving
+  the page mid-run, after which no further transaction is sent and the history records where it stopped.
 
 ### What the chain tests mock, and why production verification is not weakened
 
@@ -211,7 +269,9 @@ verification pins: an ERC-20 at USDC and at each constituent, a router with the 
 structs at the router address, and an executor at the executor address that pays the token and amount its data
 names to the recipient at the recorded word, before the deadline at the recorded word. The router pulls exactly
 the amount, runs the executor and reverts below the minimum, as the real router does. Nothing of the real
-executor's routing is reproduced.
+executor's routing is reproduced. The reference feeds are the seed's mocks at the pinned feed addresses, which
+answer 100.00 USD a token at the block's time, and the node starts at a time when the US market is open, so the
+browser's references are live and the plans are quoted at that price.
 
 Because the mocks sit at the pinned addresses, no address is added to any allowlist. The only difference between
 a production and a development build is that the development build also accepts plans for chain 31337, where

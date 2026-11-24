@@ -104,6 +104,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   browser's local storage only.
 - `RebalanceLog` attestation where the log is deployed: the last call of an atomic batch, or an optional
   transaction after every swap confirmed one at a time. Not on Base, where the contracts are not deployed.
+- The browser bounds every swap of a plan with its own reads before it can be signed: `decimals()` of every token
+  and the pinned Chainlink feed of every leg, at the latest block, with the server's validity and staleness
+  rules; a minimum out more than 200 bps worse than that reference, a closed or stale feed, other decimals, or a
+  plan for another index or version than the comparison is refused. The feed map is shared with the server.
 - ERC-8021 Builder Code attribution with `NEXT_PUBLIC_BUILDER_CODE`: the suffix on each transaction sent one at a
   time and the optional `dataSuffix` capability of a batch; nothing when no code is configured.
 - Browser tests of execution on a local Anvil node, with a mock router, executor and tokens installed at the
