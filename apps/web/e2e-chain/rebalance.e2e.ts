@@ -6,7 +6,7 @@ import { builderCodeSuffix } from "../src/lib/execution/builder-code";
 import { KYBERSWAP_ROUTER } from "../src/lib/execution/calldata";
 import { formatTokenQuantity } from "../src/lib/format";
 import { AMZN, buildReadyPlan, DIVERSIFIED, NVDA, type TestLeg, TSLA, USDC } from "../e2e/execution-plans";
-import { installMockWallet, setChainSilently, TEST_ACCOUNT } from "../e2e/wallet-support";
+import { installMockWallet, releaseHeldSend, setChainSilently, TEST_ACCOUNT } from "../e2e/wallet-support";
 import { ANVIL_RPC_URL, BUILDER_CODE } from "../playwright.chain.config";
 
 /**
@@ -284,32 +284,30 @@ test("after every swap confirmed one at a time, the attestation is offered once,
 test("leaving the page during a run stops it before the next transaction, and the history says where", async ({
   page,
 }) => {
-  // Each transaction waits a second in the wallet, as a person confirming it would.
-  await installMockWallet(page, {
-    chainId: LOCAL_CHAIN_ID,
-    signer: ANVIL_RPC_URL,
-    capabilities: null,
-    sendDelayMs: 1_000,
-  });
+  // The wallet holds the second transaction (Approve USDC) until the test confirms it, after leaving the page.
+  await installMockWallet(page, { chainId: LOCAL_CHAIN_ID, signer: ANVIL_RPC_URL, capabilities: null, holdSendAt: 1 });
   await answerPlan(page, SMALL_PLAN);
   const nonceBefore = await nonce();
   await review(page);
   await page.getByRole("button", { name: "Sign 4 transactions in your wallet, one at a time" }).click();
   const steps = page.getByRole("list", { name: "Transactions" }).getByRole("listitem");
   await expect(steps.nth(0)).toHaveAttribute("data-status", "confirmed");
-  // A link of the site: the page changes without reloading, so the run that is in flight sees it.
+  await expect(steps.nth(1)).toHaveAttribute("data-status", "awaiting_signature");
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("mock-wallet-holding"))).toBe("1");
+  expect(await nonce()).toBe(nonceBefore + 1);
+  // A link of the site: the page changes without reloading, so the run in flight sees that it was left.
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Indexes" }).click();
   await expect(page).toHaveURL(/\/indexes$/);
-  // The transaction with the wallet when the page was left can still land; none after it is asked for.
+  // The transaction confirmed in the wallet after the page was left still lands; none after it is asked for.
+  await releaseHeldSend(page);
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("equityos.execution.history.v1") ?? ""), { timeout: 15_000 })
-    .toMatch(/"stoppedBefore":[0-9]/);
+    .toMatch(/"stoppedBefore":2/);
   const history = await page.evaluate(() => JSON.parse(localStorage.getItem("equityos.execution.history.v1") ?? "{}"));
-  const entry = history.entries[0];
-  expect(entry.stoppedBefore).toBeGreaterThanOrEqual(1);
-  expect(entry.stoppedBefore).toBeLessThanOrEqual(2);
-  const sent = (await nonce()) - nonceBefore;
-  expect(sent).toBe(entry.stoppedBefore);
-  await new Promise((resolve) => setTimeout(resolve, 2_500));
-  expect((await nonce()) - nonceBefore).toBe(sent);
+  expect(history.entries[0]).toMatchObject({ mode: "sequential", result: "partial", stoppedBefore: 2 });
+  expect(history.entries[0].transactions).toHaveLength(2);
+  expect(await nonce()).toBe(nonceBefore + 2);
+  // Nothing more is sent later either: the node mines each transaction at once.
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  expect(await nonce()).toBe(nonceBefore + 2);
 });

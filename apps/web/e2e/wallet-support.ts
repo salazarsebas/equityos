@@ -24,8 +24,11 @@ export interface MockWallet {
    * reverts instead of refusing it at estimation, as a wallet does when the user confirms it anyway.
    */
   readonly sendGas?: Hex;
-  /** Milliseconds the wallet waits before it sends each transaction, as a person takes time to confirm. */
-  readonly sendDelayMs?: number;
+  /**
+   * Index, from 0, of the `eth_sendTransaction` the wallet holds, as a person who has not confirmed yet, until the
+   * test calls `releaseHeldSend`. No transaction is held when absent.
+   */
+  readonly holdSendAt?: number;
 }
 
 /**
@@ -42,7 +45,7 @@ export interface MockWallet {
  */
 export async function installMockWallet(page: Page, wallet: MockWallet): Promise<void> {
   await page.addInitScript(
-    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend, sendGas, sendDelayMs }) => {
+    ({ account, chainId, capabilities, rejectSwitch, signer, rejectSend, sendGas, holdSendAt }) => {
       const KEY = "mock-wallet";
       const stored = sessionStorage.getItem(KEY);
       const state: { connected: boolean; chainId: number } = stored
@@ -70,6 +73,8 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
         sendGas === null || transaction.gas !== undefined ? transaction : { ...transaction, gas: sendGas };
       const BATCHES = "mock-wallet-batches";
       let queue: Promise<unknown> = Promise.resolve();
+      let sendCount = 0;
+      let releaseHeld: (() => void) | null = null;
 
       const provider = {
         async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
@@ -98,8 +103,15 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
               const [transaction] = params as [Record<string, unknown>];
               // One request at a time, in the order they arrive, as a wallet queues its confirmations: the node
               // then gives each transaction its own nonce.
+              const index = sendCount;
+              sendCount += 1;
               const sent = queue.then(async () => {
-                if (sendDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, sendDelayMs));
+                if (index === holdSendAt) {
+                  sessionStorage.setItem("mock-wallet-holding", String(index));
+                  await new Promise<void>((resolve) => {
+                    releaseHeld = resolve;
+                  });
+                }
                 return forward(method, [withGas(transaction)]);
               });
               queue = sent.catch(() => undefined);
@@ -170,6 +182,11 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
             }
             // Test control, not a wallet method: changes the chain without telling the page, as a wallet whose
             // network is changed in another tab or window may do before the page hears of it.
+            // Test control, not a wallet method: confirms the transaction held by `holdSendAt`.
+            case "test_releaseHeldSend":
+              releaseHeld?.();
+              releaseHeld = null;
+              return null;
             case "test_setChainSilently": {
               const [target] = params as [number];
               state.chainId = target;
@@ -216,7 +233,7 @@ export async function installMockWallet(page: Page, wallet: MockWallet): Promise
       signer: wallet.signer ?? null,
       rejectSend: wallet.rejectSend ?? false,
       sendGas: wallet.sendGas ?? null,
-      sendDelayMs: wallet.sendDelayMs ?? 0,
+      holdSendAt: wallet.holdSendAt ?? null,
     },
   );
 }
@@ -337,4 +354,21 @@ export async function setChainSilently(page: Page, chainId: number): Promise<voi
     );
     await provider.request({ method: "test_setChainSilently", params: [target] });
   }, chainId);
+}
+
+/** Lets the test wallet send the transaction it holds (`holdSendAt`). */
+export async function releaseHeldSend(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const provider = await new Promise<{ request(args: { method: string; params: unknown[] }): Promise<unknown> }>(
+      (resolve) => {
+        window.addEventListener(
+          "eip6963:announceProvider",
+          (event) => resolve((event as CustomEvent<{ provider: never }>).detail.provider),
+          { once: true },
+        );
+        window.dispatchEvent(new Event("eip6963:requestProvider"));
+      },
+    );
+    await provider.request({ method: "test_releaseHeldSend", params: [] });
+  });
 }
