@@ -8,7 +8,8 @@ import { type Config, useConfig } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import { classifyTxError } from "@/lib/tx/errors";
 import { type PreflightState, type RegistryPresence, type RegistryReads, runPreflight } from "@/lib/studio/preflight";
-import type { NetworkPolicy, OnchainVersion, PublishPlan } from "@/lib/studio/publish";
+import type { NetworkPolicy, OnchainVersion, StudioPlan } from "@/lib/studio/publish";
+import { publishPlanKey } from "@/lib/studio/request";
 
 /** Index ids requested at once when the directory of a registry is read. */
 const ID_BATCH = 50;
@@ -28,8 +29,11 @@ export function registryChain(config: Config, chainId: number, registry: Address
   const client = getPublicClient(config, { chainId });
   if (client === undefined) throw new Error(`chain ${chainId} is not configured`);
   const contract = { address: registry, abi: indexRegistryAbi } as const;
-  const call = (plan: PublishPlan) =>
-    ({ ...contract, account: plan.creator, functionName: plan.functionName, args: plan.args }) as const;
+  const from = (plan: StudioPlan) => ({ ...contract, account: plan.creator });
+  const data = (plan: StudioPlan) =>
+    plan.functionName === "createIndex"
+      ? encodeFunctionData({ abi: indexRegistryAbi, functionName: plan.functionName, args: plan.args })
+      : encodeFunctionData({ abi: indexRegistryAbi, functionName: plan.functionName, args: plan.args });
   return {
     code: () => client.getCode({ address: registry }),
     computeIndexId: (creator, salt) =>
@@ -46,10 +50,25 @@ export function registryChain(config: Config, chainId: number, registry: Address
       }
       return ids;
     },
-    async simulate(plan) {
-      await client.simulateContract(call(plan));
+    async index(indexId) {
+      const index = await client.readContract({ ...contract, functionName: "getIndex", args: [indexId] });
+      return { creator: index.creator, latestVersion: index.latestVersion, deprecated: index.deprecatedAt !== 0n };
     },
-    estimateGas: (plan) => client.estimateContractGas(call(plan)),
+    async versionHash(indexId, version) {
+      const info = await client.readContract({ ...contract, functionName: "getVersion", args: [indexId, version] });
+      return info.specHash;
+    },
+    async simulate(plan) {
+      if (plan.functionName === "createIndex") {
+        await client.simulateContract({ ...from(plan), functionName: plan.functionName, args: plan.args });
+      } else {
+        await client.simulateContract({ ...from(plan), functionName: plan.functionName, args: plan.args });
+      }
+    },
+    estimateGas: (plan) =>
+      plan.functionName === "createIndex"
+        ? client.estimateContractGas({ ...from(plan), functionName: plan.functionName, args: plan.args })
+        : client.estimateContractGas({ ...from(plan), functionName: plan.functionName, args: plan.args }),
     async maxFeePerGas() {
       const fees = await client.estimateFeesPerGas();
       return fees.maxFeePerGas;
@@ -58,8 +77,7 @@ export function registryChain(config: Config, chainId: number, registry: Address
     // One eth_call to the GasPriceOracle predeploy, on the chains that have one (Base and Base Sepolia).
     async l1DataFee(plan) {
       if (client.chain?.contracts?.gasPriceOracle === undefined) return null;
-      const data = encodeFunctionData({ abi: indexRegistryAbi, functionName: plan.functionName, args: plan.args });
-      return estimateL1Fee(client, { account: plan.creator, to: plan.registry, data });
+      return estimateL1Fee(client, { account: plan.creator, to: plan.registry, data: data(plan) });
     },
     async version(indexId, version) {
       const args = [indexId, version] as const;
@@ -98,10 +116,10 @@ export function useRegistryPresence(chainId: number, policy: NetworkPolicy): Reg
  * Checks a plan against the chain: the registry, the index id, a simulation, gas, fee and balance. It runs
  * when the plan changes and when `refetch` is called, never on a timer, and it sends nothing.
  */
-export function usePreflight(plan: PublishPlan | null, enabled: boolean) {
+export function usePreflight(plan: StudioPlan | null, enabled: boolean) {
   const config = useConfig();
   const query = useQuery({
-    queryKey: ["studio", "preflight", plan?.chainId, plan?.registry, plan?.creator, plan?.salt, plan?.specHash],
+    queryKey: ["studio", "preflight", plan === null ? null : publishPlanKey(plan)],
     queryFn: () => {
       if (plan === null) throw new Error("no plan to check");
       const reads = registryChain(config, plan.chainId, plan.registry);

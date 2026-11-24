@@ -35,6 +35,12 @@ export interface EditorProps {
   issues: readonly FieldIssue[];
   assets: AssetsState;
   networks: readonly { readonly chainId: number; readonly name: string }[];
+  /** A new version of an existing index: its network, fixed, and its identifier before and after. */
+  version: {
+    readonly network: string;
+    readonly identifier: string;
+    readonly identifierAfter: string;
+  } | null;
 }
 
 const PRICE_STATUS: Readonly<Record<StudioAsset["priceStatus"], string>> = {
@@ -44,7 +50,17 @@ const PRICE_STATUS: Readonly<Record<StudioAsset["priceStatus"], string>> = {
   unavailable: "No price",
 };
 
-function Identity({ draft, update, issues, networks }: EditorProps) {
+/** The slug of a new version: a change of slug is a change of the canonical identifier, and the hint says so. */
+function slugHint(draft: Draft, version: EditorProps["version"]): string {
+  if (version === null) {
+    return draft.slugEdited ? "Clear it to follow the name again." : "Follows the name. Used in the index link.";
+  }
+  return version.identifierAfter === version.identifier
+    ? `Part of the canonical identifier, ${version.identifier}. Changing it changes the identifier.`
+    : `Changes the canonical identifier from ${version.identifier} to ${version.identifierAfter}. Links with the current identifier stop working; links with the index id keep working.`;
+}
+
+function Identity({ draft, update, issues, networks, version }: EditorProps) {
   const all = ["name", "slug", "description", "network"] as const;
   return (
     <Section
@@ -66,13 +82,7 @@ function Identity({ draft, update, issues, networks }: EditorProps) {
             />
           )}
         </Field>
-        <Field
-          label="Slug"
-          {...fieldMessage(
-            issuesFor(issues, "slug"),
-            draft.slugEdited ? "Clear it to follow the name again." : "Follows the name. Used in the index link.",
-          )}
-        >
+        <Field label="Slug" {...fieldMessage(issuesFor(issues, "slug"), slugHint(draft, version))}>
           {(control) => (
             <Input
               {...control}
@@ -106,20 +116,27 @@ function Identity({ draft, update, issues, networks }: EditorProps) {
       <Field
         label="Network"
         className="md:max-w-xs"
-        hint="Where the index is published. The chain id is part of the spec, so it changes the hash."
+        hint={
+          version === null
+            ? "Where the index is published. The chain id is part of the spec, so it changes the hash."
+            : "Fixed: every version of an index is published to the registry that holds it."
+        }
       >
         {(control) => (
           <Select
             {...control}
             data-field="network"
+            disabled={version !== null}
             value={draft.chainId}
             onChange={(event) => update((current) => ({ ...current, chainId: Number(event.target.value) }))}
           >
-            {networks.map(({ chainId, name }) => (
-              <option key={chainId} value={chainId}>
-                {name}
-              </option>
-            ))}
+            {(version === null ? networks : [{ chainId: draft.chainId, name: version.network }]).map(
+              ({ chainId, name }) => (
+                <option key={chainId} value={chainId}>
+                  {name}
+                </option>
+              ),
+            )}
           </Select>
         )}
       </Field>

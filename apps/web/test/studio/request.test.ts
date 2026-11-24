@@ -3,16 +3,24 @@ import { indexRegistryAbi } from "@equityos/contracts-abi";
 import type { Address } from "viem";
 import { evaluateDraft } from "../../src/lib/studio/evaluate";
 import type { ChecklistItem } from "../../src/lib/studio/preflight";
-import { buildPublishPlan, type NetworkPolicy, type PublishPlan } from "../../src/lib/studio/publish";
+import type { OnchainIndex } from "../../src/lib/studio/preflight";
+import {
+  buildPublishPlan,
+  buildVersionPlan,
+  type NetworkPolicy,
+  type PublishPlan,
+  type VersionPlan,
+} from "../../src/lib/studio/publish";
 import {
   acknowledgementEnds,
   buildPublishRequest,
+  decideAtClick,
   type PublishDecision,
   type PublishDecisionInput,
   publishPlanKey,
 } from "../../src/lib/studio/request";
 import type { TxState } from "../../src/lib/tx/machine";
-import { ASSETS, CHAIN_ID, SALT, validDraft } from "./support";
+import { ASSETS, CHAIN_ID, INDEX_ID, SALT, validDraft, versionTarget } from "./support";
 
 const REGISTRY: Address = "0x4BD4D49A9C88f75FB97674488E23A7Fa59F9506c";
 const CREATOR: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -48,6 +56,7 @@ function input(overrides: Partial<PublishDecisionInput> = {}): PublishDecisionIn
     walletChainId: CHAIN_ID,
     checklist: done,
     busy: false,
+    index: null,
     ...overrides,
   };
 }
@@ -188,5 +197,130 @@ describe("acknowledgementEnds", () => {
       { status: "unverified", hash, reason: "x" },
     ];
     for (const state of keeps) expect(acknowledgementEnds(state)).toBe(false);
+  });
+});
+
+describe("buildPublishRequest for a new version", () => {
+  const target = versionTarget(CREATOR, REGISTRY);
+  const INDEX: OnchainIndex = { creator: CREATOR, latestVersion: 1, deprecated: false };
+  function versionPlan(name = "Test Index Two", creator = CREATOR): VersionPlan {
+    const { valid } = evaluateDraft(validDraft({ name }), ASSETS);
+    if (valid === null) throw new Error("expected a valid draft");
+    return buildVersionPlan({ valid, target, creator });
+  }
+  const versionInput = (overrides: Partial<PublishDecisionInput> = {}) =>
+    input({ plan: versionPlan(), index: INDEX, ...overrides });
+
+  test("returns exactly the publishVersion call of the plan, with the expected version one above the base", () => {
+    const p = versionPlan();
+    const decision = buildPublishRequest(versionInput({ plan: p }));
+    expect(decision).toEqual({
+      ok: true,
+      plan: p,
+      request: {
+        chainId: CHAIN_ID,
+        account: CREATOR,
+        address: REGISTRY,
+        abi: indexRegistryAbi,
+        functionName: "publishVersion",
+        args: [INDEX_ID, 2, p.specHex, p.constituents.map(({ token }) => token), [3334, 3333, 3333]],
+      },
+    });
+  });
+
+  test("the function is the plan's: a new index is never sent as a version, nor the reverse", () => {
+    const created = buildPublishRequest(input({ index: INDEX }));
+    const versioned = buildPublishRequest(versionInput());
+    expect(created.ok && created.request.functionName).toBe("createIndex");
+    expect(versioned.ok && versioned.request.functionName).toBe("publishVersion");
+    expect(versioned.ok && versioned.request.args[0]).toBe(INDEX_ID);
+  });
+
+  test("refuses the bytes of the latest version", () => {
+    expect(buildPublishRequest(versionInput({ plan: versionPlan("Test Index") }))).toEqual({
+      ok: false,
+      refusal: { reason: "unchanged" },
+    });
+  });
+
+  test("refuses an account that is not the creator", () => {
+    expect(buildPublishRequest(versionInput({ plan: versionPlan("Test Index Two", OTHER) }))).toEqual({
+      ok: false,
+      refusal: { reason: "not_creator", creator: CREATOR },
+    });
+  });
+
+  test("refuses a deprecated index", () => {
+    expect(buildPublishRequest(versionInput({ index: { ...INDEX, deprecated: true } }))).toEqual({
+      ok: false,
+      refusal: { reason: "deprecated" },
+    });
+  });
+
+  test("refuses when another version was published since the draft was loaded", () => {
+    expect(buildPublishRequest(versionInput({ index: { ...INDEX, latestVersion: 2 } }))).toEqual({
+      ok: false,
+      refusal: { reason: "version_moved", latestVersion: 2 },
+    });
+  });
+
+  test("refuses while the index has not been read", () => {
+    expect(buildPublishRequest(versionInput({ index: null }))).toEqual({
+      ok: false,
+      refusal: { reason: "checks_incomplete", items: ["creator", "active", "version"] },
+    });
+  });
+
+  test("the acknowledgement of a version is bound to its index and version", () => {
+    const keys = new Set(
+      [versionPlan(), { ...versionPlan(), version: 3 }, { ...versionPlan(), indexId: SALT }].map(publishPlanKey),
+    );
+    expect(keys.size).toBe(3);
+    expect(publishPlanKey(versionPlan())).not.toBe(publishPlanKey(plan()));
+  });
+});
+
+describe("decideAtClick", () => {
+  const target = versionTarget(CREATOR, REGISTRY);
+  const { valid } = evaluateDraft(validDraft({ name: "Test Index Two" }), ASSETS);
+  if (valid === null) throw new Error("expected a valid draft");
+  const p = buildVersionPlan({ valid, target, creator: CREATOR });
+  const reviewed = input({ plan: p, index: { creator: CREATOR, latestVersion: 1, deprecated: false } });
+
+  test("reads the index again, so a version published after the review is refused at the click", async () => {
+    const reads: string[] = [];
+    const decision = await decideAtClick(reviewed, async (read) => {
+      reads.push(read.indexId);
+      return { creator: CREATOR, latestVersion: 2, deprecated: false };
+    });
+    expect(reads).toEqual([INDEX_ID]);
+    expect(decision).toEqual({ ok: false, refusal: { reason: "version_moved", latestVersion: 2 } });
+  });
+
+  test("decides with the state read at the click, not the one of the review", async () => {
+    const stale = { ...reviewed, index: { creator: CREATOR, latestVersion: 5, deprecated: true } };
+    const decision = await decideAtClick(stale, async () => ({
+      creator: CREATOR,
+      latestVersion: 1,
+      deprecated: false,
+    }));
+    expect(decision.ok && decision.request.args[1]).toBe(2);
+    expect(
+      await decideAtClick(reviewed, async () => ({ creator: CREATOR, latestVersion: 1, deprecated: true })),
+    ).toEqual({ ok: false, refusal: { reason: "deprecated" } });
+  });
+
+  test("a read that fails refuses", async () => {
+    const decision = await decideAtClick(reviewed, async () => {
+      throw new Error("unreachable");
+    });
+    expect(decision).toEqual({ ok: false, refusal: { reason: "index_unreadable" } });
+  });
+
+  test("a new index needs no read", async () => {
+    const decision = await decideAtClick(input(), async () => {
+      throw new Error("must not be called");
+    });
+    expect(decision.ok).toBe(true);
   });
 });

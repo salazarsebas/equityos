@@ -2,6 +2,7 @@ import type { Hex } from "@equityos/core";
 import type { StudioAsset } from "./assets";
 import type { Draft } from "./draft";
 import { evaluateDraft, type ValidDraft } from "./evaluate";
+import { isUnchanged, type VersionTarget } from "./version";
 
 /**
  * What the review shows and sends, taken once when it opens: the draft, the asset list it was validated
@@ -12,12 +13,22 @@ export interface ReviewSnapshot {
   readonly draft: Draft;
   readonly assets: readonly StudioAsset[];
   readonly valid: ValidDraft;
+  /** The index and its latest version a new version is based on. `null` for a new index. */
+  readonly target: VersionTarget | null;
 }
 
-/** The snapshot of a draft, or `null` when the draft is not a valid spec against these assets. */
-export function takeReviewSnapshot(draft: Draft, assets: readonly StudioAsset[]): ReviewSnapshot | null {
+/**
+ * The snapshot of a draft, or `null` when the draft is not a valid spec against these assets, or is a new
+ * version with the bytes of the latest one.
+ */
+export function takeReviewSnapshot(
+  draft: Draft,
+  assets: readonly StudioAsset[],
+  target: VersionTarget | null = null,
+): ReviewSnapshot | null {
   const { valid } = evaluateDraft(draft, assets);
-  return valid === null ? null : { draft, assets: [...assets], valid };
+  if (valid === null || (target !== null && isUnchanged(valid, target.base))) return null;
+  return { draft, assets: [...assets], valid, target };
 }
 
 /** The same snapshot with another salt. The salt is not part of the spec, so the bytes and the hash stay. */

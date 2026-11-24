@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ineligibilityText, parseAssetsResponse } from "../../src/lib/studio/assets";
-import { publishFailureText } from "../../src/lib/studio/messages";
+import { clickRefusalText, publishFailureText } from "../../src/lib/studio/messages";
 import { TOKENS } from "./support";
 
 describe("publishFailureText", () => {
@@ -20,6 +20,39 @@ describe("publishFailureText", () => {
     });
     expect(failure.body).toContain("SpecTooLarge(9000, 8192)");
     expect(publishFailureText({ kind: "unknown" })).toMatchObject({ offersNewSalt: false, reported: null });
+  });
+
+  test("the refusals of publishVersion are explained in words, with the error and its arguments", () => {
+    const id = `0x${"ab".repeat(32)}`;
+    const caller = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+    const notCreator = publishFailureText({ kind: "contract_error", name: "NotCreator", args: [id, caller] });
+    expect(notCreator).toMatchObject({
+      title: "Only the creator of this index can publish a new version.",
+      offersReload: false,
+      offersNewSalt: false,
+    });
+    expect(notCreator.body).toContain(`NotCreator(${id}, ${caller})`);
+    const deprecated = publishFailureText({ kind: "contract_error", name: "IndexIsDeprecated", args: [id] });
+    expect(deprecated).toMatchObject({ title: "This index is deprecated.", offersReload: false });
+    expect(deprecated.body).toContain(`IndexIsDeprecated(${id})`);
+    const moved = publishFailureText({ kind: "contract_error", name: "UnexpectedVersion", args: [2, 3] });
+    expect(moved).toMatchObject({
+      title: "Another version was published while this draft was open.",
+      offersReload: true,
+    });
+    expect(moved.body).toContain("This draft would be version 2, and the registry expects version 3");
+    expect(moved.body).toContain("UnexpectedVersion(2, 3)");
+    expect(moved.body).toContain("Nothing was sent.");
+  });
+
+  test("a refusal at the click is explained, and a moved version offers the reload", () => {
+    expect(clickRefusalText({ reason: "version_moved", latestVersion: 2 })).toMatchObject({
+      title: "Version 2 was published while this draft was open.",
+      offersReload: true,
+    });
+    expect(clickRefusalText({ reason: "deprecated" })?.offersReload).toBe(false);
+    expect(clickRefusalText({ reason: "index_unreadable" })?.body).toContain("Nothing was sent.");
+    expect(clickRefusalText({ reason: "busy" })).toBeNull();
   });
 
   test("a plain revert reason is kept apart from the app's own sentences", () => {

@@ -2,10 +2,10 @@
 
 The Studio is the page at `/studio` where an index is defined and published. It produces one thing: a valid
 `equityos.index/1` document, described in [Methodology spec](../architecture/methodology-spec.md), and it can send
-that document to the [index registry](../architecture/index-registry.md) as version 1 of a new index.
+that document to the [index registry](../architecture/index-registry.md) as version 1 of a new index, or as the
+next version of an existing one (see [A new version of an existing index](#a-new-version-of-an-existing-index)).
 
-The Studio creates indexes. Publishing a new version of an existing index and deprecating an index are not
-implemented in it.
+Deprecating an index is not implemented in the Studio.
 
 ## What the Studio produces
 
@@ -172,9 +172,77 @@ The published state shows the canonical identifier, the index id, the spec hash,
 and links to the profile of the new index at `/indexes/<identifier>`. The explorer lists it once it reads the
 registry again, within ten seconds, when the site is configured for the chain the index was published on.
 
+## A new version of an existing index
+
+`/studio?index=<identifier>` opens the Studio on an existing index. The identifier is the canonical one or the
+index id. The entry points are "Publish a new version" on the index profile, shown only when the connected
+account is the creator, and "Your indexes on <network>" at the top of the Studio, which lists the indexes the
+connected account created, from `GET /api/v1/indexes`.
+
+### Loading
+
+The API resolves the identifier. The index (`getIndex`) and its latest version (`getVersion`, `specOf`,
+`constituentsOf`) are then read from the registry itself, through the endpoint the browser has for that chain,
+and from `GET /api/v1/indexes/{id}/versions/{n}` when the browser has none, as in a production build for a
+local chain. Either way, the bytes, the hash and the stored constituents are verified in the browser with
+`verifyVersion` of `@equityos/core`, checks C1 to C5 on the chain the index is on, before anything is used.
+
+| The latest version                          | What the Studio does                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| Passes every check                          | Opens the editor prefilled with it (`draftFromSpec`, `lib/studio/version.ts`)    |
+| Fails a check                               | Names the check and its reason, and does not open the editor                     |
+| Is a spec the editor cannot write unchanged | Says why (a `parent` reference, or an interval that is not whole hours)          |
+| Belongs to a deprecated index               | Says that no version can follow, and does not open the editor                    |
+| Does not exist                              | Says so. An index created in the last ten seconds appears once the site reads it |
+
+Prefilling is exact: evaluated against an asset list with the same feeds, the prefilled draft gives the same
+canonical bytes as the latest version. A unit test checks this for every conformant seed version.
+
+### Editing
+
+- The network is fixed: a version goes to the registry that holds the index.
+- The slug no longer follows the name. A new slug changes the canonical identifier of the index, and the slug
+  field says from which identifier to which: links with the old identifier stop resolving, links with the index
+  id keep working.
+- The preview and the review list the changes from the latest version with `diffSpecs` and `summarizeDiff` of
+  `apps/web/src/lib/indexes/diff.ts`, the module the version history of the profile uses, so both pages
+  describe a change in the same words.
+- A draft whose canonical bytes are the latest version's cannot be reviewed: the button reads "No change from
+  version N" and the preview says that a new version must change something.
+- The draft of a new version is not stored. Reloading the page starts again from the latest version, and the
+  draft of a new index in `localStorage` is left as it was. "Discard changes" returns to the latest version.
+- When the connected account is not the creator, the editor says so. Editing and exporting stay possible.
+
+### Publishing
+
+The review shows `publishVersion(indexId, expectedVersion, spec, tokens, weightsBps)` with the creator, the index
+id, the identifier after publication, and `expectedVersion`, the latest version plus one. Its checklist has
+eleven items: the nine of a new index, with "Index id" replaced by three read with `getIndex`:
+
+| Check        | Established by                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| Creator      | The creator the registry records is the connected account                                |
+| Index active | The index is not deprecated                                                              |
+| Version      | The registry is at the version the draft was loaded from, with the hash it was read with |
+
+The simulation runs before these checks are applied, so a refusal is shown in the registry's own terms:
+`NotCreator`, `IndexIsDeprecated` and `UnexpectedVersion` are decoded and explained.
+
+At the click the index is read from the registry again, and the request is decided again with what that read
+returns. A version published in the meantime, from another tab or another client, is refused there with
+nothing sent. The refusal, like `UnexpectedVersion` from the registry, offers "Load the latest version": the
+editor comes back with the draft kept and the changes shown against the version the registry holds now.
+
+After signing, the states are the ones of a new index. Success needs exactly one `VersionPublished` from the
+registry with the index id, the expected version, the spec hash and the connected account as publisher, and no
+`IndexCreated`, then the version read back and verified as for version 1. The confirmed state links to the
+profile, which lists the new version once the site reads the registry again, within ten seconds.
+
 ## Tests
 
 - `apps/web/test/studio` and `apps/web/test/tx`: unit tests of all pure logic, without a wallet.
-- `apps/web/e2e/studio.e2e.ts`: the editor in a browser against the production build, with no chain.
-- `apps/web/e2e-chain/publish.e2e.ts`: the publish flow against a local Anvil node. Run with
-  `bun run test:integration`, or alone with `bun run --filter @equityos/web test:e2e:chain`.
+- `apps/web/e2e/studio.e2e.ts` and `studio-version.e2e.ts`: the editor in a browser against the production
+  build, with no chain, for a new index and for a new version of a recorded one.
+- `apps/web/e2e-chain/publish.e2e.ts` and `new-version.e2e.ts`: the publish flows against a local Anvil node,
+  including a version refused to an account that is not the creator and a version published first from another
+  tab. Run with `bun run test:integration`, or alone with `bun run --filter @equityos/web test:e2e:chain`.

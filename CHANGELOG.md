@@ -93,6 +93,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   as one source of the response is a replayed recording. The SDK decodes it.
 - `transferWarnings` on `GET /api/v1/portfolio` and `GET /api/v1/portfolio/plan`: a typed `transfers_paused`
   warning for each constituent whose issuer paused transfers, and a line in the plan statement of the page.
+- Index Studio publishes a new version of an existing index: `/studio?index=<identifier>` opens the latest
+  version, verified in the browser, prefilled in the editor, with its changes in the words of the version
+  history. `publishVersion` is sent only by the creator, with `expectedVersion` read again at the click, and
+  success is shown only after the `VersionPublished` event and the version read back are verified. A deprecated
+  index, a version that fails verification and an unchanged spec are refused with the reason, and a version
+  published first elsewhere offers to load the latest version and keep the draft.
+- The index profile offers "Publish a new version" to its creator, and the Studio lists the indexes of the
+  connected account.
 
 ### Changed
 

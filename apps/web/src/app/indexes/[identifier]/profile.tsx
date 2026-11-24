@@ -25,6 +25,7 @@ import { getMarketData } from "@/server/market";
 import { type Composition as CompositionKind, getRegistryReader, type IndexVersionView } from "@/server/registry";
 import { RegistryNotDeployedState, RegistryNotice } from "../registry-states";
 import { Composition, CompositionSkeleton, CurrentStatus, type SnapshotResult } from "./composition";
+import { NewVersionSlot } from "./new-version-slot";
 import { Methodology, Performance, VersionHistory } from "./sections";
 import { VerificationPanel } from "./verification-panel";
 
@@ -114,15 +115,16 @@ function Header({ profile, name }: { profile: IndexProfile; name: string }) {
       {view.conformant && view.spec.description !== "" ? (
         <p className="mt-3 max-w-measure text-md">{view.spec.description}</p>
       ) : null}
-      {view.conformant ? (
-        <p className="mt-3">
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 empty:hidden">
+        {view.conformant ? (
           <Link
             href={`/portfolio?${new URLSearchParams({ index: index.identifier, ...(superseded ? { version: String(view.version) } : {}) })}`}
           >
             Compare a wallet with this index
           </Link>
-        </p>
-      ) : null}
+        ) : null}
+        {deprecatedAt === null ? <NewVersionSlot identifier={index.identifier} creator={creator} /> : null}
+      </div>
       <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <HeaderFact term="Creator">
           {creatorUrl ? (
