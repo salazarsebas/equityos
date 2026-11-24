@@ -208,6 +208,11 @@ x-equityos-api-version: 1.2.0
 - `issues` are the findings of the valuation, as in the calculation specification: `missing_price`,
   `price_unavailable`, `zero_price` and `decimals_mismatch` are blockers; `market_closed` and `price_delayed`
   are warnings.
+- `transferWarnings` lists, in the order of the version, every constituent whose issuer paused its transfers at
+  the block of the snapshot: `{ "code": "transfers_paused", "token", "symbol" }`. The arithmetic does not model
+  a pause, so the comparison and the plan are still computed; a leg in such a token cannot be executed while the
+  pause lasts, and the execution plan blocks it with its `transfers_not_paused` check. The plan response carries
+  the same list. Added in API version 1.4.0.
 
 ## GET /api/v1/portfolio/plan
 

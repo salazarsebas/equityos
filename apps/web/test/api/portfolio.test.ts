@@ -11,7 +11,7 @@ import type { MarketData } from "../../src/server/market";
 import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
-import { body, fixtureService, get, RECORDED_AT, recordedRegistry } from "./support";
+import { body, fixtureService, get, pausedTransfers, RECORDED_AT, recordedRegistry } from "./support";
 
 const INDEX = "diversified-equity-d622e2a5";
 const MISMATCHED = "0x50f8aacd30bddc6f9e0fbca1501526b2ac01106e626678eab50a7867eb94d759";
@@ -193,6 +193,26 @@ describe("GET /api/v1/portfolio", () => {
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+describe("a constituent whose transfers are paused", () => {
+  test("is a typed warning of the comparison and of the plan, which still states its arithmetic", async () => {
+    const paused = {
+      ...options(),
+      marketData: fixtureService(RECORDED_AT, { override: pausedTransfers(TOKENS.NVDA) }).marketData,
+    };
+    const query = `address=${ABOVE}&index=${INDEX}`;
+    const compared = await portfolio(query, paused);
+    expect(compared.response.status).toBe(200);
+    const warning = { code: "transfers_paused", token: TOKENS.NVDA, symbol: "NVDAc" };
+    expect((compared.data as unknown as { transferWarnings: unknown }).transferWarnings).toEqual([warning]);
+    const planned = await plan(`${query}&mode=rebalance`, paused);
+    expect(planned.data.transferWarnings).toEqual([warning]);
+    expect(planned.data.plan.status).toBe("ready");
+    // Without a pause there is no warning.
+    expect((await plan(`${query}&mode=rebalance`)).data.transferWarnings).toEqual([]);
+    expect(((await portfolio(query)).data as unknown as { transferWarnings: unknown }).transferWarnings).toEqual([]);
   });
 });
 

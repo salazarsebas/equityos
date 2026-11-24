@@ -216,6 +216,29 @@ function apiIssue(issue: CalculationIssue) {
   };
 }
 
+/**
+ * A condition of a constituent's token that the reference arithmetic does not model, reported next to it.
+ * `transfers_paused`: the issuer paused transfers of the token, so no leg in it can be executed while the pause
+ * lasts. The execution plan blocks such a leg with its `transfers_not_paused` check.
+ */
+export interface TransferWarning {
+  readonly code: "transfers_paused";
+  readonly token: Address;
+  readonly symbol: string | null;
+}
+
+/** Every constituent whose transfers are paused at the block of the snapshot, in the order of the version. */
+export function transferWarnings(comparison: Comparison): TransferWarning[] {
+  const warnings: TransferWarning[] = [];
+  for (const { token } of comparison.view.constituents) {
+    const state = comparison.entries.get(token)?.token;
+    if (state?.status === "ok" && state.state.transfersPaused) {
+      warnings.push({ code: "transfers_paused", token, symbol: tokenLabel(comparison, token).symbol });
+    }
+  }
+  return warnings;
+}
+
 export function tokenLabel(comparison: Comparison, token: Address) {
   const entry = comparison.entries.get(token);
   return { symbol: entry?.asset.symbol ?? null, name: entry?.asset.name ?? null };
@@ -312,6 +335,7 @@ export function portfolioHandler(options: PortfolioApiOptions) {
         referencePrice: reference(holding.token),
       })),
       issues: valuation.issues.map(apiIssue),
+      transferWarnings: transferWarnings(comparison),
     };
     return ok(data, comparisonMeta(options, comparison), comparisonCache(comparison));
   });
@@ -404,6 +428,7 @@ export function portfolioPlanHandler(options: PortfolioApiOptions) {
       reserveBps,
       minLegValueUsdE8,
       plan,
+      transferWarnings: transferWarnings(comparison),
     };
     return ok(data, comparisonMeta(options, comparison), comparisonCache(comparison));
   });

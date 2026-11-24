@@ -1143,7 +1143,8 @@
               "currentMaxAbsDriftBps": null,
               "projectedMaxAbsDriftBps": null
             }
-          ]
+          ],
+          "transferWarnings": []
         },
         "meta": {
           "mode": "replay",
@@ -1371,7 +1372,8 @@
               "quoteBalance": "6939376",
               "maxAbsDriftBps": 2
             }
-          }
+          },
+          "transferWarnings": []
         },
         "meta": {
           "mode": "replay",
@@ -1494,7 +1496,8 @@
                 "projectedMaxAbsDriftBps": null
               }
             ]
-          }
+          },
+          "transferWarnings": []
         },
         "meta": {
           "mode": "replay",

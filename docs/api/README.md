@@ -172,7 +172,7 @@ reference price is computed for the time of each response.
   enumeration value as "unknown", not as a failure.
 - Every response carries `X-EquityOS-Api-Version`, the version of the contract that produced it, which is also
   `info.version` of the OpenAPI document. Its minor part rises with each additive change. Current: `1.4.0`, which
-  added `meta.mode` to every successful response. `1.3.0` added the execution plan. `1.2.0` added the portfolio
+  added `meta.mode` to every successful response and `transferWarnings` to the portfolio and the plan. `1.3.0` added the execution plan. `1.2.0` added the portfolio
   endpoints. `1.1.0` added the index endpoints and `registry` in the status.
 - A breaking change gets a new path prefix.
 - The examples in these pages are recorded responses. An example recorded before `1.4.0` has no `meta.mode`.

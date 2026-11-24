@@ -88,6 +88,7 @@ export {
   type Status,
   type StatusMeta,
   type TokenState,
+  type TransferWarning,
   type VerificationSummary,
   type VersionSummary,
 } from "./schemas.ts";

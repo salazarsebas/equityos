@@ -1,6 +1,6 @@
 import type { CalculationIssueCode } from "@equityos/core";
 import { formatPercentagePoints, formatUsd } from "@/lib/format";
-import type { ApiIssue } from "./api";
+import type { ApiIssue, ApiTransferWarning } from "./api";
 
 const USD_E8_DECIMALS = 8;
 const USDC_DECIMALS = 6;
@@ -62,4 +62,15 @@ export function describeIssues(
     const subject = tokens.length === 0 ? "the portfolio" : joinNames(tokens);
     return [{ code: first.code, severity: first.severity, text: ISSUE_TEXT[first.code](first, subject) }];
   });
+}
+
+/**
+ * The lines the plan statement adds for constituents whose transfers are paused, one per token. The arithmetic
+ * does not model a pause, so the statement says what it means for a leg in that token.
+ */
+export function transferWarningLines(warnings: readonly ApiTransferWarning[]): string[] {
+  return warnings.map(
+    ({ token, symbol }) =>
+      `Transfers of ${symbol ?? token} are paused by its issuer: a leg in it cannot be executed while the pause lasts.`,
+  );
 }

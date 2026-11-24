@@ -88,6 +88,15 @@ export function wrongChain(call: { target: Address; callData: Hex }): Answer | u
   return isChainId ? { success: true, returnData: encodeAbiParameters([{ type: "uint256" }], [1n]) } : undefined;
 }
 
+/** Makes `isPaused(TRANSFER)` of one token answer `true`: its issuer paused transfers. */
+export function pausedTransfers(token: Address) {
+  const callData = encodeFunctionData({ abi: b20AssetAbi, functionName: "isPaused", args: [0] });
+  return (call: { target: Address; callData: Hex }): Answer | undefined =>
+    call.target.toLowerCase() === token && call.callData === callData
+      ? { success: true, returnData: encodeAbiParameters([{ type: "bool" }], [true]) }
+      : undefined;
+}
+
 /** Makes `totalSupply()` of one token answer with `supply`. */
 export function supplyOf(token: Address, supply: bigint) {
   const callData = encodeFunctionData({ abi: b20AssetAbi, functionName: "totalSupply" });

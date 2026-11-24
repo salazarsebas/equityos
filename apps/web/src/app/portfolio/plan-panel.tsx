@@ -22,7 +22,7 @@ import { useExecutionAvailability } from "@/components/wallet/hooks";
 import { formatFixed, formatTokenQuantity, formatUsd } from "@/lib/format";
 import { type ApiIssue, type ApiPlan, type ComparisonState, comparisonQuery, readEnvelope } from "@/lib/portfolio/api";
 import { DEPOSIT_ERRORS, parseDepositUsd } from "@/lib/portfolio/deposit";
-import { describeIssues } from "@/lib/portfolio/issues";
+import { describeIssues, transferWarningLines } from "@/lib/portfolio/issues";
 import { EXECUTION_UNAVAILABLE_MESSAGES } from "@/lib/wallet/execution";
 import { Missing } from "./drift-table";
 
@@ -277,6 +277,13 @@ export function PlanPanel({
           This preview is arithmetic toward the published target weights at reference prices. It contains no executable
           quote, no slippage and no gas, so executable prices will differ, and it is not an instruction to trade.
         </p>
+        {result.data === undefined
+          ? null
+          : transferWarningLines(result.data.transferWarnings).map((line) => (
+              <p key={line} className="text-warning">
+                {line}
+              </p>
+            ))}
         <p>
           Executing a plan is not available on this site.{" "}
           {execution.executionAvailable ? null : EXECUTION_UNAVAILABLE_MESSAGES[execution.reason]}

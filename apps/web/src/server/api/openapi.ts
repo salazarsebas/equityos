@@ -650,6 +650,11 @@ const schemas: Record<string, Schema> = {
     ),
     outsideIndex: { type: "array", items: ref("OutsideHolding") },
     issues: { type: "array", items: ref("CalculationIssue") },
+    transferWarnings: {
+      type: "array",
+      items: ref("TransferWarning"),
+      description: "Every constituent whose transfers are paused, in the order of the version.",
+    },
   }),
   PortfolioMeta: object({
     ...snapshotMetaProperties,
@@ -720,6 +725,17 @@ const schemas: Record<string, Schema> = {
       "The address after every leg at its reference price.",
     ),
   }),
+  TransferWarning: object(
+    {
+      code: oneOf(
+        ["transfers_paused"],
+        "transfers_paused: the issuer paused transfers of the token, so no leg in it can be executed while the pause lasts. The execution plan blocks such a leg.",
+      ),
+      token: ref("Address"),
+      symbol: nullable(text("Display symbol.")),
+    },
+    "A condition of a constituent's token that the reference arithmetic does not model.",
+  ),
   PortfolioPlan: object({
     address: ref("Address"),
     index: ref("PortfolioIndex"),
@@ -731,6 +747,12 @@ const schemas: Record<string, Schema> = {
     reserveBps: { type: "integer", minimum: 0, maximum: 2_000 },
     minLegValueUsdE8: ref("UintString"),
     plan: { anyOf: [ref("BlockedPlan"), ref("ReadyPlan")] },
+    transferWarnings: {
+      type: "array",
+      items: ref("TransferWarning"),
+      description:
+        "Every constituent whose transfers are paused, in the order of the version. A plan may still list a leg in it.",
+    },
   }),
   ExecutionCheck: object(
     {

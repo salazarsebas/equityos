@@ -83,6 +83,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `@equityos/sdk`: `executionPlan` for the new endpoint.
 - Public API v1.4.0: every successful response carries `meta.mode`, `live` or `replay`, which is `replay` as soon
   as one source of the response is a replayed recording. The SDK decodes it.
+- `transferWarnings` on `GET /api/v1/portfolio` and `GET /api/v1/portfolio/plan`: a typed `transfers_paused`
+  warning for each constituent whose issuer paused transfers, and a line in the plan statement of the page.
 
 ### Changed
 
