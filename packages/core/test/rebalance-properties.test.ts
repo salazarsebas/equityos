@@ -174,6 +174,15 @@ function roundingValue(item: Planned): bigint {
   return sum(item.plan.targets.map(({ token }) => unitValue(item, token))) + 100n * (count + exits + 2n) + 1n;
 }
 
+/**
+ * What the constituents sold may raise beyond what the buys need, in quote base units: per sell, the minimum leg
+ * value and one base unit of its token, rounded down to quote base units, plus three quote base units.
+ */
+function sellAllowance(item: Planned): bigint {
+  const sells = legsOf(item.plan, "sell").filter(({ exit }) => !exit);
+  return sum(sells.map(({ token }) => (unitValue(item, token) + item.plan.minLegValueUsdE8) / 100n + 3n));
+}
+
 /** The share of the projected invested value that `roundingValue` can move, in bps, rounded up. */
 function roundingBps(item: Planned, factor: bigint): number {
   const count = BigInt(item.plan.targets.length);
@@ -378,21 +387,26 @@ describe("planRebalance over random portfolios", () => {
   });
 
   test("a sale never only adds to the quote balance: sells raise what the buys spend, and no more", () => {
+    let capped = 0;
     for (const item of cases) {
       const { plan } = item;
-      // The sells are sized for the uncapped buys. A capped candidate spends less, which the drift decides on.
-      if (plan.candidate === "capped") continue;
+      // Both candidates: the capped one has its sells scaled again to what its own buys spend.
+      if (plan.candidate === "capped" && legsOf(plan, "sell").some(({ exit }) => !exit)) capped += 1;
       const sells = legsOf(plan, "sell").filter(({ exit }) => !exit);
       const exitProceeds = sum(plan.legs.filter(({ exit }) => exit).map(({ quoteAmount }) => quoteAmount));
       const spent = sum(legsOf(plan, "buy").map(({ quoteAmount }) => quoteAmount));
       if (spent === 0n) expect(sells).toEqual([]);
       const needed = ceilDiv(spent * 10_000n, BigInt(10_000 - plan.reserveBps)) - plan.availableQuote - exitProceeds;
       // Each sell can exceed its share by one base unit of its token, the minimum leg value and two quote units.
-      const allowance = sum(sells.map(({ token }) => (unitValue(item, token) + plan.minLegValueUsdE8) / 100n + 3n));
+      const allowance = sellAllowance(item);
       expect(sum(sells.map(({ quoteAmount }) => quoteAmount))).toBeLessThanOrEqual(
         (needed > 0n ? needed : 0n) + allowance,
       );
+      // A constituent is sold only when the buys need more than the quote available, so what is left on top of
+      // the reserve is at most that allowance, with or without a deposit.
+      if (sells.length > 0) expect(plan.buyBudgetQuote - spent).toBeLessThanOrEqual(allowance);
     }
+    expect(capped).toBeGreaterThan(100);
   });
 
   test("the plan returned is never further from target than the other candidate, and there are two only after a skipped buy", () => {
@@ -535,5 +549,76 @@ describe("planRebalance over random portfolios", () => {
 
   test("the same input gives the same output", () => {
     for (const { input } of generated.slice(0, 200)) expect(planRebalance(input)).toEqual(planRebalance(input));
+  });
+});
+
+/**
+ * Seven constituents in `rebalance` mode without a deposit, with whole-unit and 2-decimal tokens priced from
+ * 0.01 USD to 1,000.00 USD per base unit. Coarse tokens make buys skip as `zero_quantity`, so the capped
+ * candidate is returned in most cases, and often while the plan sells constituents.
+ */
+const IDLE_CASES = 10_000;
+const IDLE_DECIMALS = [0, 0, 2, 6, 18];
+
+function sevenConstituents(seed: number): Case {
+  const random = createRandom(seed);
+  const tokens = Array.from({ length: 7 }, (_, i) => address(0xa1 + i * 0x11));
+  const raw = tokens.map(() => 1 + random(100));
+  const rawTotal = raw.reduce((a, b) => a + b, 0);
+  // At least 1 bps each, and the first takes what flooring leaves, so that the weights sum to 10,000.
+  const weightsBps = raw.map((share) => 1 + Math.floor((share * (10_000 - tokens.length)) / rawTotal));
+  weightsBps[0] = (weightsBps[0] ?? 0) + 10_000 - weightsBps.reduce((a, b) => a + b, 0);
+  const decimals = new Map<Address, number>(tokens.map((token) => [token, pick(random, IDLE_DECIMALS)]));
+  const prices = new Map<Address, bigint>(tokens.map((token) => [token, BigInt(1 + random(100_000)) * 1_000_000n]));
+  const totalUsd = BigInt(1_000 + random(20_000));
+  const holdings: Holding[] = tokens.map((token) => {
+    const valueUsdE8 = (totalUsd * BigInt(random(1_000)) * USD_E8) / 7_000n;
+    const tokenDecimals = decimals.get(token) ?? 0;
+    const balance = (valueUsdE8 * 10n ** BigInt(tokenDecimals)) / (prices.get(token) ?? 1n);
+    return { token, balance, decimals: tokenDecimals };
+  });
+  const input: RebalancePlanInput = {
+    mode: "rebalance",
+    constituents: tokens.map((token, i) => ({
+      token,
+      weightBps: weightsBps[i] ?? 0,
+      decimals: decimals.get(token) ?? 0,
+    })),
+    holdings,
+    prices: tokens.map((token) => ({ token, priceE8: prices.get(token) ?? 1n, status: "live" })),
+    quoteBalance: random(2) === 0 ? 0n : (totalUsd * BigInt(random(100)) * 1_000_000n) / 1_000n,
+    reserveBps: pick(random, [0, 50]),
+    minLegValueUsdE8: USD_E8,
+  };
+  return { input, decimals, prices };
+}
+
+describe("planRebalance over random rebalances of seven constituents without a deposit", () => {
+  const planned: Planned[] = Array.from({ length: IDLE_CASES }, (_, i) => sevenConstituents(0x1d1e + i)).flatMap(
+    (item) => {
+      const result = planRebalance(item.input);
+      return result.status === "ready" ? [{ ...item, plan: result }] : [];
+    },
+  );
+
+  test("a plan that sells a constituent leaves at most the minimum leg value plus rounding per sell uninvested", () => {
+    // Exception, stated in docs/architecture/calculation.md: a plan that sells no constituent. Its uninvested
+    // amount is quote that was already in the wallet, which skipped or capped buys leave unspent. A constituent
+    // is sold only when the buys need more than that quote, so it is spent first, and the sells are scaled to
+    // the buys of the candidate returned: what is left is the rounding of the sells, per sell at most the
+    // minimum leg value, one base unit of its token and three quote base units.
+    let checked = 0;
+    let capped = 0;
+    for (const item of planned) {
+      const { plan } = item;
+      const spent = sum(legsOf(plan, "buy").map(({ quoteAmount }) => quoteAmount));
+      if (!legsOf(plan, "sell").some(({ exit }) => !exit)) continue;
+      checked += 1;
+      if (plan.candidate === "capped") capped += 1;
+      expect(plan.buyBudgetQuote - spent).toBeLessThanOrEqual(sellAllowance(item));
+    }
+    expect(planned.length).toBeGreaterThan(9_000);
+    expect(checked).toBeGreaterThan(5_000);
+    expect(capped).toBeGreaterThan(2_000);
   });
 });

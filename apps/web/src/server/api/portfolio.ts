@@ -16,6 +16,7 @@ import {
 } from "@equityos/core";
 import type { Address } from "viem";
 import type { Cached } from "@/server/cache";
+import { combinedMode } from "@/server/data-mode";
 import {
   type AssetMarketData,
   BALANCE_CACHE,
@@ -26,6 +27,7 @@ import {
   type MarketDataMode,
   type MarketSnapshot,
   ONCHAIN_CACHE,
+  UpstreamError,
   USDC_ADDRESS,
 } from "@/server/market";
 import type { IndexSummary, IndexVersionView, RegistryMode, RegistryReader } from "@/server/registry";
@@ -112,6 +114,8 @@ async function loadComparisonFromQuery(options: PortfolioApiOptions, query: URLS
  *
  * @throws {ApiError} for an unknown index or version, a version that is not conformant, or a constituent
  *   that is not in the asset list.
+ * @throws {UpstreamError} if the balances could not be read now: an older read is never used in their place.
+ * @throws {MalformedResponseError} if the balance read has no answer for USDC or for a constituent.
  */
 export async function loadComparison(
   options: PortfolioApiOptions,
@@ -137,9 +141,24 @@ export async function loadComparison(
     constituents.push({ token, weightBps, decimals: entry.asset.decimals });
   }
   const balances = await options.marketData().getBalances(address);
+  // Balances move with every transfer: an older read is never presented as the current one. `BALANCE_CACHE` has
+  // no stale window, so this holds for any service that keeps to it, and is checked here for any that does not.
+  if (balances.servedStale) {
+    throw new UpstreamError("base_rpc", `the balance read of ${address} failed and only an older read exists`, {
+      cause: balances.error,
+    });
+  }
   const quoteBalance = balances.value.balances.get(USDC_ADDRESS);
   if (quoteBalance === undefined || quoteBalance === null) {
     throw new MalformedResponseError("base_rpc", `balanceOf(${address}) of USDC`, "did not answer a uint256");
+  }
+  // The balance read and the snapshot each read the asset list, which can change between the two after a refresh.
+  // A constituent the balance read does not hold has an unknown balance, never a zero one: valuing it at zero would
+  // make a plan propose buying a position the address may already hold.
+  for (const { token } of constituents) {
+    if (!balances.value.balances.has(token)) {
+      throw new MalformedResponseError("base_rpc", `balanceOf(${address}) of ${token}`, "was not part of the read");
+    }
   }
   const holdings: Holding[] = [];
   for (const [token, balance] of balances.value.balances) {
@@ -197,6 +216,29 @@ function apiIssue(issue: CalculationIssue) {
   };
 }
 
+/**
+ * A condition of a constituent's token that the reference arithmetic does not model, reported next to it.
+ * `transfers_paused`: the issuer paused transfers of the token, so no leg in it can be executed while the pause
+ * lasts. The execution plan blocks such a leg with its `transfers_not_paused` check.
+ */
+export interface TransferWarning {
+  readonly code: "transfers_paused";
+  readonly token: Address;
+  readonly symbol: string | null;
+}
+
+/** Every constituent whose transfers are paused at the block of the snapshot, in the order of the version. */
+export function transferWarnings(comparison: Comparison): TransferWarning[] {
+  const warnings: TransferWarning[] = [];
+  for (const { token } of comparison.view.constituents) {
+    const state = comparison.entries.get(token)?.token;
+    if (state?.status === "ok" && state.state.transfersPaused) {
+      warnings.push({ code: "transfers_paused", token, symbol: tokenLabel(comparison, token).symbol });
+    }
+  }
+  return warnings;
+}
+
 export function tokenLabel(comparison: Comparison, token: Address) {
   const entry = comparison.entries.get(token);
   return { symbol: entry?.asset.symbol ?? null, name: entry?.asset.name ?? null };
@@ -204,28 +246,32 @@ export function tokenLabel(comparison: Comparison, token: Address) {
 
 /**
  * The sources of a comparison. The index comes from the registry chain; balances and reference prices come
- * from Base mainnet, and the two blocks are given apart.
+ * from Base mainnet, and the two blocks are given apart. `mode` is `replay` when the registry or the market
+ * data is replayed.
  */
 export function comparisonMeta(options: PortfolioApiOptions, { snapshot, balances }: Comparison) {
   const { blockNumber, blockTimestamp } = balances.value;
+  const { registry } = registryMeta(options);
+  const marketMode = options.marketMode();
   return {
-    ...snapshotMeta(snapshot),
-    registry: registryMeta(options).registry,
+    ...snapshotMeta(snapshot, combinedMode(marketMode, registry.mode)),
+    registry,
     balances: {
       chainId: BASE_CHAIN_ID,
       blockNumber: blockNumber.toString(),
       blockTimestamp: isoTimestamp(blockTimestamp),
-      mode: options.marketMode(),
+      mode: marketMode,
     },
   };
 }
 
 /**
  * Cache lifetime: what is left of the shorter of the two TTLs. The URL carries the address, and the in-process
- * balance cache is keyed by it, so a cached answer is only ever the answer for that address.
+ * balance cache is keyed by it, so a cached answer is only ever the answer for that address. A response with any
+ * input served past its TTL (the asset list, the onchain read or the balances) is not cacheable.
  */
-function comparisonCache({ snapshot, balances }: Comparison): string {
-  if (snapshot.assetList.servedStale || snapshot.onchain.servedStale) return NO_STORE;
+export function comparisonCache({ snapshot, balances }: Comparison): string {
+  if (snapshot.assetList.servedStale || snapshot.onchain.servedStale || balances.servedStale) return NO_STORE;
   const now = snapshot.observedAt;
   const left = Math.min(
     ONCHAIN_CACHE.ttlSeconds - (now - snapshot.onchain.fetchedAt),
@@ -289,6 +335,7 @@ export function portfolioHandler(options: PortfolioApiOptions) {
         referencePrice: reference(holding.token),
       })),
       issues: valuation.issues.map(apiIssue),
+      transferWarnings: transferWarnings(comparison),
     };
     return ok(data, comparisonMeta(options, comparison), comparisonCache(comparison));
   });
@@ -381,6 +428,7 @@ export function portfolioPlanHandler(options: PortfolioApiOptions) {
       reserveBps,
       minLegValueUsdE8,
       plan,
+      transferWarnings: transferWarnings(comparison),
     };
     return ok(data, comparisonMeta(options, comparison), comparisonCache(comparison));
   });

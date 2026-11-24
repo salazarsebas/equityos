@@ -337,6 +337,7 @@
           }
         ],
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "marketPhase": "closed",
           "referencePriceSource": "chainlink",
@@ -397,6 +398,7 @@
           }
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "marketPhase": "closed",
           "referencePriceSource": "chainlink",
@@ -491,6 +493,7 @@
           }
         ],
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" },
           "total": 5,
@@ -567,6 +570,7 @@
           ]
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
         }
@@ -692,6 +696,7 @@
           }
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
         }
@@ -769,6 +774,7 @@
           }
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
         }
@@ -876,6 +882,7 @@
           ]
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "marketPhase": "closed",
           "referencePriceSource": "chainlink",
@@ -1136,9 +1143,11 @@
               "currentMaxAbsDriftBps": null,
               "projectedMaxAbsDriftBps": null
             }
-          ]
+          ],
+          "transferWarnings": []
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "marketPhase": "closed",
           "referencePriceSource": "chainlink",
@@ -1363,9 +1372,11 @@
               "quoteBalance": "6939376",
               "maxAbsDriftBps": 2
             }
-          }
+          },
+          "transferWarnings": []
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "marketPhase": "closed",
           "referencePriceSource": "chainlink",
@@ -1485,9 +1496,11 @@
                 "projectedMaxAbsDriftBps": null
               }
             ]
-          }
+          },
+          "transferWarnings": []
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "marketPhase": "closed",
           "referencePriceSource": "chainlink",
@@ -1881,6 +1894,7 @@
           ]
         },
         "meta": {
+          "mode": "replay",
           "asOf": "2026-11-21T19:10:55Z",
           "registry": { "chainId": 31337, "address": "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", "mode": "replay" }
         }
@@ -1914,7 +1928,7 @@
       "status": 200,
       "body": {
         "data": {
-          "apiVersion": "1.4.0",
+          "apiVersion": "1.5.0",
           "chainId": 8453,
           "marketPhase": "closed",
           "executionAvailable": false,
@@ -1953,7 +1967,7 @@
             "error": null
           }
         },
-        "meta": { "asOf": "2026-11-21T19:10:55Z" }
+        "meta": { "mode": "replay", "asOf": "2026-11-21T19:10:55Z" }
       }
     }
   ]

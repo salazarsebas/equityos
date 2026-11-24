@@ -73,9 +73,12 @@ export function networkHandler(options: NetworkApiOptions) {
       exclusions: read.exclusions,
       definitions: METRIC_DEFINITIONS,
     };
+    // The metrics are read from the registry chain alone, so the mode of the response is the registry's.
+    const mode = options.mode();
     const meta = {
+      mode,
       asOf: isoTimestamp(now()),
-      registry: { chainId: read.chainId, address: read.registry, mode: options.mode() },
+      registry: { chainId: read.chainId, address: read.registry, mode },
     };
     return ok(data, meta, publicCache(HEADS_CACHE.ttlSeconds));
   });

@@ -34,6 +34,7 @@ const NVDA = {
 };
 
 const RECORDED_META = {
+  mode: "live",
   asOf: "2026-11-21T19:10:55Z",
   marketPhase: "closed",
   referencePriceSource: "chainlink",
@@ -63,7 +64,10 @@ function symbols(data: unknown): string[] {
 
 describe("GET /api/v1/assets", () => {
   test("returns every listed asset ordered by symbol, with the snapshot it was built from", async () => {
-    const response = await assetsHandler(fixtureService().marketData)(get("/api/v1/assets"), undefined);
+    const response = await assetsHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
+      get("/api/v1/assets"),
+      undefined,
+    );
     const { data, meta } = await body(response);
     expect(response.status).toBe(200);
     expect(meta).toEqual({ ...RECORDED_META, count: 17, total: 17 });
@@ -72,7 +76,7 @@ describe("GET /api/v1/assets", () => {
   });
 
   test("eligible=true keeps the thirteen eligible assets and eligible=false the other four", async () => {
-    const handler = assetsHandler(fixtureService().marketData);
+    const handler = assetsHandler({ marketData: fixtureService().marketData, mode: () => "live" });
     const eligible = await body(await handler(get("/api/v1/assets?eligible=true"), undefined));
     const others = await body(await handler(get("/api/v1/assets?eligible=false"), undefined));
     expect(eligible.meta).toMatchObject({ count: 13, total: 17 });
@@ -82,7 +86,12 @@ describe("GET /api/v1/assets", () => {
   });
 
   test("an asset without supply or feed has null values with the reason for each, never zero", async () => {
-    const { data } = await body(await assetsHandler(fixtureService().marketData)(get("/api/v1/assets"), undefined));
+    const { data } = await body(
+      await assetsHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
+        get("/api/v1/assets"),
+        undefined,
+      ),
+    );
     const rkt = Array.isArray(data) ? data.find((asset: { address: string }) => asset.address === TOKENS.RKT) : null;
     expect(rkt).toMatchObject({
       onchain: { status: "ok", totalSupply: "0" },
@@ -103,7 +112,10 @@ describe("GET /api/v1/assets", () => {
     // Tuesday 2026-11-24 02:00 UTC: more than a day of trading time after the Friday rounds.
     const service = fixtureService(RECORDED_AT + 198_000);
     const { data } = await body(
-      await assetsHandler(service.marketData)(get("/api/v1/assets?eligible=true"), undefined),
+      await assetsHandler({ marketData: service.marketData, mode: () => "live" })(
+        get("/api/v1/assets?eligible=true"),
+        undefined,
+      ),
     );
     const nvda = Array.isArray(data) ? data.find((asset: { address: string }) => asset.address === TOKENS.NVDA) : null;
     expect(nvda.referencePrice).toEqual({
@@ -120,7 +132,10 @@ describe("GET /api/v1/assets", () => {
   test("a supply as large as uint256 is serialized exactly", async () => {
     const max = 2n ** 256n - 1n;
     const service = fixtureService(RECORDED_AT, { override: supplyOf(TOKENS.NVDA, max) });
-    const response = await assetsHandler(service.marketData)(get("/api/v1/assets?eligible=true"), undefined);
+    const response = await assetsHandler({ marketData: service.marketData, mode: () => "live" })(
+      get("/api/v1/assets?eligible=true"),
+      undefined,
+    );
     const text = await response.text();
     expect(text).toContain(`"totalSupply":"${max}"`);
     // Every JSON number in the body is a small integer: nothing financial is a number.
@@ -132,7 +147,7 @@ describe("GET /api/v1/assets", () => {
 
   test("a fresh snapshot is cacheable for what is left of the 15 second onchain TTL", async () => {
     const { marketData, clock } = fixtureService(NVDA_UPDATED_AT + 60);
-    const handler = assetsHandler(marketData);
+    const handler = assetsHandler({ marketData: marketData, mode: () => "live" });
     expect((await handler(get("/api/v1/assets"), undefined)).headers.get("Cache-Control")).toBe("public, max-age=15");
     clock.now += 11;
     const later = await handler(get("/api/v1/assets"), undefined);
@@ -142,7 +157,7 @@ describe("GET /api/v1/assets", () => {
 
   test("a snapshot served past its TTL because the RPC is down is flagged and not cacheable", async () => {
     const { marketData, clock, outage } = fixtureService(NVDA_UPDATED_AT + 60);
-    const handler = assetsHandler(marketData);
+    const handler = assetsHandler({ marketData: marketData, mode: () => "live" });
     await handler(get("/api/v1/assets"), undefined);
     outage.rpc = true;
     clock.now += 120;
@@ -161,7 +176,10 @@ describe("GET /api/v1/assets", () => {
     for (const source of ["api", "rpc"] as const) {
       const service = fixtureService();
       service.outage[source] = true;
-      const response = await assetsHandler(service.marketData)(get("/api/v1/assets"), undefined);
+      const response = await assetsHandler({ marketData: service.marketData, mode: () => "live" })(
+        get("/api/v1/assets"),
+        undefined,
+      );
       expect(response.status).toBe(503);
       expect((await body(response)).error).toMatchObject({
         code: "upstream_unavailable",
@@ -172,7 +190,10 @@ describe("GET /api/v1/assets", () => {
 
   test("an asset list of the wrong shape answers 502", async () => {
     const service = fixtureService(RECORDED_AT, { apiBody: { tokens: "none" } });
-    const response = await assetsHandler(service.marketData)(get("/api/v1/assets"), undefined);
+    const response = await assetsHandler({ marketData: service.marketData, mode: () => "live" })(
+      get("/api/v1/assets"),
+      undefined,
+    );
     expect(response.status).toBe(502);
     expect((await body(response)).error).toMatchObject({
       code: "upstream_malformed",
@@ -184,7 +205,10 @@ describe("GET /api/v1/assets", () => {
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
       const service = fixtureService(RECORDED_AT, { override: wrongChain });
-      const response = await assetsHandler(service.marketData)(get("/api/v1/assets"), undefined);
+      const response = await assetsHandler({ marketData: service.marketData, mode: () => "live" })(
+        get("/api/v1/assets"),
+        undefined,
+      );
       const text = await response.text();
       expect(response.status).toBe(500);
       expect(JSON.parse(text).error.code).toBe("service_misconfigured");
@@ -197,7 +221,7 @@ describe("GET /api/v1/assets", () => {
   test("a misspelled or malformed filter answers 400 and reads nothing", async () => {
     const service = fixtureService();
     service.outage.api = true;
-    const handler = assetsHandler(service.marketData);
+    const handler = assetsHandler({ marketData: service.marketData, mode: () => "live" });
     for (const search of ["?eligble=true", "?eligible=yes", "?eligible=true&eligible=true", "?page=2"]) {
       const response = await handler(get(`/api/v1/assets${search}`), undefined);
       expect(response.status).toBe(400);
@@ -206,9 +230,19 @@ describe("GET /api/v1/assets", () => {
   });
 });
 
+describe("meta.mode", () => {
+  test("says replay on both asset routes when the market data is replayed", async () => {
+    const options = { marketData: fixtureService().marketData, mode: () => "replay" as const };
+    const list = await body(await assetsHandler(options)(get("/api/v1/assets"), undefined));
+    const one = await body(await assetHandler(options)(get("/"), addressContext(TOKENS.NVDA)));
+    expect(list.meta?.mode).toBe("replay");
+    expect(one.meta?.mode).toBe("replay");
+  });
+});
+
 describe("GET /api/v1/assets/{address}", () => {
   test("returns one asset for an address in any letter case", async () => {
-    const handler = assetHandler(fixtureService().marketData);
+    const handler = assetHandler({ marketData: fixtureService().marketData, mode: () => "live" });
     for (const address of [TOKENS.NVDA, TOKENS.NVDA.toUpperCase().replace("0X", "0x")]) {
       const response = await handler(get(`/api/v1/assets/${address}`), addressContext(address));
       expect(response.status).toBe(200);
@@ -218,7 +252,10 @@ describe("GET /api/v1/assets/{address}", () => {
   });
 
   test("a token with a share multiplier of 8 reports it without applying it to the price", async () => {
-    const response = await assetHandler(fixtureService().marketData)(get("/"), addressContext(TOKENS.SNDK));
+    const response = await assetHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
+      get("/"),
+      addressContext(TOKENS.SNDK),
+    );
     expect((await body(response)).data).toMatchObject({
       onchain: { multiplierWad: "8000000000000000000" },
       referencePrice: { priceE8: "64944000000" },
@@ -229,7 +266,10 @@ describe("GET /api/v1/assets/{address}", () => {
     const service = fixtureService();
     service.outage.rpc = true;
     for (const address of ["0x1234", "nvda", `${TOKENS.NVDA}0`]) {
-      const response = await assetHandler(service.marketData)(get("/"), addressContext(address));
+      const response = await assetHandler({ marketData: service.marketData, mode: () => "live" })(
+        get("/"),
+        addressContext(address),
+      );
       expect(response.status).toBe(400);
       expect((await body(response)).error).toMatchObject({
         code: "invalid_address",
@@ -240,7 +280,10 @@ describe("GET /api/v1/assets/{address}", () => {
 
   test("an address that is not listed answers 404 with the lowercase address", async () => {
     const unknown = "0x00000000000000000000000000000000000000AB";
-    const response = await assetHandler(fixtureService().marketData)(get("/"), addressContext(unknown));
+    const response = await assetHandler({ marketData: fixtureService().marketData, mode: () => "live" })(
+      get("/"),
+      addressContext(unknown),
+    );
     expect(response.status).toBe(404);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect((await body(response)).error).toEqual({
@@ -251,7 +294,7 @@ describe("GET /api/v1/assets/{address}", () => {
   });
 
   test("a query parameter answers 400", async () => {
-    const handler = assetHandler(fixtureService().marketData);
+    const handler = assetHandler({ marketData: fixtureService().marketData, mode: () => "live" });
     const response = await handler(get(`/api/v1/assets/${TOKENS.NVDA}?eligible=true`), addressContext(TOKENS.NVDA));
     expect(response.status).toBe(400);
   });

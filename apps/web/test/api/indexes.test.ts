@@ -31,7 +31,13 @@ const AAPL = "0xb200000000000000000000c2e324d24d7eecd1fb";
 const REGISTRY_META = { chainId: 31_337, address: REGISTRY, mode: "replay" };
 
 function options(registry: RegistryReader = recordedRegistry(), service = fixtureService()) {
-  return { registry: () => registry, mode: () => "replay" as const, now: () => RECORDED_AT, ...service };
+  return {
+    registry: () => registry,
+    mode: () => "replay" as const,
+    marketMode: () => "live" as const,
+    now: () => RECORDED_AT,
+    ...service,
+  };
 }
 
 type Item = Record<string, unknown> & { latest: Record<string, unknown> };
@@ -47,6 +53,7 @@ describe("GET /api/v1/indexes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=10");
     expect(meta).toEqual({
+      mode: "replay",
       asOf: "2026-11-21T19:10:55Z",
       registry: REGISTRY_META,
       total: 5,
@@ -175,7 +182,7 @@ describe("GET /api/v1/indexes/{identifier}", () => {
     const bySlug = await body(await handler(get("/"), identifierContext("diversified-equity-d622e2a5")));
     const byId = await body(await handler(get("/"), identifierContext(`0x${DIVERSIFIED.slice(2).toUpperCase()}`)));
     expect(byId.data).toEqual(bySlug.data);
-    expect(bySlug.meta).toEqual({ asOf: "2026-11-21T19:10:55Z", registry: REGISTRY_META });
+    expect(bySlug.meta).toEqual({ mode: "replay", asOf: "2026-11-21T19:10:55Z", registry: REGISTRY_META });
     expect(bySlug.data).toMatchObject({
       indexId: DIVERSIFIED,
       identifier: "diversified-equity-d622e2a5",
@@ -315,6 +322,18 @@ describe("GET /api/v1/indexes/{identifier}/versions/{version}", () => {
 });
 
 describe("GET /api/v1/indexes/{identifier}/composition", () => {
+  test("meta.mode is replay as soon as the registry or the market data is replayed", async () => {
+    for (const [registry, market, expected] of [
+      ["live", "live", "live"],
+      ["replay", "live", "replay"],
+      ["live", "replay", "replay"],
+    ] as const) {
+      const handler = indexCompositionHandler({ ...options(), mode: () => registry, marketMode: () => market });
+      const { meta } = await body(await handler(get("/"), identifierContext(DIVERSIFIED)));
+      expect(meta).toMatchObject({ mode: expected, registry: { mode: registry } });
+    }
+  });
+
   test("joins the constituents of the latest version with the asset universe of one block", async () => {
     const response = await indexCompositionHandler(options())(get("/"), identifierContext(DIVERSIFIED));
     const { data, meta } = await body(response);

@@ -5,7 +5,7 @@ export interface CachePolicy {
   readonly ttlSeconds: number;
   /**
    * Seconds past the TTL during which the last value may still be served when a reload fails. Beyond it the
-   * failure is thrown.
+   * failure is thrown. Zero means never: a failed reload is always thrown, even for a value exactly at its TTL.
    */
   readonly staleIfErrorSeconds: number;
 }
@@ -52,8 +52,9 @@ export interface KeyedCacheOptions {
  * - Within the TTL the stored value is returned.
  * - Past the TTL the loader runs, once for all the keys of a call that need it. Concurrent callers of a key
  *   share its load.
- * - If the load fails and the stored value is within TTL plus the stale window, it is returned with
- *   `servedStale: true` and its original `fetchedAt`. Otherwise the error is thrown.
+ * - If the load fails, the stale window is above zero and the stored value is within TTL plus the stale window,
+ *   it is returned with `servedStale: true` and its original `fetchedAt`. Otherwise the error is thrown. A
+ *   policy with a stale window of zero never serves a value stale.
  *
  * A failed load and a key the loader leaves out are not cached: the next call tries again.
  *
@@ -92,7 +93,8 @@ export function createKeyedCache<T>(
         })
         .catch((error: unknown): Cached<T> => {
           const entry = entries.get(key);
-          if (entry !== undefined && now() - entry.fetchedAt <= policy.ttlSeconds + policy.staleIfErrorSeconds) {
+          const stale = entry !== undefined && policy.staleIfErrorSeconds > 0;
+          if (stale && now() - entry.fetchedAt <= policy.ttlSeconds + policy.staleIfErrorSeconds) {
             return { value: entry.value, fetchedAt: entry.fetchedAt, servedStale: true, error };
           }
           throw error;

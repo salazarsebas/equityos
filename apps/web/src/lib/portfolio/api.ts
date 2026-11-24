@@ -83,9 +83,17 @@ export type ApiPlanResult =
       readonly projected: { readonly quoteBalance: string; readonly maxAbsDriftBps: number | null };
     };
 
+/** A constituent whose issuer paused transfers: no leg in it can be executed while the pause lasts. */
+export interface ApiTransferWarning {
+  readonly code: "transfers_paused";
+  readonly token: string;
+  readonly symbol: string | null;
+}
+
 export interface ApiPlan {
   readonly statement: string;
   readonly plan: ApiPlanResult;
+  readonly transferWarnings: readonly ApiTransferWarning[];
 }
 
 export interface ApiError {

@@ -164,7 +164,7 @@ The browser tests run the pages against a recording, so that they need no chain:
   node. The reader serves it through the same code as a live chain.
 - `apps/web/test/fixtures/registry` is the local chain after the deployment script and the seed, and
   `apps/web/test/fixtures/registry-empty` is the chain after the deployment script alone.
-- While a recording is served, every index page shows a warning that says so, the API reports
-  `meta.registry.mode: "replay"`, and `GET /api/v1/status` reports `registry.mode: "replay"`.
+- While a recording is served, every index page shows a warning that says so, the API reports `meta.mode` and
+  `meta.registry.mode` as `"replay"`, and `GET /api/v1/status` reports `registry.mode: "replay"`.
 
-Never set the variable on a deployment.
+A deployment refuses the variable: see [Registry reader](../architecture/registry-reader.md#replay-of-a-recording).

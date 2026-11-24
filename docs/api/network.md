@@ -130,6 +130,9 @@ curl "http://localhost:3000/api/v1/network"
 }
 ```
 
+Since API version 1.5.0 `meta` also carries `mode`, the mode of the whole response: the registry's, here
+`replay`. See [Data mode](./README.md#data-mode).
+
 ## Fields
 
 | Field                     | Meaning                                                                                                    |

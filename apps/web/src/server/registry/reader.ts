@@ -1,6 +1,7 @@
 import "server-only";
 import type { Address, Hex } from "viem";
 import { type CachePolicy, createCache, createKeyedCache, IMMUTABLE, type KeyedCache } from "../cache";
+import { type DataMode, replayRefusal } from "../data-mode";
 import {
   type ChainTarget,
   createRegistryClient,
@@ -324,16 +325,27 @@ export function createRegistryReader(options: RegistryReaderOptions = {}): Regis
  * - `live`: the chain selected by `EQUITYOS_CHAIN_ID` is read as it is now.
  * - `replay`: a recording of the registry of a local chain at one past block is served. For browser tests.
  */
-export type RegistryMode = "live" | "replay";
+export type RegistryMode = DataMode;
 
+/**
+ * The recording `REGISTRY_REPLAY_DIR` names, or `null` when it is unset.
+ *
+ * @throws {RegistryConfigurationError} if it is set where a replay is refused: see `replayRefusal`.
+ */
 function replayDirectory(env: NodeJS.ProcessEnv): string | null {
   const directory = env[REGISTRY_REPLAY_VARIABLE]?.trim() ?? "";
-  return directory === "" ? null : directory;
+  if (directory === "") return null;
+  const refusal = replayRefusal(env);
+  if (refusal !== null) throw new RegistryConfigurationError(REGISTRY_REPLAY_VARIABLE, refusal);
+  return directory;
 }
 
 /**
  * Where the process-wide reader reads from. A caller that shows registry data to a person or returns it from
  * an API must state when the mode is `replay`: a replayed registry is a past state of a development chain.
+ *
+ * @throws {RegistryConfigurationError} if `REGISTRY_REPLAY_DIR` is set on a deployment, or in a production
+ *   build without the test flag.
  */
 export function registryMode(env: NodeJS.ProcessEnv = process.env): RegistryMode {
   return replayDirectory(env) === null ? "live" : "replay";
@@ -341,7 +353,11 @@ export function registryMode(env: NodeJS.ProcessEnv = process.env): RegistryMode
 
 let replay: RegistryReplay | undefined;
 
-/** The recording the process-wide reader replays, or `null` in `live` mode. */
+/**
+ * The recording the process-wide reader replays, or `null` in `live` mode.
+ *
+ * @throws {RegistryConfigurationError} as `registryMode`, or if the recording is unusable.
+ */
 export function getRegistryReplay(): RegistryReplay | null {
   const directory = replayDirectory(process.env);
   if (directory === null) return null;

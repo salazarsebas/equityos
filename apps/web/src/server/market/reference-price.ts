@@ -68,13 +68,18 @@ export interface ReferencePriceInput {
    * so such a read is never reported as `live`.
    */
   readonly servedStale: boolean;
+  /**
+   * Whether the read is a replayed recording. A recorded value is never current, so a usable one is reported as
+   * `last_close`, never `live` or `delayed`, whatever its age at the recorded block.
+   */
+  readonly recorded: boolean;
 }
 
 /**
  * Builds the reference price of a token from the read of its feed. The only source is the mapped feed: when
  * it cannot provide a usable value the result is `unavailable`, never a value from elsewhere.
  */
-export function buildReferencePrice({ feed, read, now, servedStale }: ReferencePriceInput): ReferencePrice {
+export function buildReferencePrice({ feed, read, now, servedStale, recorded }: ReferencePriceInput): ReferencePrice {
   if (read === undefined || read.status !== "ok") return unavailable("feed_read_failed");
   if (!isExpectedFeed(feed, read)) return unavailable("feed_mismatch");
   const { roundId, answer, updatedAt, answeredInRound } = read.round;
@@ -87,7 +92,7 @@ export function buildReferencePrice({ feed, read, now, servedStale }: ReferenceP
   if (status === "unavailable") return unavailable("stale_feed", point);
   return {
     ...point,
-    status: status === "live" && servedStale ? "delayed" : status,
+    status: recorded ? "last_close" : status === "live" && servedStale ? "delayed" : status,
     source: "chainlink",
     marketPhase: session.phase,
   };

@@ -55,14 +55,18 @@ The plan is the rebalance plan of the methodology for this address, at reference
 
 - **Rebalance** sells constituents above their target value and buys those below it.
 - **Buy only** never sells. It can add a deposit, typed in USD and parsed exactly from the decimal text to an
-  integer scaled by 1e8: an amount with more than 8 decimals is refused, never rounded.
+  integer scaled by 1e8: an amount with more than 6 decimals, finer than one USDC base unit, is refused, never
+  rounded. A deposit through the API below one USDC base unit (`depositUsdE8` under 100) adds nothing and the plan
+  is the plan without a deposit.
 
 The preview shows the legs (side, asset, quantity, reference value), the largest drift before and after, the USDC
 left after the legs and every finding in plain words with its code. A blocked plan shows its blockers and no leg;
 a first replication too small to buy every constituent states the amount from which it can.
 
 The preview is arithmetic toward the published target weights at reference prices. It contains no executable
-quote, no slippage and no gas, so executable prices will differ, and it is not an instruction to trade.
+quote, no slippage and no gas, so executable prices will differ, and it is not an instruction to trade. For each
+constituent whose transfers are paused by its issuer the statement adds a line saying that a leg in it cannot be
+executed while the pause lasts (`transferWarnings` of the plan).
 Executing is not available on this site: the page states why, from `GET /api/v1/status`, and offers no control
 that trades.
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { marketPhaseAt } from "@equityos/core";
+import { combinedMode } from "@/server/data-mode";
 import { classifyJurisdiction, type Jurisdiction } from "@/server/jurisdiction";
 import { BASE_CHAIN_ID, type MarketData, type MarketDataMode } from "@/server/market";
 import type { RegistryMode, RegistryReader } from "@/server/registry";
@@ -47,6 +48,9 @@ export function statusHandler(options: StatusOptions) {
   const { marketData, mode, now = () => Math.floor(Date.now() / 1000) } = options;
   return route(async (request: Request) => {
     parseQuery(request, []);
+    // Read first: a replay refused in this environment fails the request before anything is reported.
+    const marketMode = mode();
+    const registryMode = options.registryMode();
     const reader = options.registry();
     const registry = await reader.listIndexes({ limit: 1 }).then(
       (page) =>
@@ -73,15 +77,16 @@ export function statusHandler(options: StatusOptions) {
       marketPhase: marketPhaseAt(market.at),
       ...executionAvailability(classifyJurisdiction(request.headers)),
       marketData: {
-        mode: mode(),
+        mode: marketMode,
         available: market.datasets !== null,
         referencePriceSource: "chainlink",
         datasets: market.datasets,
         error: market.error,
       },
-      registry: { chainId: reader.chainId, address: reader.registry, mode: options.registryMode(), ...registry },
+      registry: { chainId: reader.chainId, address: reader.registry, mode: registryMode, ...registry },
     };
+    const meta = { mode: combinedMode(marketMode, registryMode), asOf: isoTimestamp(market.at) };
     // Never stored: the answer depends on where the request comes from and reports the state of this moment.
-    return ok(data, { asOf: isoTimestamp(market.at) }, NO_STORE);
+    return ok(data, meta, NO_STORE);
   });
 }

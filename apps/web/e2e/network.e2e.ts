@@ -104,6 +104,7 @@ test.describe("network page on the recorded local chain", () => {
     expect(response.status()).toBe(200);
     const { data, meta } = await response.json();
     expect(meta.registry.mode).toBe("replay");
+    expect(meta.mode).toBe("replay");
     expect(data.metrics.attestationsTierA.value).toBe(2);
     expect(data.metrics.tierAReferenceValueUsdE8.value).toBe("130000000000");
     expect(data.exclusions).toEqual([

@@ -39,7 +39,7 @@ export type Registry =
       readonly chainId: number;
       readonly address: Address;
       readonly total: number;
-      /** The newest index, or `null` for a registry that holds none. */
+      /** The newest index, or `null` for a registry that holds none. Never `null` when `total` is above zero. */
       readonly newest: IndexSummary | null;
       /** Time of the read, Unix seconds: the recorded block in a replay, the clock otherwise. */
       readonly readAt: number;
@@ -89,7 +89,10 @@ export async function loadUniverse(getMarket: () => MarketData = getMarketData):
   }
 }
 
-/** The registry state: whether it is deployed, how many indexes it holds and the newest one. */
+/**
+ * The registry state: whether it is deployed, how many indexes it holds and the newest one. A registry that holds
+ * indexes but whose newest one cannot be read is `unavailable`, never a registry with no index.
+ */
 export async function loadRegistry(
   getReader: () => RegistryReader = getRegistryReader,
   now: () => number = () => Math.floor(Date.now() / 1000),
@@ -106,6 +109,7 @@ export async function loadRegistry(
     if (count.total > 0) {
       const page = await reader.listIndexes({ offset: count.total - 1, limit: 1 });
       newest = page.status === "ok" ? (page.indexes[0] ?? null) : null;
+      if (newest === null) return { status: "unavailable" };
     }
     return {
       status: "deployed",

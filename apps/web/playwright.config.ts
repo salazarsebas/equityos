@@ -3,12 +3,17 @@ import { defineConfig, devices } from "@playwright/test";
 /** First of three consecutive ports. Set `E2E_PORT` when the default ones are taken. */
 const port = Number(process.env.E2E_PORT ?? 3100);
 const MARKET_REPLAY_DIR = "test/fixtures/market";
+/**
+ * A production build refuses to replay a recording unless this flag is `1`, and a deployment refuses it
+ * always. Only these smoke tests set it: see `src/server/data-mode.ts`.
+ */
+const EQUITYOS_REPLAY_FOR_TESTS = "1";
 
 function server(serverPort: number, env: Record<string, string>) {
   return {
     command: `bun run start --port ${serverPort}`,
     url: `http://127.0.0.1:${serverPort}`,
-    env: { ...env, MARKET_REPLAY_DIR },
+    env: { ...env, MARKET_REPLAY_DIR, EQUITYOS_REPLAY_FOR_TESTS },
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   };

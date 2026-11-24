@@ -1,6 +1,7 @@
 import "server-only";
 import type { Address } from "viem";
 import { type Cache, type Cached, type CachePolicy, createCache, createKeyedCache } from "../cache";
+import { type DataMode, replayRefusal } from "../data-mode";
 import { type AssetList, type AssetListOptions, fetchAssetList, type ListedAsset } from "./asset-list";
 import { type BalanceRead, readBalances, USDC_ADDRESS } from "./balances";
 import { assessEligibility, type Eligibility } from "./eligibility";
@@ -8,6 +9,7 @@ import {
   IneligibleTokenError,
   MarketDataError,
   type MarketDataErrorCode,
+  MissingConfigurationError,
   MissingFeedError,
   StaleFeedError,
   TokenPausedError,
@@ -74,11 +76,16 @@ export interface MarketSnapshot {
   readonly assets: ReadonlyMap<Address, AssetMarketData>;
 }
 
-/** Combines an asset list and an onchain read into the per-token view, for the given clock time. */
+/**
+ * Combines an asset list and an onchain read into the per-token view, for the given clock time.
+ *
+ * @param mode `replay` for a recording: every usable reference price is then reported as `last_close`.
+ */
 export function buildMarketSnapshot(
   assetList: Cached<AssetList>,
   onchain: Cached<OnchainSnapshot>,
   now: number,
+  mode: MarketDataMode,
 ): MarketSnapshot {
   const assets = new Map<Address, AssetMarketData>();
   for (const [address, asset] of assetList.value) {
@@ -88,7 +95,13 @@ export function buildMarketSnapshot(
     const eligibility = assessEligibility({ asset, token, feed, feedRead });
     const referencePrice =
       eligibility.eligible && feed !== undefined
-        ? buildReferencePrice({ feed, read: feedRead, now, servedStale: onchain.servedStale })
+        ? buildReferencePrice({
+            feed,
+            read: feedRead,
+            now,
+            servedStale: onchain.servedStale,
+            recorded: mode === "replay",
+          })
         : null;
     assets.set(address, { asset, token, eligibility, referencePrice });
   }
@@ -175,7 +188,7 @@ export function createMarketData(options: MarketDataOptions = {}): MarketData {
   return {
     async getSnapshot(): Promise<MarketSnapshot> {
       const read = await reads.get();
-      return buildMarketSnapshot(read.value.assetList, { ...read, value: read.value.onchain }, now());
+      return buildMarketSnapshot(read.value.assetList, { ...read, value: read.value.onchain }, now(), "live");
     },
     getBalances,
   };
@@ -185,16 +198,27 @@ export function createMarketData(options: MarketDataOptions = {}): MarketData {
  * - `live`: the asset list API and Base mainnet are read as they are now.
  * - `replay`: a recording of one past block is served, with the clock fixed at that block. For browser tests.
  */
-export type MarketDataMode = "live" | "replay";
+export type MarketDataMode = DataMode;
 
+/**
+ * The recording `MARKET_REPLAY_DIR` names, or `null` when it is unset.
+ *
+ * @throws {MissingConfigurationError} if it is set where a replay is refused: see `replayRefusal`.
+ */
 function replayDirectory(env: NodeJS.ProcessEnv): string | null {
   const directory = env[REPLAY_VARIABLE]?.trim() ?? "";
-  return directory === "" ? null : directory;
+  if (directory === "") return null;
+  const refusal = replayRefusal(env);
+  if (refusal !== null) throw new MissingConfigurationError(REPLAY_VARIABLE, refusal);
+  return directory;
 }
 
 /**
  * Where the process-wide service reads from. A caller that shows market data to a person or returns it from an
  * API must state when the mode is `replay`: a replayed snapshot is real data of a past block, not current data.
+ *
+ * @throws {MissingConfigurationError} if `MARKET_REPLAY_DIR` is set on a deployment, or in a production build
+ *   without the test flag.
  */
 export function marketDataMode(env: NodeJS.ProcessEnv = process.env): MarketDataMode {
   return replayDirectory(env) === null ? "live" : "replay";
@@ -219,6 +243,7 @@ function createReplayMarketData(directory: string): MarketData {
           { value: assetList, fetchedAt, servedStale: false, error: null },
           { value: onchain, fetchedAt, servedStale: false, error: null },
           fetchedAt,
+          "replay",
         );
       });
       return snapshot;
@@ -234,7 +259,11 @@ function createReplayMarketData(directory: string): MarketData {
 
 let shared: MarketData | undefined;
 
-/** The process-wide market data service: live, unless `MARKET_REPLAY_DIR` names a recording to replay. */
+/**
+ * The process-wide market data service: live, unless `MARKET_REPLAY_DIR` names a recording to replay.
+ *
+ * @throws {MissingConfigurationError} if `MARKET_REPLAY_DIR` is set where a replay is refused.
+ */
 export function getMarketData(): MarketData {
   const directory = replayDirectory(process.env);
   shared ??= directory === null ? createMarketData() : createReplayMarketData(directory);

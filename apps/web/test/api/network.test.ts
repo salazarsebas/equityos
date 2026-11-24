@@ -130,9 +130,10 @@ describe("GET /api/v1/network", () => {
     const response = await handler()(get("/api/v1/network"), undefined);
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=10");
-    expect(response.headers.get(API_VERSION_HEADER)).toBe("1.4.0");
+    expect(response.headers.get(API_VERSION_HEADER)).toBe("1.5.0");
     const { data, meta } = await response.json();
     expect(meta).toEqual({
+      mode: "replay",
       asOf: "2027-01-15T08:00:00Z",
       registry: { chainId: 31_337, address: "0x4bd4d49a9c88f75fb97674488e23a7fa59f9506c", mode: "replay" },
     });

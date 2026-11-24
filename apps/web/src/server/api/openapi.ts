@@ -202,6 +202,7 @@ const datasetProperties = {
 } as const satisfies Record<string, Schema>;
 
 const snapshotMetaProperties = {
+  mode: ref("DataMode"),
   asOf: ref("Timestamp"),
   marketPhase: ref("MarketPhase"),
   referencePriceSource: { type: "string", const: "chainlink" },
@@ -343,6 +344,10 @@ const schemas: Record<string, Schema> = {
     pattern: "^(0|[1-9]\\d*)$",
     description: "A non-negative integer as a decimal string. Its unit and scale are given by the field.",
   },
+  DataMode: oneOf(
+    ["live", "replay"],
+    "Where the data of the response comes from. live: the sources as they are now. replay: a recording of a past block, served only by test builds and refused on a deployment; no reference price of a replay is live or delayed.",
+  ),
   MarketPhase: oneOf(
     ["regular", "extended", "closed", "unknown"],
     "Phase of the US equity market. extended covers the pre-market, post-market and overnight sessions. unknown means the market calendar does not cover the instant.",
@@ -445,8 +450,9 @@ const schemas: Record<string, Schema> = {
     },
     "The index registry a response was read from.",
   ),
-  RegistryMeta: object({ asOf: ref("Timestamp"), registry: ref("RegistryRef") }),
+  RegistryMeta: object({ mode: ref("DataMode"), asOf: ref("Timestamp"), registry: ref("RegistryRef") }),
   IndexListMeta: object({
+    mode: ref("DataMode"),
     asOf: ref("Timestamp"),
     registry: ref("RegistryRef"),
     total: { ...count, description: "Number of indexes in the registry." },
@@ -751,6 +757,11 @@ const schemas: Record<string, Schema> = {
     ),
     outsideIndex: { type: "array", items: ref("OutsideHolding") },
     issues: { type: "array", items: ref("CalculationIssue") },
+    transferWarnings: {
+      type: "array",
+      items: ref("TransferWarning"),
+      description: "Every constituent whose transfers are paused, in the order of the version.",
+    },
   }),
   PortfolioMeta: object({
     ...snapshotMetaProperties,
@@ -821,6 +832,17 @@ const schemas: Record<string, Schema> = {
       "The address after every leg at its reference price.",
     ),
   }),
+  TransferWarning: object(
+    {
+      code: oneOf(
+        ["transfers_paused"],
+        "transfers_paused: the issuer paused transfers of the token, so no leg in it can be executed while the pause lasts. The execution plan blocks such a leg.",
+      ),
+      token: ref("Address"),
+      symbol: nullable(text("Display symbol.")),
+    },
+    "A condition of a constituent's token that the reference arithmetic does not model.",
+  ),
   PortfolioPlan: object({
     address: ref("Address"),
     index: ref("PortfolioIndex"),
@@ -832,6 +854,12 @@ const schemas: Record<string, Schema> = {
     reserveBps: { type: "integer", minimum: 0, maximum: 2_000 },
     minLegValueUsdE8: ref("UintString"),
     plan: { anyOf: [ref("BlockedPlan"), ref("ReadyPlan")] },
+    transferWarnings: {
+      type: "array",
+      items: ref("TransferWarning"),
+      description:
+        "Every constituent whose transfers are paused, in the order of the version. A plan may still list a leg in it.",
+    },
   }),
   ExecutionCheck: object(
     {
@@ -1286,7 +1314,7 @@ export const openApiDocument: OpenApiDocument = {
           "Version, chain, market phase, execution availability, the age of each cached dataset and whether the index registry is deployed on the configured chain. Answers 200 when a data source is down and reports the failure in marketData.error or registry.error.",
         tags: ["Meta"],
         responses: {
-          "200": success("The status.", ref("Status"), object({ asOf: ref("Timestamp") })),
+          "200": success("The status.", ref("Status"), object({ mode: ref("DataMode"), asOf: ref("Timestamp") })),
           "400": invalidRequest,
           "500": failures["500"],
         },

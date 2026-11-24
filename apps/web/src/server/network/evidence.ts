@@ -151,6 +151,9 @@ export async function readAtBlock(
       },
       now: Number(block.timestamp),
       servedStale: false,
+      // A read of the chain at the block of the attestation, classified for the time of that block. It is not
+      // the market data replay, and its class is evidence about that block, never shown as a current price.
+      recorded: false,
     });
     prices.set(
       token,

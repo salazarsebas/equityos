@@ -48,8 +48,11 @@ passed to the plan as tokens to exit: no token outside the compared version is e
 | 409    | `registry_not_deployed`  | The registry has no code on the configured chain                       |
 | 409    | `version_not_conformant` | The version fails verification, so it has no target weights to compare |
 | 409    | `ineligible_token`       | A constituent is not in the asset list, so it has no decimals or price |
-| 502    | `upstream_malformed`     | The balance of USDC or of a constituent could not be decoded           |
+| 502    | `upstream_malformed`     | The balance of USDC or of a constituent is not decoded or not read     |
 | 503    | `upstream_unavailable`   | Base mainnet did not answer. The balance read is never served stale    |
+
+The balance read and the market snapshot each read the asset list, which can change between them. A constituent
+the balance read does not cover answers `upstream_malformed`: its balance is unknown, and it is never taken as zero.
 
 A missing or unusable reference price is not an error: the valuation reports it as a blocker (see below).
 
@@ -205,6 +208,11 @@ x-equityos-api-version: 1.2.0
 - `issues` are the findings of the valuation, as in the calculation specification: `missing_price`,
   `price_unavailable`, `zero_price` and `decimals_mismatch` are blockers; `market_closed` and `price_delayed`
   are warnings.
+- `transferWarnings` lists, in the order of the version, every constituent whose issuer paused its transfers at
+  the block of the snapshot: `{ "code": "transfers_paused", "token", "symbol" }`. The arithmetic does not model
+  a pause, so the comparison and the plan are still computed; a leg in such a token cannot be executed while the
+  pause lasts, and the execution plan blocks it with its `transfers_not_paused` check. The plan response carries
+  the same list. Added in API version 1.5.0.
 
 ## GET /api/v1/portfolio/plan
 
@@ -355,8 +363,9 @@ Warnings of a ready plan include `uninvested_quote` (with `uninvestedQuote` in U
 
 Both endpoints answer `public, max-age=N`, where `N` is what is left of the shorter of the onchain read and the
 balance read, at most 15 seconds. The URL carries the address and the server keeps one balance entry per address,
-so a cached answer is only ever the answer for that address. When the market data is served stale the answer is
-`no-store`.
+so a cached answer is only ever the answer for that address. When the asset list or the onchain read is served
+stale the answer is `no-store`. Balances are never served stale: when they cannot be read now the answer is `503
+upstream_unavailable`, never an older read, even one taken exactly a TTL ago.
 
 ## The page
 

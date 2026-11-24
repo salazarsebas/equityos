@@ -62,7 +62,8 @@ cache-control: no-store
 }
 ```
 
-`mode` is `replay` when the server serves a recording of a development chain for testing. `deployed` is `null`
+`mode` is `replay` when the server serves a recording of a development chain for testing; `meta.mode` of every
+index response then says `replay` too ([Data mode](./README.md#data-mode)). `deployed` is `null`
 when the chain endpoint could not be read, and `error` then carries the code.
 
 ## Identifiers

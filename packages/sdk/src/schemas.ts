@@ -116,6 +116,7 @@ export const onchainDataset = object({ ...datasetProperties, blockNumber: uint()
 export const datasets = object({ assetList: dataset, onchain: onchainDataset });
 
 const snapshotMetaProperties = {
+  mode,
   asOf: timestamp(),
   marketPhase,
   referencePriceSource: constant("chainlink"),
@@ -162,8 +163,9 @@ export const asset = object({
 });
 
 export const registryRef = object({ chainId: integer(), address: address(), mode });
-export const registryMeta = object({ asOf: timestamp(), registry: registryRef });
+export const registryMeta = object({ mode, asOf: timestamp(), registry: registryRef });
 export const indexListMeta = object({
+  mode,
   asOf: timestamp(),
   registry: registryRef,
   total: integer(),
@@ -337,7 +339,7 @@ export const status = object({
   registry: registryStatus,
 });
 
-export const statusMeta = object({ asOf: timestamp() });
+export const statusMeta = object({ mode, asOf: timestamp() });
 
 export const portfolioIndex = object({
   indexId: bytes32(),
@@ -384,6 +386,12 @@ export const outsideHolding = object({
   referencePrice,
 });
 
+export const transferWarning = object({
+  code: enumOf(["transfers_paused"]),
+  token: address(),
+  symbol: nullable(string()),
+});
+
 export const portfolio = object({
   address: address(),
   index: portfolioIndex,
@@ -407,6 +415,7 @@ export const portfolio = object({
   ),
   outsideIndex: array(outsideHolding),
   issues: array(calculationIssue),
+  transferWarnings: array(transferWarning),
 });
 
 export const portfolioMeta = object({
@@ -484,6 +493,7 @@ export const portfolioPlan = object({
   reserveBps: integer(),
   minLegValueUsdE8: uint(),
   plan: union("status", { blocked: blockedPlan, ready: readyPlan }),
+  transferWarnings: array(transferWarning),
 });
 
 /** The statement every execution plan carries, as the API returns it. */
@@ -722,6 +732,7 @@ export type PortfolioIndex = Infer<typeof portfolioIndex>;
 export type CalculationIssue = Infer<typeof calculationIssue>;
 export type PortfolioPosition = Infer<typeof portfolioPosition>;
 export type OutsideHolding = Infer<typeof outsideHolding>;
+export type TransferWarning = Infer<typeof transferWarning>;
 export type Portfolio = Infer<typeof portfolio>;
 export type PortfolioMeta = Infer<typeof portfolioMeta>;
 export type PlanLeg = Infer<typeof planLeg>;
