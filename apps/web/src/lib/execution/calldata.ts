@@ -29,6 +29,11 @@ export const EXECUTION_CHAIN_ID = 8453;
  */
 export const ROUTE_DEADLINE_TOLERANCE_SECONDS = 15;
 
+/** Default slippage tolerance of a plan, in basis points. The server documents why. */
+export const PLAN_DEFAULT_SLIPPAGE_BPS = 50;
+/** Default deviation band of a plan, in basis points, applied to the quoted and to the minimum-out price. */
+export const PLAN_DEFAULT_MAX_DEVIATION_BPS = 150;
+
 /**
  * KyberSwap `MetaAggregationRouterV2` on Base mainnet, lowercase. Listed for chain 8453 in the KyberSwap
  * contract documentation, returned as `routerAddress` by the aggregator API for Base, verified on Sourcify for
