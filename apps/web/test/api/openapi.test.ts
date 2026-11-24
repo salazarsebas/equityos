@@ -17,7 +17,7 @@ import { resolveRegistryConfig } from "../../src/server/registry/config";
 import { RegistryUpstreamError } from "../../src/server/registry/errors";
 import { createRegistryReader, type RegistryReader } from "../../src/server/registry/reader";
 import { TOKENS } from "../market/support";
-import { constructedRead, stubNetwork } from "../network/support";
+import { constructedRead, recordedNetwork, stubNetwork } from "../network/support";
 import { buildSpec, FakeChain } from "../registry/support";
 import {
   addressContext,
@@ -271,11 +271,13 @@ describe("handler output validates against the document", () => {
     for (const response of responses) await expectDocumented("/indexes/{identifier}/composition", response);
   });
 
-  test("GET /network: constructed activity, bad parameter, not deployed and registry down", async () => {
+  test("GET /network: constructed and recorded activity, an empty registry, bad parameter, not deployed and registry down", async () => {
     const mode = () => "replay" as const;
     const read = constructedRead();
     const responses = [
       await networkHandler({ network: stubNetwork(read), mode })(get("/api/v1/network"), undefined),
+      await recordedNetwork()(get("/api/v1/network"), undefined),
+      await recordedNetwork("registry-empty")(get("/api/v1/network"), undefined),
       await networkHandler({ network: stubNetwork(read), mode })(get("/api/v1/network?x=1"), undefined),
       await networkHandler({
         network: stubNetwork({
@@ -291,7 +293,7 @@ describe("handler output validates against the document", () => {
         undefined,
       ),
     ];
-    expect(responses.map((response) => response.status)).toEqual([200, 400, 409, 503]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 400, 409, 503]);
     for (const response of responses) await expectDocumented("/network", response);
   });
 

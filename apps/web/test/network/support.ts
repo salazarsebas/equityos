@@ -1,13 +1,17 @@
 import type { Address, Hex } from "viem";
+import { networkHandler } from "../../src/server/api/network";
 import {
   buildNetworkMetrics,
   type ClassifiedAttestation,
+  createNetworkService,
   type MetricsInput,
   type NetworkRead,
   type NetworkService,
   type Tier,
 } from "../../src/server/network";
 import type { EventScan, RegistryEvent } from "../../src/server/registry";
+import { createRegistryReader } from "../../src/server/registry/reader";
+import { loadRegistryReplay } from "../../src/server/registry/replay";
 
 export const CREATOR: Address = "0x00000000000000000000000000000000000c0ffe";
 export const TEAM: Address = "0x0000000000000000000000000000000000007ea3";
@@ -121,4 +125,22 @@ export function stubNetwork(result: NetworkRead | Error): () => NetworkService {
     read: () => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)),
   };
   return () => service;
+}
+
+/** Clock of the handlers over a recording. */
+const RECORDING_READ_AT = 1_800_000_000;
+
+export const EXCLUDED_SEED_ACCOUNT = "0x5eed00000000000000000000000000000000000e";
+
+/** The real service over a recording of the local chain in `test/fixtures/<directory>`. */
+export function recordedNetwork(directory = "registry") {
+  const { config, client } = loadRegistryReplay(new URL(`../fixtures/${directory}`, import.meta.url).pathname);
+  const service = createNetworkService({
+    reader: createRegistryReader({ config, client }),
+    config,
+    client: () => client,
+    exclusions: [{ address: EXCLUDED_SEED_ACCOUNT, label: "Local seed test account" }],
+    now: () => RECORDING_READ_AT,
+  });
+  return networkHandler({ network: () => service, mode: () => "replay", now: () => RECORDING_READ_AT });
 }

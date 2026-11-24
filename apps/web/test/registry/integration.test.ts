@@ -12,6 +12,7 @@ import { indexRegistryAbi, rebalanceLogAbi } from "@equityos/contracts-abi";
 import { createPublicClient, createWalletClient, type Hex, http, stringToHex } from "viem";
 import { anvil } from "viem/chains";
 import { buildSeedIndexes } from "../../scripts/seed/indexes";
+import { SEED_ACCOUNTS, seedUsage } from "../../scripts/seed/usage";
 import { type SeededIndex, seedLocal } from "../../scripts/seed-local";
 import {
   countPerDay,
@@ -23,6 +24,7 @@ import {
   type RegistryReader,
   resolveRegistryConfig,
 } from "../../src/server/registry";
+import { createNetworkService } from "../../src/server/network";
 import { testClock } from "./support";
 
 const enabled = process.env.INTEGRATION_TESTS === "1";
@@ -242,6 +244,56 @@ describe.skipIf(!enabled)("integration: deploy, seed and read on Anvil", () => {
       expect(scan.events.at(-1)?.blockTimestamp).toBe(block.timestamp);
       expect(distinctCreators(scan.events)).toEqual([creator.toLowerCase() as Hex]);
       expect(countPerDay(scan.events, "index_created").reduce((sum, { count }) => sum + count, 0)).toBe(6);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the usage seed gives one attestation of each tier, classified from the chain alone",
+    async () => {
+      const [creator, linkedSender, idleSender] = (await wallet.getAddresses()).map(
+        (address): Hex => `0x${address.slice(2).toLowerCase()}`,
+      );
+      if (creator === undefined || linkedSender === undefined || idleSender === undefined) {
+        throw new Error("the node exposes fewer than three unlocked accounts");
+      }
+      expect((await seedUsage(rpcUrl)).sent).toBe(true);
+      expect((await seedUsage(rpcUrl)).sent).toBe(false);
+      const service = createNetworkService({
+        reader,
+        config,
+        client: () => createRegistryClient(rpcUrl),
+        exclusions: [{ address: SEED_ACCOUNTS.excluded, label: "Local seed test account" }],
+        now: clock.now,
+      });
+      clock.advance(HEADS_CACHE.ttlSeconds);
+      const read = await service.read();
+      if (read.status !== "ok") throw new Error(read.status);
+      expect(read.usageComplete).toBe(true);
+      expect(read.classified.map(({ event, tier, reason }) => [event.account, tier, reason])).toEqual([
+        // The rebalance recorded by the test above, with no token moved.
+        [creator, "unmatched", "no_constituent_flows"],
+        [SEED_ACCOUNTS.matched, "a", null],
+        [SEED_ACCOUNTS.partial, "a", null],
+        [linkedSender, "b", "no_constituent_flows"],
+        [SEED_ACCOUNTS.dust, "unmatched", "below_minimum_notional"],
+        [idleSender, "unmatched", "no_constituent_flows"],
+        [SEED_ACCOUNTS.excluded, "a", null],
+      ]);
+      expect(read.classified.map(({ tracking }) => tracking?.status ?? null)).toEqual([
+        null,
+        "within",
+        "outside",
+        null,
+        null,
+        null,
+        "within",
+      ]);
+      const { metrics } = read;
+      expect(metrics.attestationsTierA.value).toBe(2);
+      expect(metrics.accountsTierA.value).toBe(2);
+      expect(metrics.tierAReferenceValueUsdE8.value).toBe(130_000_000_000n);
+      expect(metrics.excludedActivity.value.attestations).toEqual({ tierA: 1, tierB: 0, unmatched: 0 });
     },
     TIMEOUT_MS,
   );

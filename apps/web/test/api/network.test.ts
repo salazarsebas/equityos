@@ -4,7 +4,7 @@ import { networkHandler } from "../../src/server/api/network";
 import { createNetworkService, METRIC_DEFINITIONS } from "../../src/server/network";
 import { RegistryUpstreamError, resolveRegistryConfig } from "../../src/server/registry";
 import { createRegistryReader } from "../../src/server/registry/reader";
-import { constructedRead, stubNetwork, TEAM } from "../network/support";
+import { constructedRead, EXCLUDED_SEED_ACCOUNT, recordedNetwork, stubNetwork, TEAM } from "../network/support";
 import { get } from "./support";
 
 const NOW = 1_800_000_000;
@@ -27,6 +27,103 @@ function notDeployed() {
   });
   return networkHandler({ network: () => service, mode: () => "live", now: () => NOW });
 }
+
+describe("GET /api/v1/network on the recorded local chain", () => {
+  test("classifies each example attestation of the seed from its logs, receipts and reads at its block", async () => {
+    const { data } = await (await recordedNetwork()(get("/api/v1/network"), undefined)).json();
+    const rows = [...data.attestations].reverse().map(({ account, tier, reason, valueUsdE8, tracking, excluded }) => ({
+      account,
+      tier,
+      reason,
+      valueUsdE8,
+      tracking: tracking?.status ?? null,
+      excluded,
+    }));
+    expect(rows).toEqual([
+      {
+        account: "0x5eed00000000000000000000000000000000000a",
+        tier: "a",
+        reason: null,
+        valueUsdE8: "100000000000",
+        tracking: "within",
+        excluded: false,
+      },
+      {
+        account: "0x5eed00000000000000000000000000000000000b",
+        tier: "a",
+        reason: null,
+        valueUsdE8: "30000000000",
+        tracking: "outside",
+        excluded: false,
+      },
+      {
+        account: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+        tier: "b",
+        reason: "no_constituent_flows",
+        valueUsdE8: "10000000000",
+        tracking: null,
+        excluded: false,
+      },
+      {
+        account: "0x5eed00000000000000000000000000000000000d",
+        tier: "unmatched",
+        reason: "below_minimum_notional",
+        valueUsdE8: null,
+        tracking: null,
+        excluded: false,
+      },
+      {
+        account: "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+        tier: "unmatched",
+        reason: "no_constituent_flows",
+        valueUsdE8: null,
+        tracking: null,
+        excluded: false,
+      },
+      {
+        account: EXCLUDED_SEED_ACCOUNT,
+        tier: "a",
+        reason: null,
+        valueUsdE8: "100000000000",
+        tracking: "within",
+        excluded: true,
+      },
+    ]);
+    const value = (name: string) => data.metrics[name].value;
+    expect(["indexesPublished", "versionsPublished", "distinctCreators", "indexesDeprecated"].map(value)).toEqual([
+      5, 6, 1, 1,
+    ]);
+    expect(["attestations", "attestationsTierA", "attestationsTierB", "attestationsUnmatched"].map(value)).toEqual([
+      5, 2, 1, 2,
+    ]);
+    expect(["accountsTierA", "accountsWithinTolerance", "tierAReferenceValueUsdE8"].map(value)).toEqual([
+      2,
+      1,
+      "130000000000",
+    ]);
+    expect(value("excludedActivity")).toEqual({
+      indexes: 0,
+      versions: 0,
+      attestations: { tierA: 1, tierB: 0, unmatched: 0 },
+    });
+    expect(data.metrics.attestations).toMatchObject({ chainId: 31_337, fromBlock: "0", toBlock: "29" });
+  });
+
+  test("a deployed registry without activity answers zeros, which are the true counts", async () => {
+    const { data } = await (await recordedNetwork("registry-empty")(get("/api/v1/network"), undefined)).json();
+    expect(data.scan).toEqual({
+      fromBlock: "0",
+      scannedToBlock: "2",
+      targetBlock: "2",
+      complete: true,
+      usageComplete: true,
+    });
+    expect(data.metrics.indexesPublished.value).toBe(0);
+    expect(data.metrics.attestations.value).toBe(0);
+    expect(data.metrics.byIndex.value).toEqual([]);
+    expect(data.attestations).toEqual([]);
+  });
+});
 
 describe("GET /api/v1/network", () => {
   test("returns every metric with its definition id, chain, block range and computation time", async () => {
