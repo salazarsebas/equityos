@@ -71,7 +71,14 @@ test("building a draft shows the composition, the canonical JSON and a hash that
   const composition = page.getByRole("region", { name: "Composition" });
   await expect(composition.getByRole("row")).toHaveCount(5);
   await expect(composition.getByRole("row", { name: /Total/ })).toContainText("100.00%");
-  await expect(page.getByText("Equal weight across 3 tokenized stocks: from 33.33% to 33.34%.")).toBeVisible();
+  // The methodology uses the same fixed templates as the index profile.
+  await expect(
+    page
+      .getByRole("complementary", { name: "Preview" })
+      .getByText(
+        "Every constituent has the same target weight, rounded to a whole basis point: 33.34% for the lowest token addresses and 33.33% for the others, so that the weights sum to exactly 100.00%.",
+      ),
+  ).toBeVisible();
 
   const canonical = await text(json(page));
   expect(canonical.startsWith('{"calc":"equityos.calc/1","chainId":8453,')).toBe(true);
