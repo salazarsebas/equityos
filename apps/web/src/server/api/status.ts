@@ -19,7 +19,7 @@ type ExecutionUnavailableReason = "restricted_jurisdiction" | "jurisdiction_unkn
  * Execution availability for a request. No execution endpoint exists in this release, so the answer is `false`
  * for everyone. The reason already reflects the jurisdiction gate, which takes precedence.
  */
-function executionAvailability(jurisdiction: Jurisdiction): {
+export function executionAvailability(jurisdiction: Jurisdiction): {
   executionAvailable: boolean;
   executionUnavailableReason: ExecutionUnavailableReason | null;
 } {
