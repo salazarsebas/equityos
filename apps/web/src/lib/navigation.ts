@@ -12,4 +12,5 @@ export const primaryNavigation: readonly NavItem[] = [
   { label: "Studio", href: "/studio" },
   { label: "Portfolio", href: "/portfolio" },
   { label: "Wallet", href: "/wallet" },
+  { label: "Developers", href: "/developers" },
 ];

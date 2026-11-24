@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Container, Grid } from "@/components/shell/container";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { CodeBlock } from "@/components/ui/code-block";
 import { cx } from "@/components/ui/cx";
 import { Checkbox, Field, Input, Select } from "@/components/ui/field";
 import { Link } from "@/components/ui/link";
@@ -491,6 +492,18 @@ export default function ComponentReferencePage() {
             The reference price for HLIO is missing. The last successful calculation is from 2026-11-20 21:00 UTC and is
             unchanged. Try again after the next price update.
           </ErrorState>
+        </div>
+      </Section>
+
+      <Section title="Code block" note="Commands wrap anywhere. JSON keeps its lines and scrolls inside the block.">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <CodeBlock title="Shell" code={'curl "http://localhost:3000/api/v1/status"'} copyLabel="command" />
+          <CodeBlock
+            title="JSON"
+            code={JSON.stringify({ error: { code: "index_not_found", message: "Example.", details: null } }, null, 2)}
+            copyLabel="example body"
+            overflow="scroll"
+          />
         </div>
       </Section>
 

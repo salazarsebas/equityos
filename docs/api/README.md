@@ -162,6 +162,19 @@ To add an endpoint: write the handler, add its `route.ts`, add its path and sche
 responses to the validation test. Then add its method and decoders to the SDK, an example request to
 `apps/web/test/api/examples.ts`, and run `bun run --filter @equityos/web record:api-examples`.
 
+## Developer pages
+
+The web app documents the API for readers at `/developers`:
+
+| Page               | Content                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `/developers`      | Conventions, three curl requests against the deployment's own origin, the SDK and verification |
+| `/developers/api`  | Every operation of `openapi.ts`: parameters, response fields, errors, schemas, curl            |
+| `/developers/spec` | The fields of the published JSON Schema, its rules, and an example hashed at build time        |
+
+The pages are static. Their example responses are the recorded examples of `apps/web/src/server/api/examples.json`
+and say so. The commands use `NEXT_PUBLIC_SITE_URL`, the origin of the deployment.
+
 ## Execution availability and the jurisdiction gate
 
 No endpoint executes or prepares a trade. `GET /api/v1/status` already reports `executionAvailable`, which is
