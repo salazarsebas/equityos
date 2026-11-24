@@ -166,7 +166,7 @@ test.describe("portfolio API on the replay", () => {
   test("compares a constructed wallet and says where each input was read", async ({ request }) => {
     const response = await request.get(`/api/v1/portfolio?address=${ABOVE}&index=${INDEX}`);
     expect(response.status()).toBe(200);
-    expect(response.headers()["x-equityos-api-version"]).toBe("1.2.0");
+    expect(response.headers()["x-equityos-api-version"]).toBe("1.3.0");
     const { data, meta } = await response.json();
     expect(data.drift).toMatchObject({ maxAbsDriftBps: 1500, thresholdReached: true });
     expect(meta.registry).toMatchObject({ chainId: 31_337, mode: "replay" });
