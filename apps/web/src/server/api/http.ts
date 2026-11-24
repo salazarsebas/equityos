@@ -5,7 +5,7 @@ import { type ApiError, toApiError, UPSTREAM_RETRY_AFTER_SECONDS } from "./error
  * Version of the API contract, as in the OpenAPI document. The major version is the one in the path. Additive
  * changes raise the minor version and never break a client that ignores fields it does not know.
  */
-export const API_VERSION = "1.2.0";
+export const API_VERSION = "1.3.0";
 export const API_VERSION_HEADER = "X-EquityOS-Api-Version";
 
 /** A response that must not be stored: errors, and data that depends on who asks or is already past its TTL. */
@@ -72,6 +72,20 @@ export function preflight(): Response {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Access-Control-Allow-Headers": "Accept, Content-Type",
+      "Access-Control-Max-Age": "86400",
+      [API_VERSION_HEADER]: API_VERSION,
+    },
+  });
+}
+
+/** Answers a CORS preflight for an endpoint that takes a JSON body by POST. */
+export function preflightPost(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Accept, Content-Type",
       "Access-Control-Max-Age": "86400",
       [API_VERSION_HEADER]: API_VERSION,

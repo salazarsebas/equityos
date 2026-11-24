@@ -23,6 +23,8 @@ export const API_ERROR_CODES = [
   "token_paused",
   "missing_feed",
   "stale_feed",
+  "invalid_body",
+  "execution_unavailable",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
