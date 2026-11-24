@@ -95,6 +95,7 @@ test("an atomic wallet executes the plan and the attestation in one batch, and t
   ]);
   // Nothing was sent by preparing, reviewing or acknowledging.
   expect(await nonce()).toBe(nonceBefore);
+  const blockBefore = await chain.getBlockNumber();
   await page.getByRole("button", { name: "Sign 6 calls in your wallet" }).click();
 
   await expect(
@@ -134,7 +135,7 @@ test("an atomic wallet executes the plan and the attestation in one batch, and t
     abi: rebalanceLogAbi,
     eventName: "RebalanceRecorded",
     args: { account: TEST_ACCOUNT },
-    fromBlock: 0n,
+    fromBlock: blockBefore + 1n,
   });
   expect(logs).toHaveLength(1);
   expect(logs[0]?.args).toEqual({ account: TEST_ACCOUNT, indexId: DIVERSIFIED.indexId, version: DIVERSIFIED.version });

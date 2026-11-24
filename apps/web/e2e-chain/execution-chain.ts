@@ -8,12 +8,15 @@ import { AAPL, AMZN, MSTR, NVDA, TSLA, USDC } from "../e2e/execution-plans";
 import { TEST_ACCOUNT } from "../e2e/wallet-support";
 
 /**
- * Installs the execution mocks of `contracts/test/e2e/ExecutionMocks.sol` on the local node, at the Base mainnet
+ * Installs the execution mocks of `contracts/test/mocks/ExecutionMocks.sol` on the local node, at the Base mainnet
  * addresses the client verification pins: a token at USDC and at each constituent of the seeded index, the
  * router at the KyberSwap router address and the executor at its executor address. The app's allowlist is not
  * widened: the local chain uses the very same router, executor and USDC addresses as Base mainnet. Only
  * `anvil_setCode`, which a live network does not have, puts them there, and the script refuses any chain but
  * 31337.
+ *
+ * It runs after the seed, whose usage example installs simpler token mocks at the same token addresses: the
+ * code is replaced, and the balances the seed minted to its own accounts are left behind unread.
  *
  * Balances: the test account gets what `test/fixtures/market/balances.json` records for it, so the chain agrees
  * with the replayed comparison; the executor gets the tokens it pays out.

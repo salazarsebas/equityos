@@ -3,7 +3,7 @@ pragma solidity 0.8.39;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MockExecutor, MockRouter, MockToken, SwapDescriptionV2, SwapExecutionParams} from "./ExecutionMocks.sol";
+import {MockExecutor, MockRouter, MockToken, SwapDescriptionV2, SwapExecutionParams} from "./mocks/ExecutionMocks.sol";
 
 /// @dev The mocks of the browser tests behave as the app's verification assumes the router does.
 contract ExecutionMocksTest is Test {
