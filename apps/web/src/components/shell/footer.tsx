@@ -12,7 +12,11 @@ export function Footer() {
         </p>
         <p className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1">
           <span>Open source under the MIT license</span>
-          <Link href={site.repositoryUrl} variant="quiet" className="text-primary">
+          <Link
+            href={site.repositoryUrl}
+            variant="quiet"
+            className="text-primary pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+          >
             Source code on GitHub
           </Link>
         </p>

@@ -121,9 +121,10 @@ The shell is in `apps/web/src/components/shell`: `Header`, `PrimaryNav`, `ThemeT
 `Grid`. The root layout adds a skip link before the header.
 
 The top bar ends with the account control from `apps/web/src/components/wallet`: "Connect wallet", or the
-shortened account in mono with a menu. It has a fixed width of 176 px and is a neutral block of that size until
-its code has loaded, so the bar never shifts. Under 640 px the primary navigation moves to a second row of 40 px,
-because the wordmark, the navigation, the theme toggle and the account control do not fit in one.
+shortened account in mono with a menu. It has a fixed width of 176 px (144 px under 640 px) and is a neutral block
+of that size until its code has loaded, so the bar never shifts. Under 1024 px the primary navigation moves to a
+second row of 40 px (44 px on touch devices), because the wordmark, the navigation, the theme toggle and the
+account control do not fit in one.
 
 ### Usage rules
 
@@ -137,8 +138,8 @@ because the wordmark, the navigation, the theme toggle and the account control d
 - **Table.** Text left, numbers right, identifiers left in mono. Mark every cell of a numeric column, header
   included, as `numeric`. Put the unit in the header when the column shares one. The first column identifies the
   row and is the only one in medium weight. No vertical borders and no zebra striping. On narrow screens the
-  table scrolls horizontally: it is never converted into cards. Pass `maxHeight` to scroll the body under the
-  sticky header.
+  table scrolls horizontally, and fades the edge that has more columns behind it: it is never converted into
+  cards. Pass `maxHeight` to scroll the body under the sticky header.
 - **Stat.** The value is a string from the formatting utilities. A missing value renders as `MISSING`, never as
   zero.
 - **SourceLine.** One per data region, directly under it. Timestamps are UTC.

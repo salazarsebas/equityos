@@ -96,7 +96,11 @@ function Header({ profile, name }: { profile: IndexProfile; name: string }) {
   return (
     <header>
       <nav aria-label="Breadcrumb" className="text-sm text-secondary">
-        <Link href="/indexes" variant="quiet">
+        <Link
+          href="/indexes"
+          variant="quiet"
+          className="pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+        >
           Indexes
         </Link>
         <span aria-hidden="true"> / </span>
@@ -118,6 +122,7 @@ function Header({ profile, name }: { profile: IndexProfile; name: string }) {
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 empty:hidden">
         {view.conformant ? (
           <Link
+            className="pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
             href={`/portfolio?${new URLSearchParams({ index: index.identifier, ...(superseded ? { version: String(view.version) } : {}) })}`}
           >
             Compare a wallet with this index
@@ -266,9 +271,13 @@ export async function IndexProfilePage({ identifier, version }: { identifier: st
               />
               <Stat label="Last published" value={formatUtcDate(index.latest.publishedAt)} unit="UTC" />
             </StatGrid>
-            <nav aria-label="Sections" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <nav aria-label="Sections" className="mt-3 flex flex-wrap gap-x-4 gap-y-0 text-sm">
               {SECTIONS.map(({ href, label }) => (
-                <a key={href} href={href} className="rounded-sm text-accent underline-offset-[3px] hover:underline">
+                <a
+                  key={href}
+                  href={href}
+                  className="rounded-sm text-accent underline-offset-[3px] hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+                >
                   {label}
                 </a>
               ))}

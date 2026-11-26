@@ -38,7 +38,7 @@ function ViewLink({
       href={href}
       aria-current={current ? "page" : undefined}
       className={cx(
-        "inline-flex h-10 items-center border-b-2 px-2 font-medium whitespace-nowrap -outline-offset-2 transition-colors duration-[120ms]",
+        "inline-flex h-10 items-center border-b-2 px-2 pointer-coarse:h-11 font-medium whitespace-nowrap -outline-offset-2 transition-colors duration-[120ms]",
         current ? "border-accent text-primary" : "border-transparent text-secondary hover:text-primary",
       )}
     >

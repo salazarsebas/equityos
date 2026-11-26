@@ -31,7 +31,7 @@ export function Callout({ title, children, tone = "neutral", role = "note" }: Ca
   return (
     <div role={role} className={cx("rounded-md border px-4 py-3 text-base", tones[tone])}>
       <p className={cx("font-medium", titles[tone])}>{title}</p>
-      {children ? <div className="mt-1 max-w-measure text-primary">{children}</div> : null}
+      {children ? <div className="mt-1 max-w-measure text-primary [overflow-wrap:anywhere]">{children}</div> : null}
     </div>
   );
 }

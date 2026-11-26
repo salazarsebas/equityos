@@ -199,8 +199,8 @@ export function Preview({ evaluation, assets, assetsFailed, base }: PreviewProps
                 onClick={() => focusField(issue)}
                 className={
                   issue.incomplete
-                    ? "rounded-sm text-left text-secondary underline-offset-[3px] hover:underline"
-                    : "rounded-sm text-left text-negative underline-offset-[3px] hover:underline"
+                    ? "rounded-sm text-left text-secondary underline-offset-[3px] hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+                    : "rounded-sm text-left text-negative underline-offset-[3px] hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
                 }
               >
                 {issue.message}
