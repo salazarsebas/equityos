@@ -79,7 +79,7 @@ type CheckboxProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { lab
 /** Native checkbox, restyled, with its label as one click target. */
 export function Checkbox({ label, className, ...rest }: CheckboxProps) {
   return (
-    <label className={cx("inline-flex items-start gap-2 text-base text-primary", className)}>
+    <label className={cx("inline-flex items-start gap-2 text-base text-primary pointer-coarse:py-3", className)}>
       <span className="relative mt-0.5 inline-flex size-4 shrink-0">
         <input
           {...rest}

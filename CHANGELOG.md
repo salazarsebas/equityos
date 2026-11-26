@@ -165,6 +165,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Narrow screens: the top bar keeps one row at 320 px, tables fade the scrolling edge, long text in callouts wraps,
+  and primary controls and links in tables reach 44 px on touch devices. A browser test checks every route.
 - The execution review states every pre-trade check and warning in plain language, with its codes kept in mono
   for developers. The text is a typed map over the server's checks and reasons, and a test fails when the server
   reports a reason without text.

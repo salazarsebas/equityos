@@ -95,7 +95,12 @@ function Header({ data, state, connected }: { data: ApiPortfolio; state: Compari
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-secondary">
         <span>{connected ? "Connected wallet" : "Read-only lookup: this page is not connected to the address"}</span>
         <CopyButton value={data.address} label="Copy address" />
-        <Link href={explorer.url}>View on {explorer.name}</Link>
+        <Link
+          href={explorer.url}
+          className="pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+        >
+          View on {explorer.name}
+        </Link>
       </p>
       {index.isLatest ? null : (
         <Callout

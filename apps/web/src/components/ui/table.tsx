@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 import { cx } from "./cx";
+import { TableFrame } from "./table-frame";
 
 type TableProps = {
   /** Names the scroll region for assistive technology. Use the caption text. */
@@ -18,20 +19,14 @@ type TableProps = {
  */
 export function Table({ label, dense = false, maxHeight, children }: TableProps) {
   return (
-    <section
-      aria-label={label}
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must be reachable by keyboard
-      tabIndex={0}
-      style={maxHeight ? { maxHeight } : undefined}
-      className="overflow-auto rounded-lg border bg-surface"
-    >
+    <TableFrame label={label} maxHeight={maxHeight}>
       <table
         data-dense={dense || undefined}
-        className="group/table w-full border-separate border-spacing-0 text-left text-base"
+        className="group/table w-full border-separate border-spacing-0 text-left text-base pointer-coarse:[&_a]:inline-flex pointer-coarse:[&_a]:min-h-11 pointer-coarse:[&_a]:items-center"
       >
         {children}
       </table>
-    </section>
+    </TableFrame>
   );
 }
 

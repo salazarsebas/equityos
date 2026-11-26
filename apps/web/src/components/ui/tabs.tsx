@@ -63,7 +63,7 @@ export function Tabs({ label, items, defaultTabId }: TabsProps) {
               tabIndex={selected ? 0 : -1}
               onClick={() => setActiveId(item.id)}
               className={cx(
-                "h-10 shrink-0 border-b-2 px-2 text-base font-medium whitespace-nowrap -outline-offset-2 transition-colors duration-[120ms]",
+                "h-10 shrink-0 border-b-2 px-2 pointer-coarse:h-11 text-base font-medium whitespace-nowrap -outline-offset-2 transition-colors duration-[120ms]",
                 selected ? "border-accent text-primary" : "border-transparent text-secondary hover:text-primary",
               )}
             >

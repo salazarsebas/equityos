@@ -23,7 +23,7 @@ export function SectionNav() {
             href={href}
             aria-current={current ? "page" : undefined}
             className={cx(
-              "inline-flex h-10 shrink-0 items-center border-b-2 text-base font-medium -outline-offset-2 transition-colors duration-[120ms]",
+              "inline-flex h-10 shrink-0 items-center border-b-2 pointer-coarse:h-11 text-base font-medium -outline-offset-2 transition-colors duration-[120ms]",
               current ? "border-b-accent text-primary" : "border-b-transparent text-secondary hover:text-primary",
             )}
           >
