@@ -194,3 +194,52 @@ describe("computeConstituents", () => {
     expect(errorCode(() => computeConstituents(inconsistent))).toBe("length_mismatch");
   });
 });
+
+describe("weight errors", () => {
+  function thrown(run: () => unknown): WeightCalculationError {
+    try {
+      run();
+    } catch (error) {
+      if (error instanceof WeightCalculationError) return error;
+      throw error;
+    }
+    throw new Error("nothing was thrown");
+  }
+
+  test("name the problem and the offending value", () => {
+    const empty = thrown(() => computeEqualWeights([]));
+    expect(empty.name).toBe("WeightCalculationError");
+    expect(empty.message).toBe("at least one constituent is required");
+    expect(thrown(() => computeEqualWeights(range(10_001).map(address))).message).toBe(
+      "10001 constituents cannot each have 1 bps",
+    );
+    expect(thrown(() => computeEqualWeights(["0x1"])).message).toBe("0x1 is not a lowercase address");
+    expect(thrown(() => computeEqualWeights([address(2), address(1), address(2)])).message).toBe(
+      `${address(2)} is repeated`,
+    );
+  });
+
+  test("a fixed weighting without one weight per token says so", () => {
+    const validation = validateSpec({ ...baseSpec(2), weighting: { type: "fixed", weightsBps: [6000, 4000] } });
+    if (!validation.ok) throw new Error(JSON.stringify(validation.errors));
+    const spec = { ...validation.spec, weighting: { type: "fixed" as const, weightsBps: [10_000] } };
+    expect(thrown(() => computeConstituents(spec)).message).toBe("a fixed weighting needs one weight per token");
+  });
+
+  test("equal weights come back in ascending order for every order of 2 to 6 tokens", () => {
+    const tokens = [address(0x30), address(0x2), address(0xff), address(0x100), address(0x1f), address(0xa0)];
+    const ascending = [...tokens].sort();
+    const permutations = (items: Address[]): Address[][] =>
+      items.length <= 1
+        ? [items]
+        : items.flatMap((item, i) =>
+            permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [item, ...rest]),
+          );
+    for (let count = 2; count <= tokens.length; count++) {
+      const expected = ascending.filter((token) => tokens.slice(0, count).includes(token));
+      for (const order of permutations(tokens.slice(0, count))) {
+        expect(computeEqualWeights(order).map(({ token }) => token)).toEqual(expected);
+      }
+    }
+  });
+});

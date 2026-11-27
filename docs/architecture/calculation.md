@@ -407,7 +407,8 @@ A plan only ever trades constituents of the target version, with one exception. 
 constituent, the caller passes the tokens of the previous version that are no longer constituents as
 `exitTokens`. In `rebalance` mode each one the wallet holds is sold in full (`exit: true` on the leg) and its
 proceeds fund buys. A token to exit that the wallet holds needs a usable price; one the wallet does not hold
-needs none.
+needs none. Its price is classified like a constituent's: a missing, unavailable or zero price is a blocker, and
+a `delayed` or `last_close` price is a warning (a blocker with `blockOnLastClose`) that names the token.
 
 An exit below the minimum leg value is skipped. It stays in the wallet, so its value is not part of the
 deployable value and does not raise any target.
@@ -626,17 +627,20 @@ Every balance, price, value and quote amount is a decimal string, because these 
 points, decimals and booleans are JSON numbers and booleans. A value that is not defined is `null`. Two vectors
 carry a price whose `status` is absent or not a known class.
 
-The vectors cover both modes, the defaults, every blocker, warning and skip reason, a token to exit, tokens of
-0, 2, 6, 8 and 18 decimals, prices from 0.07 USD to 4,321.00 USD, an index of one constituent and one of 64, and
-portfolios from 9 USD to 10 million USD, and the three outcomes of two candidates: the capped one closer to
-target, the uncapped one closer, and a tie. `capped-candidate-sells-for-its-own-buys` is a capped candidate
+The vectors cover both modes, the defaults, every blocker, warning and skip reason, tokens to exit (sold, skipped
+below the minimum, not held, ignored in `buy_only`, with a delayed, last_close or missing price), tokens of 0, 2,
+6, 8 and 18 decimals, prices from 0.0001 USD to 100,000.00 USD, a reserve of 0 and of `MAX_RESERVE_BPS`, a
+minimum leg value of 0, holdings too small to have a value, a deposit with a fraction of a quote base unit,
+inputs in descending token order, an index of one constituent and one of 64 in both modes, and portfolios from
+9 USD to 10 million USD, and the three outcomes of two candidates: the capped one closer to target, the uncapped
+one closer, and a tie. `capped-candidate-sells-for-its-own-buys` is a capped candidate
 whose sells are scaled again to its own buys, and `tie-in-drift-with-a-deposit-below-one-quote-unit` a deposit
 of 99 in USD scaled by 1e8 that is no deposit for the tie.
 
 The expected output of every vector was produced by `@equityos/core`. The first 36 vectors were checked
 against an independent implementation of this page written in another language, which is not part of the
-repository: blockers, warnings, targets, legs, skipped legs and projection agree on all of them. All of them,
-the last two included, are checked by a second independent implementation written from this page alone,
+repository: blockers, warnings, targets, legs, skipped legs and projection agree on all of them. All 60 are
+checked by a second independent implementation written from this page alone,
 `packages/core/test/plan-vectors-independent.test.ts`. It imports nothing from `src` and recomputes the whole
 expected result of every vector.
 
@@ -646,3 +650,6 @@ expected result of every vector.
 (eligibility, worked examples with hand-computed numbers, one group per rule), `rebalance-properties.test.ts`
 (the guarantees above over seeded random portfolios), `plan-vectors.test.ts` (the published vectors) and
 `plan-vectors-independent.test.ts` (the vectors recomputed by an implementation written from this page).
+
+The core is also held to statement and branch coverage of at least 95% and a mutation score of at least 80%,
+both in CI ([Getting started](../development/getting-started.md#coverage-and-mutation-testing-of-the-core)).

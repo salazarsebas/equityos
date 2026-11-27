@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!contracts/lib", "!**/next-env.d.ts"]
+    "includes": ["**", "!contracts/lib", "!**/next-env.d.ts", "!tools/mutation/incremental.json"]
   },
   "formatter": {
     "enabled": true,

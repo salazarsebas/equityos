@@ -462,7 +462,9 @@ function planRebalance(input: PlanInput): PlanResult {
       const holding = holdings.get(token);
       if (holding === undefined || holding.balance === 0n) continue;
       const price = resolvePrice(prices, token, input.blockOnLastClose);
+      // The price is classified like a constituent's: a delayed or last_close price is a warning.
       blockers.push(...price.findings.filter(({ severity }) => severity === "blocker"));
+      warnings.push(...price.findings.filter(({ severity }) => severity === "warning"));
       if (price.usablePriceE8 !== null) {
         heldExits.push({ token, balance: holding.balance, decimals: holding.decimals, priceE8: price.usablePriceE8 });
       }
@@ -792,8 +794,8 @@ function toVectorJson(value: unknown): unknown {
 }
 
 describe("published vectors, recomputed independently from the specification", () => {
-  test("there are 38 vectors", () => {
-    expect(planVectors.vectors.length).toBe(38);
+  test("there are 60 vectors", () => {
+    expect(planVectors.vectors.length).toBe(60);
   });
 
   for (const vector of planVectors.vectors) {

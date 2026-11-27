@@ -1,0 +1,13 @@
+{
+  "name": "@equityos/mutation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Mutation testing of packages/core with Stryker, outside the workspace because Stryker needs TypeScript 6",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@hughescr/stryker-bun-runner": "1.6.0",
+    "@stryker-mutator/core": "10.1.1",
+    "typescript": "6.0.3"
+  }
+}

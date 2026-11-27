@@ -20,6 +20,8 @@
     "lint": "biome lint .",
     "typecheck": "bun run --filter '*' typecheck && tsc -p scripts",
     "test": "bun run --filter '*' test && bun test ./scripts",
+    "test:coverage:core": "cd packages/core && CORE_COVERAGE_FILE=coverage/istanbul.json bun test --preload ../../scripts/core-coverage-preload.ts && cd ../.. && bun scripts/check-core-coverage.ts packages/core/coverage/istanbul.json packages/core/src",
+    "test:mutation": "bun install --frozen-lockfile --cwd tools/mutation && cd packages/core && ../../tools/mutation/node_modules/.bin/stryker run ../../tools/mutation/stryker.config.mjs",
     "test:e2e": "bun run --filter @equityos/web test:e2e",
     "test:integration": "forge build --root contracts && CONTRACT_ARTIFACTS=required bun run --filter @equityos/contracts-abi test && bun run --filter @equityos/web test:integration && bun run --filter @equityos/web test:e2e:chain",
     "build": "bun run --filter '*' build",
@@ -38,6 +40,8 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
     "@types/bun": "1.3.14",
+    "@types/istanbul-lib-instrument": "1.7.8",
+    "istanbul-lib-instrument": "6.0.3",
     "typescript": "7.0.2"
   }
 }

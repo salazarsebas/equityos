@@ -87,6 +87,8 @@ describe.each([
   test("throws DivisionByZeroError when the denominator is zero", () => {
     expect(() => mulDiv(1n, 1n, 0n)).toThrow(DivisionByZeroError);
     expect(() => mulDiv(0n, 0n, 0n)).toThrow(DivisionByZeroError);
+    expect(() => mulDiv(1n, 1n, 0n)).toThrow("division by zero");
+    expect(new DivisionByZeroError().name).toBe("DivisionByZeroError");
   });
 
   test("reports division by zero before a negative operand", () => {

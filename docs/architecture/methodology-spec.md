@@ -159,6 +159,11 @@ newline:
 
 These 642 bytes hash to `0x0303f9e547c0c4b543d9c661f47bb6867f9048fbbd4bd66b8c37a88e4b3680e3`.
 
+The hash therefore depends on the content of a spec and on nothing else. `packages/core/test/hash-properties.test.ts`
+checks it over seeded random specs of 1 to 64 tokens: property order, whitespace and escapes in the JSON text and
+a round trip through the canonical bytes leave the bytes and the hash unchanged, the bytes agree with an
+independent RFC 8785 implementation, and a change to any part of the content changes the hash.
+
 ## Weight calculation `equityos.calc/1`
 
 The calculation maps a valid spec to its constituents: each token of `universe.tokens`, in the same order,
