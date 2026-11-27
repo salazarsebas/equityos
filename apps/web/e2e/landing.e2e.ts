@@ -154,7 +154,9 @@ test("execution is stated as not available, from the status of this release", as
   if (status.data.executionUnavailableReason === "not_released") {
     await expect(holder).toContainText("Executing trades is not available on this site yet.");
   }
-  await expect(page.getByRole("region", { name: "What it is not" })).toContainText("Not on Base mainnet yet");
+  const limits = page.getByRole("region", { name: "What it is not" });
+  await expect(limits).toContainText("Not on Base mainnet yet");
+  await expect(limits).toContainText("Automated rebalancing is a design and a test simulation only, not shipped.");
 });
 
 test("where the registry is not deployed, the page says so and the commands use shell variables", async ({ page }) => {

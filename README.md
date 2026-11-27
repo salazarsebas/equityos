@@ -46,7 +46,11 @@ or one transaction at a time; the site holds no key. The contracts are not deplo
 recorded there. See [docs/product/portfolio.md](docs/product/portfolio.md) and
 [docs/security/execution-sending.md](docs/security/execution-sending.md).
 
-Not built yet: new versions of a published index from the app, automated or scheduled rebalancing.
+Not built yet: new versions of a published index from the app, automated or scheduled rebalancing. Automated
+rebalancing exists only as a design and a test simulation, not deployed: see
+[docs/architecture/bounded-executor.md](docs/architecture/bounded-executor.md).
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
