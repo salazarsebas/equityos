@@ -6,6 +6,7 @@ import {
   KYBERSWAP_ROUTER,
   PLAN_DEFAULT_MAX_DEVIATION_BPS,
   PLAN_DEFAULT_SLIPPAGE_BPS,
+  PLAN_LIFETIME_SECONDS,
   planHash,
   ROUTE_DEADLINE_TOLERANCE_SECONDS,
   verifyQuote,
@@ -56,7 +57,7 @@ export const MULTIPLIER_WINDOW_SECONDS = 86_400;
  * Lifetime of a plan from its first quote, 120 seconds: time to review it and confirm an approval and a few
  * swaps in a wallet. It is also the deadline asked of the provider, so a swap sent later reverts onchain.
  */
-export const PLAN_TTL_SECONDS = 120;
+export const PLAN_TTL_SECONDS = PLAN_LIFETIME_SECONDS;
 /** A route's deadline may exceed the plan's expiry by at most this many seconds, the clock skew allowed. */
 export const DEADLINE_TOLERANCE_SECONDS = ROUTE_DEADLINE_TOLERANCE_SECONDS;
 /**

@@ -284,6 +284,7 @@ export function buildBlockedPlan(account: Address, chainId: number) {
       statement: "A fixed statement.",
       mode: "rebalance",
       slippageBps: 50,
+      maxDeviationBps: 150,
       provider: { name: "kyberswap", router: KYBERSWAP_ROUTER },
       status: "blocked",
       executable: false,

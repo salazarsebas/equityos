@@ -29,6 +29,13 @@ export const EXECUTION_CHAIN_ID = 8453;
  */
 export const ROUTE_DEADLINE_TOLERANCE_SECONDS = 15;
 
+/**
+ * Lifetime of an execution plan from its first quote, in seconds. The server never sets a later expiry, and a
+ * client that sends a plan refuses one that expires later than this, plus the deadline tolerance, after the
+ * block it read the chain at.
+ */
+export const PLAN_LIFETIME_SECONDS = 120;
+
 /** Default slippage tolerance of a plan, in basis points. The server documents why. */
 export const PLAN_DEFAULT_SLIPPAGE_BPS = 50;
 /** Default deviation band of a plan, in basis points, applied to the quoted and to the minimum-out price. */

@@ -11,6 +11,9 @@
 import { type Address, type Hex, isAddressEqual } from "viem";
 import {
   isExactApproval,
+  PLAN_DEFAULT_MAX_DEVIATION_BPS,
+  PLAN_DEFAULT_SLIPPAGE_BPS,
+  PLAN_LIFETIME_SECONDS,
   type ProviderQuote,
   planHash,
   type QuoteFailureReason,
@@ -28,6 +31,11 @@ export type VerificationFailureCode =
   | "not_ready"
   /** No check may block, be skipped or be unsimulated in a plan that is sent. */
   | "check_not_passed"
+  /**
+   * The plan was built with another slippage tolerance or deviation band than the defaults the page requests,
+   * the parameters the browser's price bound is derived from. `detail` names them.
+   */
+  | "parameters_mismatch"
   /** This build does not send plans on the plan's chain. */
   | "unsupported_chain"
   /** The plan was built for another address than the connected account. */
@@ -44,6 +52,11 @@ export type VerificationFailureCode =
   | "swap_not_verified"
   /** The decoded minimum or deadline differs from what the answer reports for the leg or the call. */
   | "swap_mismatch"
+  /**
+   * The plan expires later than a plan's lifetime, plus the deadline tolerance, after the block the browser read
+   * the chain at: its quotes and the price bound would be relied on for longer than they are checked for.
+   */
+  | "expiry_out_of_range"
   /** A route deadline is before the plan's expiry, or more than the tolerance after it. */
   | "deadline_out_of_range"
   /** The totals of the answer differ from the totals recomputed from the decoded calls. */
@@ -207,8 +220,17 @@ export function verifyExecutionPlan(plan: ExecutionPlanView, context: Verificati
       ...unsettled.map((check) => failure("check_not_passed", { detail: `${check.check}:${check.status}` })),
     );
   }
+  const parameters = [
+    plan.slippageBps !== PLAN_DEFAULT_SLIPPAGE_BPS && "slippageBps",
+    plan.maxDeviationBps !== PLAN_DEFAULT_MAX_DEVIATION_BPS && "maxDeviationBps",
+  ].filter((field): field is string => field !== false);
+  if (parameters.length > 0) return refuse(failure("parameters_mismatch", { detail: parameters.join(",") }));
   if (network === null) return refuse(failure("unsupported_chain", { detail: String(plan.chainId) }));
   if (!isAddressEqual(plan.address, account)) return refuse(failure("account_mismatch"));
+  // The price bound is checked at the browser's reads: a plan that outlives them would be signed on old checks.
+  if (expiresAt > context.market.chainTime + PLAN_LIFETIME_SECONDS + ROUTE_DEADLINE_TOLERANCE_SECONDS) {
+    return refuse(failure("expiry_out_of_range", { detail: String(expiresAt) }));
+  }
   if (
     plan.index.indexId.toLowerCase() !== context.index.indexId.toLowerCase() ||
     plan.index.version !== context.index.version

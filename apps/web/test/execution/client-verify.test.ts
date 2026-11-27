@@ -33,7 +33,8 @@ const CONSTITUENTS: Address[] = [
   "0xb200000000000000000000d9192b6b456483c2e8",
 ];
 const base = executionNetwork(8453, { NODE_ENV: "production" });
-const EXPIRES = 1_800_000_000;
+/** Within a plan's lifetime of the chain time the browser reads. */
+const EXPIRES = OPEN_MARKET_TIME + 100;
 
 /** A plan that sells NVDA and buys TSLA and AMZN, for `ACCOUNT` on Base. */
 function rebalanceBody() {
@@ -386,6 +387,26 @@ describe("every field of every call is verified in the browser", () => {
     const outcome = verify(body);
     if (!outcome.ok) throw new Error(codes(outcome).join(" "));
     expect(outcome.hashMatches).toBe(false);
+  });
+
+  test("a plan that expires later than a plan's lifetime after the browser's reads is refused", () => {
+    const plan = parseExecutionPlan(rebalanceBody());
+    // The latest expiry allowed is the chain time read, plus the lifetime, plus the deadline tolerance.
+    const at = (chainTime: number) => codes(verify(rebalanceBody(), ACCOUNT, base, chainReadsFor(plan, { chainTime })));
+    expect(at(EXPIRES - 135)).toEqual([]);
+    expect(at(EXPIRES - 136)).toEqual([`expiry_out_of_range:${EXPIRES}`]);
+  });
+
+  test("a plan built with another slippage tolerance or deviation band than the page asks for is refused", () => {
+    const slippage = edited((data) => {
+      data.slippageBps = 200;
+    });
+    expect(codes(verify(slippage))).toEqual(["parameters_mismatch:slippageBps"]);
+    const both = edited((data) => {
+      data.slippageBps = 0;
+      data.maxDeviationBps = 500;
+    });
+    expect(codes(verify(both))).toEqual(["parameters_mismatch:slippageBps,maxDeviationBps"]);
   });
 
   test("an expiry that differs from the one the hash was computed with breaks the hash", () => {

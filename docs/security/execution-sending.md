@@ -47,6 +47,11 @@ version.
 
 - The plan is `ready` and `executable`, with calls, totals, an expiry and a hash, and no check is `block`,
   `skipped` or `not_simulated`.
+- The plan was built with the slippage tolerance and the deviation band the page asks for, 50 and 150 basis
+  points, the parameters the price bound below is derived from.
+- The plan expires no later than a plan's lifetime (120 seconds) plus the deadline tolerance (15 seconds) after
+  the block the browser read the chain at, so its quotes and the price bound are never relied on for longer than
+  a plan lives.
 - The plan's chain is one this build sends on. A production build accepts Base mainnet (8453) only. A development
   build also accepts the local Anvil chain (31337), with the same router, executor and USDC addresses
   (`lib/execution/networks.ts`).

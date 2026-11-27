@@ -179,6 +179,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The browser refuses an execution plan that expires later than a plan's lifetime after its own reads of the chain,
+  or that was built with another slippage tolerance or deviation band than the page asks for. The page now states
+  both parameters in its request. Before, a server could have stretched how long a checked plan stayed signable.
 - The independent implementation of the plan in the tests reports a `price_delayed` or `market_closed` warning
   for a held token to exit, as `@equityos/core` does. `docs/architecture/calculation.md` states it.
 - Narrow screens: the top bar keeps one row at 320 px, tables fade the scrolling edge, long text in callouts wraps,
