@@ -207,6 +207,10 @@ export function Limitations() {
         <Limit term="Not an executable price">
           Reference prices come from oracle feeds and value a holding. No trade is guaranteed at them.
         </Limit>
+        <Limit term="No automated execution">
+          Every trade is signed in your own wallet. Automated rebalancing is a design and a test simulation only, not
+          shipped. <Link href={docs("architecture/bounded-executor.md")}>Design</Link>
+        </Limit>
         <Limit term="Not for trading by US persons">
           Execution is withheld from requests located in the United States and its territories. Reading works
           everywhere.

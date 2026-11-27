@@ -157,6 +157,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Example contract `IndexSliceSender` in `contracts/test/examples`: it reads a pinned version from the registry and
   sends the same share of every constituent the caller holds to a recipient, without custody. Tests and a guide,
   `docs/development/consuming-an-index.md`.
+- Bounded executor design, `docs/architecture/bounded-executor.md`, and a simulation of it in
+  `contracts/test/simulation` with tests of every bound. Not deployed and not audited; the landing page lists
+  automated execution as not shipped.
+- `SECURITY.md`: how to report a vulnerability privately, what to expect, and the scope. No audit is claimed.
 
 ### Changed
 
