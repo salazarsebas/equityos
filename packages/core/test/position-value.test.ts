@@ -54,6 +54,10 @@ describe("positionValueUsdE8", () => {
     for (const decimals of [-1, 1.5, MAX_TOKEN_DECIMALS + 1, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => positionValueUsdE8(1n, 1n, decimals, "down")).toThrow(InvalidDecimalsError);
     }
+    expect(() => positionValueUsdE8(1n, 1n, 37, "down")).toThrow(
+      "token decimals must be an integer between 0 and 36, received 37",
+    );
+    expect(new InvalidDecimalsError(37).name).toBe("InvalidDecimalsError");
     expect(positionValueUsdE8(10n ** 36n, 7n, MAX_TOKEN_DECIMALS, "down")).toBe(7n);
   });
 });

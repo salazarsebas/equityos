@@ -148,6 +148,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Slither and Aderyn compared with a reviewed baseline in `contracts/static-analysis/baseline.json`, and an
   invariant that index ids never collide (I14). The log's storage writes are now checked inside the invariant
   campaign too (I13).
+- Core gates in the `web` CI job: statement and branch coverage of `packages/core/src` of at least 95%, measured
+  with Istanbul (`bun run test:coverage:core`), and a Stryker mutation score of at least 80%
+  (`bun run test:mutation`, set up in `tools/mutation`).
+- Property tests for canonicalization and the spec hash over random specs, plan properties for the tie between
+  the two candidates and for holdings too small to have a value, and 22 rebalance plan vectors (60 in all), each
+  recomputed by the independent implementation.
 
 ### Changed
 
@@ -170,6 +176,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The independent implementation of the plan in the tests reports a `price_delayed` or `market_closed` warning
+  for a held token to exit, as `@equityos/core` does. `docs/architecture/calculation.md` states it.
 - Narrow screens: the top bar keeps one row at 320 px, tables fade the scrolling edge, long text in callouts wraps,
   and primary controls and links in tables reach 44 px on touch devices. A browser test checks every route.
 - The execution review states every pre-trade check and warning in plain language, with its codes kept in mono

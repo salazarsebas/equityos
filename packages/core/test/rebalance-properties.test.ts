@@ -518,6 +518,55 @@ describe("planRebalance over random portfolios", () => {
     expect(blocked).toBeGreaterThan(100);
   });
 
+  test("on a tie in drift the capped candidate wins, unless a deposit of at least one quote base unit is made", () => {
+    let ties = 0;
+    let uncappedTies = 0;
+    for (const { input, plan } of cases) {
+      const other = plan.otherCandidateMaxAbsDriftBps;
+      if (other === null || plan.projected.maxAbsDriftBps !== other) continue;
+      ties += 1;
+      const deposited = (input.depositUsdE8 ?? 0n) / 100n > 0n;
+      if (plan.candidate === "uncapped") {
+        uncappedTies += 1;
+        expect(deposited).toBe(true);
+      }
+      if (!deposited) expect(plan.candidate).toBe("capped");
+    }
+    expect(ties).toBeGreaterThan(50);
+    expect(uncappedTies).toBeGreaterThan(0);
+  });
+
+  test("a holding too small to have a value is never sold, and dust alone is a first replication", () => {
+    let dust = 0;
+    let dustOnly = 0;
+    for (const item of generated.slice(0, 1_000)) {
+      // One base unit of every constituent the wallet does not hold, where that unit is worth nothing.
+      const held = new Set(item.input.holdings.map(({ token }) => token));
+      const added = item.input.constituents
+        .filter(({ token }) => !held.has(token))
+        .filter(({ token, decimals }) => positionValueUsdE8(1n, item.prices.get(token) ?? 0n, decimals, "down") === 0n)
+        .map(({ token, decimals }) => ({ token, balance: 1n, decimals }));
+      if (added.length === 0) continue;
+      const result = planRebalance({ ...item.input, holdings: [...item.input.holdings, ...added] });
+      if (result.status !== "ready") continue;
+      const worthless = new Set(
+        [...result.valuation.positions, ...result.valuation.outsideIndex]
+          .filter(({ balance, valueUsdE8 }) => balance > 0n && valueUsdE8 === 0n)
+          .map(({ token }) => token),
+      );
+      dust += worthless.size;
+      for (const leg of legsOf(result, "sell")) expect(worthless.has(leg.token)).toBe(false);
+      if (result.valuation.investedValueUsdE8 === 0n) {
+        dustOnly += 1;
+        expect(result.currentMaxAbsDriftBps).toBeNull();
+        // A first replication buys every constituent, dust included.
+        expect(legsOf(result, "buy").length).toBe(result.targets.length);
+      }
+    }
+    expect(dust).toBeGreaterThan(50);
+    expect(dustOnly).toBeGreaterThan(10);
+  });
+
   test("buy only never sells", () => {
     for (const { input } of generated) {
       const plan = planRebalance({ ...input, mode: "buy_only" });

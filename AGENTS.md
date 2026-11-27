@@ -16,6 +16,7 @@ deterministic methodology. It is not a pooled fund: users replicate an index in 
 | `packages/contracts-abi` | `@equityos/contracts-abi`: typed contract ABIs and deployment map     |
 | `packages/sdk`           | `@equityos/sdk`: TypeScript SDK                                       |
 | `contracts`              | Foundry project, dependencies as git submodules in `contracts/lib`    |
+| `tools/mutation`         | Stryker for `packages/core`, installed apart with its own lockfile    |
 | `docs`                   | Technical documentation, indexed in `docs/README.md`                  |
 | `.github/workflows`      | CI                                                                    |
 
@@ -33,6 +34,8 @@ or yarn, and do not commit any lockfile other than `bun.lock`.
 | `bun run lint`                | Lint with Biome                       |
 | `bun run typecheck`           | Type-check every workspace            |
 | `bun run test`                | Run unit tests with `bun test`        |
+| `bun run test:coverage:core`  | Core statement and branch coverage    |
+| `bun run test:mutation`       | Core mutation score (Linux, macOS)    |
 | `bun run build`               | Build the packages and the web app    |
 | `bun run test:e2e`            | Playwright smoke test, after a build  |
 | `bun run test:integration`    | Local Anvil: deploy, read and publish |

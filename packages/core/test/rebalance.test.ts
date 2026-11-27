@@ -121,6 +121,17 @@ describe("rebalanceEligibility", () => {
     expect(result.reason).toBe("below_threshold");
   });
 
+  test("a valuation with an invested value but an undefined weight is blocked, not guessed", () => {
+    const [first, ...rest] = drifted.positions;
+    if (first === undefined) throw new Error("no position");
+    const inconsistent = { ...drifted, positions: [{ ...first, weightBps: null }, ...rest] };
+    expect(rebalanceEligibility({ rule: RULE, valuation: inconsistent, lastRebalanceAt: null, now: NOW })).toEqual({
+      due: false,
+      reason: "valuation_blocked",
+      blockers: [],
+    });
+  });
+
   test("a first replication is always allowed", () => {
     const first = valuePortfolio(dollars([5_000, 5_000], [0n, 0n], 100_000_000n));
     expect(rebalanceEligibility({ rule: RULE, valuation: first, lastRebalanceAt: NOW - 1, now: NOW })).toEqual({

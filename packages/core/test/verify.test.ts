@@ -158,6 +158,14 @@ describe("verifyVersion", () => {
     expect(report.spec).toBeUndefined();
   });
 
+  test("C4 names the document itself when the only violation is at its root", () => {
+    const report = verifyVersion(publishedBytes(canonicalize([1, 2])));
+    expect(report.checks[3]?.code).toBe("schema_violation");
+    expect(report.specErrors.map(({ path }) => path)).toEqual([""]);
+    expect(report.checks[3]?.reason).toStartWith("document: ");
+    expect(report.checks[3]?.reason).not.toContain("more");
+  });
+
   test("C4 reports an unsupported schema or calc as such and computes nothing", () => {
     const otherSchema = verifyVersion(publishedBytes(canonicalize({ ...baseSpec(2), schema: "equityos.index/2" })));
     expect(otherSchema.checks.slice(3).map(({ status, code }) => `${status} ${code}`)).toEqual([
@@ -241,5 +249,84 @@ describe("verifyVersion", () => {
         ]);
       }
     });
+  });
+});
+
+describe("verifyVersion reasons", () => {
+  const input = published(fixedSpec);
+  const [first] = input.constituents;
+  if (first === undefined) throw new Error("no constituent");
+  const reasons = (report: ReturnType<typeof verifyVersion>) => report.checks.map(({ reason }) => reason);
+
+  test("a conformant version states what was checked", () => {
+    const report = verifyVersion(input);
+    expect(report.conformant).toBe(true);
+    expect(report.spec).toBeDefined();
+    expect(reasons(report)).toEqual([
+      `keccak256 of the ${input.specBytes.length} bytes is ${input.specHash}`,
+      "well-formed UTF-8, one JSON value, no duplicate property names",
+      "the bytes equal the canonical serialization of the parsed value",
+      "valid equityos.index/1 document for chain 8453",
+      "4 constituents match the spec in order and weight",
+    ]);
+  });
+
+  test("C1 names both hashes, and rejects a hash with anything before or after its 64 digits", () => {
+    const other = `0x${"ab".repeat(32)}`;
+    expect(verifyVersion({ ...input, specHash: other }).checks[0]?.reason).toBe(
+      `keccak256 of the bytes is ${input.specHash}, the published hash is ${other}`,
+    );
+    for (const malformed of [`x${input.specHash}`, `${input.specHash}0`, input.specHash.slice(0, -1)]) {
+      const check = verifyVersion({ ...input, specHash: malformed }).checks[0];
+      expect(check?.code).toBe("invalid_spec_hash");
+      expect(check?.reason).toBe("the published hash is not 32 bytes of hexadecimal");
+    }
+  });
+
+  test("a check that is not evaluated names the check it needed", () => {
+    const malformed = verifyVersion(publishedBytes(utf8('{"a":1,"a":2}')));
+    expect(malformed.conformant).toBe(false);
+    expect(malformed.specErrors).toEqual([]);
+    expect(malformed.spec).toBeUndefined();
+    expect(reasons(malformed).slice(2)).toEqual([
+      "not evaluated because C2 did not pass",
+      "not evaluated because C3 did not pass",
+      "not evaluated because C4 did not pass",
+    ]);
+    const spaced = verifyVersion(publishedBytes(utf8('{ "a": 1 }')));
+    expect(spaced.conformant).toBe(false);
+    expect(spaced.specErrors).toEqual([]);
+    expect(reasons(spaced).slice(3)).toEqual([
+      "not evaluated because C3 did not pass",
+      "not evaluated because C4 did not pass",
+    ]);
+  });
+
+  test("C4 names both chains and keeps the spec, and C5 is not evaluated", () => {
+    const report = verifyVersion({ ...input, chainId: 84532 });
+    expect(report.conformant).toBe(false);
+    expect(report.spec).toBeDefined();
+    expect(report.specErrors).toEqual([]);
+    expect(reasons(report).slice(3)).toEqual([
+      "the spec is for chain 8453, the version was read from chain 84532",
+      "not evaluated because C4 did not pass",
+    ]);
+  });
+
+  test("C5 names the constituent and both values that differ", () => {
+    const c5 = (constituents: readonly { token: string; weightBps: number }[]) =>
+      verifyVersion({ ...input, constituents }).checks[4]?.reason;
+    expect(c5(input.constituents.slice(1))).toBe("the spec implies 4 constituents, 3 are published");
+    const rest = input.constituents.slice(1);
+    expect(c5([{ ...first, token: address(0xdead) }, ...rest])).toBe(
+      `constituent 0 is ${address(0xdead)}, the spec implies ${first.token}`,
+    );
+    expect(c5([{ ...first, weightBps: first.weightBps - 1 }, ...rest])).toBe(
+      `${first.token} is published at ${first.weightBps - 1} bps, the spec implies ${first.weightBps} bps`,
+    );
+    for (const token of [`${first.token}0`, `x${first.token}`, first.token.slice(0, -1)]) {
+      expect(c5([{ ...first, token }, ...rest])).toBe("constituent 0 is not an address with an integer weight");
+    }
+    expect(c5([{ ...first, weightBps: 0.5 }, ...rest])).toBe("constituent 0 is not an address with an integer weight");
   });
 });

@@ -84,6 +84,21 @@ To run a script in a single workspace, filter by package name:
 bun run --filter @equityos/core test
 ```
 
+### Coverage and mutation testing of the core
+
+`bun run test:coverage:core` runs the tests of `packages/core` with every source file instrumented by Istanbul
+(`scripts/core-coverage-preload.ts`), because Bun's own coverage reports neither statements nor branches. It
+prints the coverage of each file and fails when statement or branch coverage of `packages/core/src` as a whole
+is below 95%, or when a source file is not loaded by any test.
+
+`bun run test:mutation` runs [Stryker](https://stryker-mutator.io) on `packages/core/src` and fails below a
+mutation score of 80%. It is installed separately in `tools/mutation`, with its own lockfile, because Stryker
+reads `tsconfig.json` with TypeScript 6 and the workspace uses TypeScript 7. Its Bun runner needs Bun 1.4 or
+later and runs on Linux and macOS only; on Windows, run it in a Linux container. A full run takes about 30
+minutes on 12 cores. `tools/mutation/incremental.json` keeps the result of every mutant, and a run tests again
+only the mutants whose code or covering tests changed since. Commit the updated file with a change to
+`packages/core`.
+
 ## Environment
 
 | Variable                               | Used by    | Purpose                                                                                |
@@ -136,8 +151,10 @@ deliberate. CI runs the tests with `FOUNDRY_PROFILE=ci`, which raises the number
 
 `.github/workflows/ci.yml` runs on every pull request and on every push to `main`:
 
-- `web`: install with a frozen lockfile, format check, lint, typecheck, test, build, Playwright smoke test.
-- `contracts`: format check, build, test.
+- `web`: install with a frozen lockfile, format check, lint, typecheck, test, core coverage, build, Playwright
+  smoke test, mutation testing of the core.
+- `contracts`: format check, build, test with the gas snapshot check, local deployment, coverage, Slither and
+  Aderyn against the reviewed baseline ([Static analysis](../security/static-analysis.md)).
 - `integration`: builds the contracts, checks the committed ABI modules against the build artifacts, then runs
   the deployment script, the seed and the registry reader against a local Anvil node.
 

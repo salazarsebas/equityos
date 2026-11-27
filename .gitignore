@@ -17,6 +17,9 @@ dist/
 *.tsbuildinfo
 coverage/
 
+# Stryker sandboxes
+.stryker-tmp/
+
 # Next.js
 .next/
 # Written by `next dev` on every start
