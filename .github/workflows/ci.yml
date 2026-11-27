@@ -112,6 +112,53 @@ jobs:
       - name: Deploy to a local node
         run: ./test/deploy-local.sh
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      # Line and branch coverage of every file under src/, at least 95% each. Coverage builds without the
+      # optimizer, so the tests that assert facts about the optimized bytecode (code hashes, opcodes, gas) are left
+      # out. It runs after the local deployment for the same reason: it rebuilds the artifacts.
+      - name: Coverage
+        run: >-
+          mkdir -p coverage &&
+          forge coverage --report summary --report lcov --report-file coverage/lcov.info
+          --no-match-path "test/{Deploy,Bytecode,IndexRegistry.gas}.t.sol" --no-match-coverage "^(test|script)/"
+        env:
+          FOUNDRY_PROFILE: default
+
+      - name: Check coverage
+        run: bun ../scripts/check-contracts-coverage.ts coverage/lcov.info
+
+      - name: Install Slither
+        run: pipx install slither-analyzer==0.11.6
+
+      # Aderyn is retired and its release binaries were withdrawn, so it is built from the source of the last
+      # release, pinned by commit, and cached. That source still carries a `#![feature]` attribute for an API that
+      # is stable since Rust 1.98, which the stable compiler rejects: RUSTC_BOOTSTRAP accepts it.
+      - name: Cache Aderyn
+        id: aderyn-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/aderyn
+          key: aderyn-a288420403cb1ae5f38ce606c3a6d4e605b9c81d-${{ runner.os }}
+
+      - name: Build Aderyn
+        if: steps.aderyn-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked --git https://github.com/Cyfrin/aderyn --rev a288420403cb1ae5f38ce606c3a6d4e605b9c81d aderyn
+        env:
+          RUSTC_BOOTSTRAP: 1
+
+      # Both reports are compared with the reviewed baseline: a new, changed or fixed finding fails the job, and
+      # no High or Medium finding is accepted unless it is shown to be a false positive.
+      - name: Static analysis
+        run: |
+          slither . --config-file slither.config.json --json "$RUNNER_TEMP/slither.json" > /dev/null
+          ~/.cargo/bin/aderyn . --output "$RUNNER_TEMP/aderyn.json"
+          bun ../scripts/check-static-analysis.ts --baseline static-analysis/baseline.json \
+            --slither "$RUNNER_TEMP/slither.json" --aderyn "$RUNNER_TEMP/aderyn.json"
+
   # The contracts and the TypeScript that reads them, together: needs both Foundry and Bun.
   integration:
     name: integration

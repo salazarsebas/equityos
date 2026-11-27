@@ -1,0 +1,60 @@
+{
+  "findings": [
+    {
+      "tool": "slither",
+      "detector": "timestamp",
+      "severity": "Low",
+      "location": "src/IndexRegistry.sol:IndexRegistry.exists",
+      "verdict": "false-positive",
+      "reason": "The comparison is on latestVersion, a version counter. Slither taints it because it shares a storage slot with deprecatedAt, which is written from block.timestamp. No logic depends on time."
+    },
+    {
+      "tool": "slither",
+      "detector": "timestamp",
+      "severity": "Low",
+      "location": "src/IndexRegistry.sol:IndexRegistry.versionExists",
+      "verdict": "false-positive",
+      "reason": "Same as exists: the comparison is between a requested version and latestVersion, both counters. No logic depends on time."
+    },
+    {
+      "tool": "slither",
+      "detector": "naming-convention",
+      "severity": "Informational",
+      "location": "src/interfaces/IIndexRegistry.sol:IIndexRegistry.BPS",
+      "verdict": "accepted",
+      "reason": "Getter of a public constant, named in upper case as the Solidity style guide asks for constants. Renaming it changes the ABI and the deterministic deployment address."
+    },
+    {
+      "tool": "slither",
+      "detector": "naming-convention",
+      "severity": "Informational",
+      "location": "src/interfaces/IIndexRegistry.sol:IIndexRegistry.MAX_SPEC_BYTES",
+      "verdict": "accepted",
+      "reason": "Getter of a public constant, named in upper case as the Solidity style guide asks for constants. Renaming it changes the ABI and the deterministic deployment address."
+    },
+    {
+      "tool": "slither",
+      "detector": "naming-convention",
+      "severity": "Informational",
+      "location": "src/interfaces/IIndexRegistry.sol:IIndexRegistry.MAX_CONSTITUENTS",
+      "verdict": "accepted",
+      "reason": "Getter of a public constant, named in upper case as the Solidity style guide asks for constants. Renaming it changes the ABI and the deterministic deployment address."
+    },
+    {
+      "tool": "slither",
+      "detector": "naming-convention",
+      "severity": "Informational",
+      "location": "src/RebalanceLog.sol:RebalanceLog.REGISTRY",
+      "verdict": "accepted",
+      "reason": "Public immutable, named in upper case like a constant. Renaming it changes the ABI and the deterministic deployment address."
+    },
+    {
+      "tool": "slither",
+      "detector": "naming-convention",
+      "severity": "Informational",
+      "location": "src/interfaces/IRebalanceLog.sol:IRebalanceLog.REGISTRY",
+      "verdict": "accepted",
+      "reason": "Interface getter of the public immutable REGISTRY. Same reason as RebalanceLog.REGISTRY."
+    }
+  ]
+}

@@ -25,7 +25,7 @@ depth = 100
 fail_on_revert = true
 
 [profile.ci.fuzz]
-runs = 5000
+runs = 10000
 
 [profile.ci.invariant]
 runs = 256

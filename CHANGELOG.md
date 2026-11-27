@@ -144,9 +144,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   critical violation.
 - A not-found page for any unknown path, inside the application shell, and an error state for the portfolio page
   when its data sources do not answer.
+- Contract gates in the `contracts` CI job: line and branch coverage of at least 95% per file under `src/`,
+  Slither and Aderyn compared with a reviewed baseline in `contracts/static-analysis/baseline.json`, and an
+  invariant that index ids never collide (I14). The log's storage writes are now checked inside the invariant
+  campaign too (I13).
 
 ### Changed
 
+- The `ci` Foundry profile runs every fuzz test 10,000 times instead of 5,000.
 - Public API v1.6.0: `GET /api/v1/status` answers `executionAvailable: true` for every request the jurisdiction
   gate lets through.
   The `not_released` reason is no longer returned, and the SDK and the OpenAPI document no longer list it.

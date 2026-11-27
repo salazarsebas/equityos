@@ -43,6 +43,7 @@ contract RegistryHandler is Test {
     uint256 public rebalancesRecorded;
     uint256 public rebalancesRejected;
     uint256 public etherRejected;
+    uint256 public createdWithSaltOfAnotherCreator;
 
     constructor(IndexRegistry registry, RebalanceLog rebalanceLog) {
         REGISTRY = registry;
@@ -73,9 +74,15 @@ contract RegistryHandler is Test {
             return;
         }
 
+        // I14: a salt already used by another creator still yields a fresh id, and creating it changes nothing
+        // that already exists.
+        bytes32 othersBefore = _allIndexesDigest();
+        if (_saltUsedByOthers(salt, actor)) ++createdWithSaltOfAnotherCreator;
+
         vm.prank(actor);
         bytes32 returned = REGISTRY.createIndex(salt, spec, tokens, weights);
         assertEq(returned, indexId, "createIndex returned an unexpected id");
+        assertEq(_allIndexesDigest(), othersBefore, "I14: creating an index changed another index");
 
         _ghostIds.push(indexId);
         ghostExists[indexId] = true;
@@ -219,10 +226,17 @@ contract RegistryHandler is Test {
             return;
         }
 
+        // I13: the call writes no storage, in the log or in the registry it reads.
+        vm.record();
         vm.expectEmit(address(REBALANCE_LOG));
         emit IRebalanceLog.RebalanceRecorded(actor, indexId, version);
         vm.prank(actor);
         REBALANCE_LOG.recordRebalance(indexId, version);
+        (, bytes32[] memory logWrites) = vm.accesses(address(REBALANCE_LOG));
+        (, bytes32[] memory registryWrites) = vm.accesses(address(REGISTRY));
+        vm.stopRecord();
+        assertEq(logWrites.length, 0, "I13: the log wrote storage");
+        assertEq(registryWrites.length, 0, "I13: recording a rebalance wrote registry storage");
         ++rebalancesRecorded;
     }
 
@@ -295,6 +309,22 @@ contract RegistryHandler is Test {
 
     function _actor(uint256 seed) internal view returns (address) {
         return _actors[seed % _actors.length];
+    }
+
+    /// @dev True if an index already exists with `salt` and a creator other than `creator`.
+    function _saltUsedByOthers(bytes32 salt, address creator) internal view returns (bool) {
+        for (uint256 i = 0; i < _ghostIds.length; ++i) {
+            bytes32 indexId = _ghostIds[i];
+            if (ghostSalt[indexId] == salt && ghostCreator[indexId] != creator) return true;
+        }
+        return false;
+    }
+
+    /// @dev Digest of every existing index, in creation order.
+    function _allIndexesDigest() internal view returns (bytes32 digest) {
+        for (uint256 i = 0; i < _ghostIds.length; ++i) {
+            digest = keccak256(abi.encode(digest, indexDigest(_ghostIds[i])));
+        }
     }
 
     function _pickIndex(uint256 seed) internal view returns (bool any, bytes32 indexId) {
