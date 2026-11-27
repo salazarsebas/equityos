@@ -1,0 +1,15 @@
+{
+  "routesKb": {
+    "/": 245,
+    "/indexes": 245,
+    "/assets": 245,
+    "/studio": 370,
+    "/portfolio": 375,
+    "/wallet": 255,
+    "/developers": 245,
+    "/developers/api": 245,
+    "/developers/spec": 245,
+    "/network": 245,
+    "/indexes/diversified-equity-d622e2a5": 280
+  }
+}

@@ -77,6 +77,12 @@ jobs:
       - name: Smoke test
         run: bun run test:e2e
 
+      # Mobile Lighthouse on the landing page, the explorer and an index page, with the replayed data: performance
+      # at least 95, the other categories 100, LCP, CLS and TBT under their ceilings. See
+      # docs/development/performance.md.
+      - name: Lighthouse budgets
+        run: bun run test:lighthouse
+
       # Mutation score of packages/core, at least 80%. Stryker's Bun runner needs Bun 1.4, so these steps come last:
       # the second setup replaces the Bun used above. Only the mutants whose code or covering tests changed since
       # tools/mutation/incremental.json are tested again.

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { cache, type ReactNode, Suspense } from "react";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Container } from "@/components/shell/container";
 import { Callout } from "@/components/ui/callout";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -20,6 +21,7 @@ import { chainName, explorerAddressUrl } from "@/lib/indexes/chains";
 import { CHECK_MEANINGS } from "@/lib/indexes/checks";
 import { formatDuration, formatPoints, largestWeightBps, weightingLabel } from "@/lib/indexes/methodology";
 import { site } from "@/lib/site";
+import { indexStructuredData } from "@/lib/structured-data";
 import { type IndexProfile, loadIndexProfile } from "@/server/indexes";
 import { getMarketData } from "@/server/market";
 import { type Composition as CompositionKind, getRegistryReader, type IndexVersionView } from "@/server/registry";
@@ -65,10 +67,7 @@ export async function profileMetadata(identifier: string, version: number | null
   const { index, version: view } = profile;
   const name = displayName(view);
   const title = version === null ? name : `${name}, version ${view.version}`;
-  const published = formatUtcDate(view.publishedAt);
-  const description = view.conformant
-    ? `${weightingLabel(view.spec)}, ${view.constituents.length} ${view.constituents.length === 1 ? "constituent" : "constituents"}. Version ${view.version} of a published index methodology, published ${published} and verified against the index registry on ${chainName(view.chainId)}.`
-    : `Version ${view.version} of an index published ${published} on ${chainName(view.chainId)}. It fails verification, so its methodology is not shown.`;
+  const description = profileDescription(view);
   const canonical = profilePath(index.identifier, version);
   return {
     title,
@@ -77,6 +76,14 @@ export async function profileMetadata(identifier: string, version: number | null
     openGraph: { type: "website", siteName: site.name, title, description, url: canonical, locale: "en_US" },
     twitter: { card: "summary", title, description },
   };
+}
+
+/** The description of a version, for the page metadata and the structured data alike. */
+function profileDescription(view: IndexVersionView): string {
+  const published = formatUtcDate(view.publishedAt);
+  return view.conformant
+    ? `${weightingLabel(view.spec)}, ${view.constituents.length} ${view.constituents.length === 1 ? "constituent" : "constituents"}. Version ${view.version} of a published index methodology, published ${published} and verified against the index registry on ${chainName(view.chainId)}.`
+    : `Version ${view.version} of an index published ${published} on ${chainName(view.chainId)}. It fails verification, so its methodology is not shown.`;
 }
 
 function HeaderFact({ term, children }: { term: string; children: ReactNode }) {
@@ -249,6 +256,17 @@ export async function IndexProfilePage({ identifier, version }: { identifier: st
 
   return (
     <Container className="flex flex-col gap-8 py-8 md:py-12">
+      <JsonLd
+        data={indexStructuredData({
+          name: displayName(view),
+          description: profileDescription(view),
+          url: new URL(profilePath(index.identifier, version), site.url).toString(),
+          version: view.version,
+          indexId: view.indexId,
+          firstPublishedAt,
+          publishedAt: view.publishedAt,
+        })}
+      />
       <Header profile={profile} name={displayName(view)} />
       <div className="flex flex-col gap-3 empty:hidden">
         <Notices profile={profile} />

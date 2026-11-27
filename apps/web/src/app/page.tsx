@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { LiveData, Verify } from "@/components/landing/live";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Developers, Hero, Holder, Limitations, RuleSet } from "@/components/landing/sections";
 import { buildExampleSpec } from "@/lib/landing/example-spec";
 import { site } from "@/lib/site";
+import { webSiteStructuredData } from "@/lib/structured-data";
 import { executionReleased, loadRegistry, loadUniverse } from "@/server/landing";
 
 const TITLE = `${site.name}: open, verifiable indexes for tokenized stocks on Base`;
@@ -33,6 +35,13 @@ export default async function HomePage() {
   const released = executionReleased();
   return (
     <>
+      <JsonLd
+        data={webSiteStructuredData({
+          name: site.name,
+          url: new URL("/", site.url).toString(),
+          description: DESCRIPTION,
+        })}
+      />
       <Hero />
       <RuleSet example={example} executionReleased={released} />
       <Verify registry={registry} />

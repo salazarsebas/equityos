@@ -80,7 +80,7 @@ test.describe("index explorer", () => {
     expect(html.indexOf("Single Asset Example")).toBeGreaterThan(0);
   });
 
-  test("a page past the last index says so, and without JavaScript the list links to the same data as JSON", async ({
+  test("a page past the last index says so, and without JavaScript the list is in the page with its JSON link", async ({
     page,
     browser,
   }) => {
@@ -89,8 +89,9 @@ test.describe("index explorer", () => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const plain = await context.newPage();
     await plain.goto("/indexes");
-    const note = plain.getByRole("note").filter({ hasText: "needs JavaScript" });
-    await expect(note.getByRole("link", { name: "published indexes" })).toHaveAttribute("href", "/api/v1/indexes");
+    const list = plain.getByRole("region", { name: "Published indexes" });
+    await expect(list.getByRole("link", { name: "Diversified Equity" })).toBeVisible();
+    await expect(list.getByRole("link", { name: "JSON" })).toHaveAttribute("href", /^\/api\/v1\/indexes\?/);
     await context.close();
   });
 

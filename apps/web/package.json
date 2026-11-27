@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "bun test",
     "test:e2e": "playwright test",
+    "test:lighthouse": "bun scripts/check-lighthouse.ts",
     "seed:local": "bun --conditions=react-server scripts/seed-local.ts",
     "seed:public": "bun --conditions=react-server scripts/seed-public.ts",
     "record:registry": "bun --conditions=react-server scripts/record-registry.ts",
@@ -43,6 +44,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "ajv": "8.20.0",
+    "lighthouse": "13.6.0",
     "tailwindcss": "4.3.5"
   }
 }
