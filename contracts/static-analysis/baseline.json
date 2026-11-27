@@ -55,6 +55,30 @@
       "location": "src/interfaces/IRebalanceLog.sol:IRebalanceLog.REGISTRY",
       "verdict": "accepted",
       "reason": "Interface getter of the public immutable REGISTRY. Same reason as RebalanceLog.REGISTRY."
+    },
+    {
+      "tool": "aderyn",
+      "detector": "costly-loop",
+      "severity": "Low",
+      "location": "src/IndexRegistry.sol (1 instance)",
+      "verdict": "accepted",
+      "reason": "The loop in _publish pushes each constituent to storage. Storing the mirror is the purpose of the call, and the loop is bounded by MAX_CONSTITUENTS (64), which _validateComposition enforces first. The gas tests measure the 64-token case."
+    },
+    {
+      "tool": "aderyn",
+      "detector": "large-numeric-literal",
+      "severity": "Low",
+      "location": "src/IndexRegistry.sol (1 instance)",
+      "verdict": "accepted",
+      "reason": "BPS = 10_000 already uses a digit separator. Rewriting it as 1e4 is cosmetic, and any source change alters the metadata hash, the bytecode and the deterministic deployment address."
+    },
+    {
+      "tool": "aderyn",
+      "detector": "require-revert-in-loop",
+      "severity": "Low",
+      "location": "src/IndexRegistry.sol (1 instance)",
+      "verdict": "accepted",
+      "reason": "_validateComposition reverts on the first token that is out of order or has a zero weight, and names its position. The publication is all or nothing by design: skipping a bad entry would store a mirror that differs from the spec."
     }
   ]
 }

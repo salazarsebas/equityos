@@ -137,9 +137,11 @@ jobs:
       # Aderyn is retired and its release binaries were withdrawn, so it is built from the source of the last
       # release, pinned by commit, and cached. That source still carries a `#![feature]` attribute for an API that
       # is stable since Rust 1.98, which the stable compiler rejects: RUSTC_BOOTSTRAP accepts it.
-      - name: Cache Aderyn
+      # The build takes about five minutes. The cache is saved right after it, so a later failing step does not
+      # discard it.
+      - name: Restore Aderyn
         id: aderyn-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/aderyn
           key: aderyn-a288420403cb1ae5f38ce606c3a6d4e605b9c81d-${{ runner.os }}
@@ -149,6 +151,13 @@ jobs:
         run: cargo install --locked --git https://github.com/Cyfrin/aderyn --rev a288420403cb1ae5f38ce606c3a6d4e605b9c81d aderyn
         env:
           RUSTC_BOOTSTRAP: 1
+
+      - name: Save Aderyn
+        if: steps.aderyn-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/aderyn
+          key: aderyn-a288420403cb1ae5f38ce606c3a6d4e605b9c81d-${{ runner.os }}
 
       # Both reports are compared with the reviewed baseline: a new, changed or fixed finding fails the job, and
       # no High or Medium finding is accepted unless it is shown to be a false positive.
