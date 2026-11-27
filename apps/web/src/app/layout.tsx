@@ -10,7 +10,9 @@ import "./globals.css";
 // The font files come from exact-pinned Fontsource packages (SIL Open Font License 1.1) in node_modules: the build
 // makes no network request, and next/font serves the files from this origin. Latin subset only. IBM Plex Sans is
 // the variable font, one file for the three weights in use. The metric-adjusted fallback faces are declared in
-// globals.css with fixed values, so adjustFontFallback is off.
+// globals.css with fixed values, so adjustFontFallback is off. Both families are preloaded: numbers, addresses and
+// stats are set in the mono face, and its proportional fallback wraps differently, so a late mono file shifts the
+// layout of the index page (measured by Lighthouse as cumulative layout shift).
 const plexSans = localFont({
   src: [
     {
@@ -39,7 +41,6 @@ const plexMono = localFont({
   ],
   variable: "--font-plex-mono",
   display: "swap",
-  preload: false,
   adjustFontFallback: false,
 });
 

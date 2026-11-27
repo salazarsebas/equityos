@@ -157,6 +157,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Example contract `IndexSliceSender` in `contracts/test/examples`: it reads a pinned version from the registry and
   sends the same share of every constituent the caller holds to a recipient, without custody. Tests and a guide,
   `docs/development/consuming-an-index.md`.
+- Performance and SEO budgets checked in CI: mobile Lighthouse on the landing page, the explorer and an index
+  page (performance at least 95, other categories 100, LCP, CLS and TBT ceilings), a first-load JavaScript budget
+  per route, and a metadata, structured data, sitemap and font check on every public page.
+  `docs/development/performance.md` describes them.
+- schema.org structured data: `WebSite` on the landing page and `Dataset` on index pages.
+- The sitemap lists every published index at its canonical URL with the time of its latest version.
 
 ### Changed
 
@@ -179,6 +185,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Index pages no longer shift on load (cumulative layout shift 0.215, now 0): the mono font is preloaded, and
+  the copy button holds its place before the page is interactive.
 - The independent implementation of the plan in the tests reports a `price_delayed` or `market_closed` warning
   for a held token to exit, as `@equityos/core` does. `docs/architecture/calculation.md` states it.
 - Narrow screens: the top bar keeps one row at 320 px, tables fade the scrolling edge, long text in callouts wraps,
