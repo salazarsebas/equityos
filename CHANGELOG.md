@@ -187,6 +187,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Index pages no longer shift on load (cumulative layout shift 0.215, now 0): the mono font is preloaded, and
   the copy button holds its place before the page is interactive.
+- The index explorer sends its table in the first response instead of a placeholder: the swap moved the footer on
+  slow servers, and the list now also reads without JavaScript.
 - The independent implementation of the plan in the tests reports a `price_delayed` or `market_closed` warning
   for a held token to exit, as `@equityos/core` does. `docs/architecture/calculation.md` states it.
 - Narrow screens: the top bar keeps one row at 320 px, tables fade the scrolling edge, long text in callouts wraps,

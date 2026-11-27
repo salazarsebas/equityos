@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import NextLink from "next/link";
-import { type ReactNode, Suspense } from "react";
+import type { ReactNode } from "react";
 import { Container } from "@/components/shell/container";
 import { Callout } from "@/components/ui/callout";
 import { cx } from "@/components/ui/cx";
 import { Link } from "@/components/ui/link";
-import { Skeleton } from "@/components/ui/skeleton";
 import { SourceLine } from "@/components/ui/source-line";
 import { EmptyState } from "@/components/ui/state";
 import { chainName } from "@/lib/indexes/chains";
@@ -21,7 +20,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/indexes" },
 };
 
-/** Rendered on every request: the registry reader already bounds its reads with a ten second cache. */
+/**
+ * Rendered on every request: the registry reader already bounds its reads with a ten second cache. The list is
+ * read before anything is sent, as on an index page, so the table is in the first response: a placeholder swapped
+ * for the table would move the footer below it, and the table also reads without JavaScript.
+ */
 export const revalidate = 0;
 
 type Sort = "newest" | "oldest";
@@ -153,42 +156,6 @@ async function Explorer({ sort, page }: { sort: Sort; page: number }) {
   );
 }
 
-const SKELETON_ROWS = Array.from({ length: 5 }, (_, index) => index);
-const SKELETON_COLUMNS = ["w-48", "w-24", "w-20", "w-8", "w-12", "w-10", "w-16", "w-28"] as const;
-
-/**
- * Shape of the list while the registry is read. The table is streamed after this shell and put in place by a
- * script, so a reader without JavaScript keeps seeing it: it says where the same data can be read.
- */
-function ExplorerSkeleton() {
-  return (
-    <>
-      <noscript>
-        <Callout title="This page needs JavaScript to show the table.">
-          The same list is available without it as JSON: <Link href="/api/v1/indexes">published indexes</Link>.
-        </Callout>
-      </noscript>
-      <div aria-busy="true" className="mt-3">
-        <span className="sr-only">Loading the published indexes</span>
-        <Skeleton className="h-10 w-56" />
-        <div className="mt-3 overflow-hidden rounded-lg border bg-surface">
-          <div className="border-b px-4 py-3">
-            <Skeleton className="h-5 w-48" />
-          </div>
-          <div className="h-8 border-b bg-subtle" />
-          {SKELETON_ROWS.map((row) => (
-            <div key={row} className="flex h-9 items-center gap-6 border-b px-4 last:border-b-0">
-              {SKELETON_COLUMNS.map((width) => (
-                <Skeleton key={width} className={`${width} shrink-0`} />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
-
 export default async function IndexesPage({ searchParams }: PageProps<"/indexes">) {
   const query = await searchParams;
   const sort: Sort = query.sort === "oldest" ? "oldest" : "newest";
@@ -203,9 +170,7 @@ export default async function IndexesPage({ searchParams }: PageProps<"/indexes"
         stores onchain.
       </p>
       <div className="mt-6">
-        <Suspense key={`${sort}:${requested}`} fallback={<ExplorerSkeleton />}>
-          <Explorer sort={sort} page={requested} />
-        </Suspense>
+        <Explorer sort={sort} page={requested} />
       </div>
     </Container>
   );

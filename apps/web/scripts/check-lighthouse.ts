@@ -16,6 +16,7 @@ import {
   CATEGORIES,
   formatSummary,
   LIGHTHOUSE_ROUTES,
+  layoutShiftCulprits,
   type LighthouseResult,
   medianRun,
   type RouteSummary,
@@ -111,8 +112,12 @@ async function main(): Promise<number> {
     for (const route of LIGHTHOUSE_ROUTES) {
       const runs: LighthouseResult[] = [];
       for (let i = 0; i < RUNS; i++) runs.push(await lighthouse(chrome, route));
-      const summary = summarize(route, medianRun(runs));
+      const median = medianRun(runs);
+      const summary = summarize(route, median);
       console.log(formatSummary(summary));
+      if (summary.failures.length > 0) {
+        for (const culprit of layoutShiftCulprits(median)) console.log(`  layout shift ${culprit}`);
+      }
       summaries.push(summary);
     }
     const failed = summaries.filter(({ failures }) => failures.length > 0).length;

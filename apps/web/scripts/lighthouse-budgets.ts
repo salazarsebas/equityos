@@ -33,7 +33,17 @@ export const METRICS = Object.keys(METRIC_CEILINGS) as Metric[];
 /** The part of a Lighthouse result (LHR) these checks read. */
 export interface LighthouseResult {
   readonly categories: Readonly<Record<string, { readonly score: number | null }>>;
-  readonly audits: Readonly<Record<string, { readonly numericValue?: number }>>;
+  readonly audits: Readonly<
+    Record<
+      string,
+      {
+        readonly numericValue?: number;
+        readonly details?: {
+          readonly items?: readonly { readonly score?: number; readonly node?: { readonly selector?: string } }[];
+        };
+      }
+    >
+  >;
   readonly runtimeError?: { readonly code: string; readonly message: string };
 }
 
@@ -104,4 +114,15 @@ function percent(score: number): string {
 
 function formatMetric(value: number, unit: string): string {
   return unit === "ms" ? `${Math.round(value)} ms` : value.toFixed(3);
+}
+
+/**
+ * The elements that moved, largest shift first, from the `layout-shifts` audit: printed when a run fails, so a
+ * shift seen only on a CI runner can be traced from the job log.
+ */
+export function layoutShiftCulprits(result: LighthouseResult): string[] {
+  const items = result.audits["layout-shifts"]?.details?.items ?? [];
+  return [...items]
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .map(({ score, node }) => `${(score ?? 0).toFixed(3)} ${node?.selector ?? "unknown element"}`);
 }

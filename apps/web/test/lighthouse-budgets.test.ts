@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { CATEGORIES, formatSummary, type LighthouseResult, medianRun, summarize } from "../scripts/lighthouse-budgets";
+import {
+  CATEGORIES,
+  formatSummary,
+  type LighthouseResult,
+  layoutShiftCulprits,
+  medianRun,
+  summarize,
+} from "../scripts/lighthouse-budgets";
 
 function result(
   scores: Partial<Record<string, number | null>> = {},
@@ -73,5 +80,24 @@ describe("Lighthouse budgets", () => {
     expect(medianRun([fast, slow])).toBe(slow);
     expect(medianRun([result({ performance: null }), middle, fast])).toBe(middle);
     expect(() => medianRun([])).toThrow("no Lighthouse run");
+  });
+
+  test("the elements that moved are listed largest shift first, and none when the audit is absent", () => {
+    const shifted: LighthouseResult = {
+      ...result(),
+      audits: {
+        "layout-shifts": {
+          details: {
+            items: [
+              { score: 0.01, node: { selector: "footer" } },
+              { score: 0.06, node: { selector: "main > div" } },
+              { score: 0.02 },
+            ],
+          },
+        },
+      },
+    };
+    expect(layoutShiftCulprits(shifted)).toEqual(["0.060 main > div", "0.020 unknown element", "0.010 footer"]);
+    expect(layoutShiftCulprits(result())).toEqual([]);
   });
 });

@@ -35,6 +35,11 @@ Layout shift is the budget most easily broken. Two patterns keep it at zero toda
   wraps text differently, so a late mono file moves the page.
 - A control that exists only once the page is interactive, such as the copy button, holds its place with an
   invisible box of the same size until then.
+- The index explorer reads the registry before it sends the page, so the table is in the first response. A
+  placeholder swapped for the table moved the footer, which sits at the bottom of a short page, on slow servers.
+
+When a run fails, the check prints the elements that moved, largest shift first, so a shift seen only on a CI
+runner can be traced from the job log.
 
 ## First-load JavaScript
 
