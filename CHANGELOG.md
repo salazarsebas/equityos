@@ -154,6 +154,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Property tests for canonicalization and the spec hash over random specs, plan properties for the tie between
   the two candidates and for holdings too small to have a value, and 22 rebalance plan vectors (60 in all), each
   recomputed by the independent implementation.
+- Example contract `IndexSliceSender` in `contracts/test/examples`: it reads a pinned version from the registry and
+  sends the same share of every constituent the caller holds to a recipient, without custody. Tests and a guide,
+  `docs/development/consuming-an-index.md`.
 
 ### Changed
 

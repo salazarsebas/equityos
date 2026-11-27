@@ -152,7 +152,9 @@ the mirror for `RuleBased`, which stores no constituents.
 
 `contracts/test/examples/IndexConsumer.sol` is a complete contract used by the test suite that follows this
 pattern: `targetAllocation` and `staticWeightOf` revert with `NotStatic` on any other composition, and
-`isConstituent` answers membership with a binary search without touching the weights.
+`isConstituent` answers membership with a binary search without touching the weights. `contracts/test/examples/IndexSliceSender.sol`
+acts on the constituents: it sends a share of every constituent the caller holds to a recipient. Both are
+described in [Consuming an index from a contract](../development/consuming-an-index.md).
 
 Read functions:
 
