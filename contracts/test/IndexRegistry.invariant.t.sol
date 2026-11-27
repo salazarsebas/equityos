@@ -6,8 +6,8 @@ import {RegistryHandler} from "./invariant/RegistryHandler.sol";
 import {RegistryTestBase} from "./utils/RegistryTestBase.sol";
 
 /// @notice Stateful invariants of the registry and the log under random sequences of calls from four actors.
-/// @dev The ids I1 to I12 are the ones documented in docs/security/index-registry.md. I12 is asserted inside
-///      the handler, next to the call it is about. Each `invariant_` function runs its own campaign.
+/// @dev The ids I1 to I14 are the ones documented in docs/security/index-registry.md. I12, I13 and
+///      I14 are also asserted inside the handler, next to the call they are about. Each `invariant_` function runs its own campaign.
 contract IndexRegistryInvariantTest is RegistryTestBase {
     RegistryHandler internal handler;
 
@@ -76,6 +76,25 @@ contract IndexRegistryInvariantTest is RegistryTestBase {
             }
         }
         assertEq(versions, handler.created() + handler.published(), "one version per successful publish");
+    }
+
+    /// @dev I14: index ids never collide. Every enumerated id is distinct, and two different
+    ///      (creator, salt) pairs never share an id, including the same salt used by several creators.
+    function invariant_IndexIdsNeverCollide() public view {
+        uint256 count = registry.indexCount();
+        for (uint256 i = 0; i < count; ++i) {
+            bytes32 first = registry.indexIdAt(i);
+            address firstCreator = registry.getIndex(first).creator;
+            bytes32 firstSalt = handler.ghostSalt(first);
+            for (uint256 j = i + 1; j < count; ++j) {
+                bytes32 second = registry.indexIdAt(j);
+                assertTrue(first != second, "I14: two positions hold the same id");
+                assertTrue(
+                    firstCreator != registry.getIndex(second).creator || firstSalt != handler.ghostSalt(second),
+                    "I14: one (creator, salt) pair, two ids"
+                );
+            }
+        }
     }
 
     /// @dev I11: neither contract ever holds ETH.

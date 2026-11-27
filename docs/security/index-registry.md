@@ -74,6 +74,7 @@ attacks from four actors, and by the unit and fuzz tests.
 | I11 | Neither contract holds ETH under any sequence of calls                                                                                          |
 | I12 | A call by anyone other than the creator leaves an index unchanged                                                                               |
 | I13 | `RebalanceLog` writes no storage and emits exactly one event, with `account == msg.sender`, on success                                          |
+| I14 | Index ids never collide: every id in `indexIdAt` is distinct and no two `(creator, salt)` pairs share one                                       |
 
 Structural checks on the compiled bytecode (`contracts/test/Bytecode.t.sol`):
 
@@ -82,7 +83,9 @@ Structural checks on the compiled bytecode (`contracts/test/Bytecode.t.sol`):
 - `RebalanceLog` contains exactly one `STATICCALL`, and no `CALL`, `CALLCODE`, `DELEGATECALL`, `CREATE`,
   `CREATE2`, `SELFDESTRUCT`, `SSTORE` or `TSTORE` instruction.
 
-Line and branch coverage of both contracts is 100%.
+Line and branch coverage of both contracts is 100%. CI fails below 95% for any file under `src/`, and runs the
+fuzz tests 10,000 times each. Static analysis findings and their triage are in
+[Static analysis](static-analysis.md).
 
 ## What is not protected against
 
