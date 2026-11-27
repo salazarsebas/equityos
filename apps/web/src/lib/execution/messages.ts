@@ -38,6 +38,8 @@ export function stopMessage(stop: SequentialStop): string {
 const FAILURES: Record<VerificationFailureCode, string> = {
   not_ready: "The plan is not ready to execute.",
   check_not_passed: "A pre-trade check did not pass.",
+  parameters_mismatch:
+    "The plan was built with another slippage tolerance or deviation band than this site asks for and checks prices with.",
   unsupported_chain: "This site does not send plans on the plan's network.",
   account_mismatch: "The plan was built for another address than the connected account.",
   router_mismatch: "The plan names a router other than the one this site allows.",
@@ -46,6 +48,7 @@ const FAILURES: Record<VerificationFailureCode, string> = {
   approval_not_exact: "An approval is not for exactly the amount swapped, toward the allowed router.",
   swap_not_verified: "A swap's calldata does not verify against its leg and your address.",
   swap_mismatch: "A swap's decoded minimum or deadline differs from what the plan states.",
+  expiry_out_of_range: "The plan expires later than a plan may after this browser read the chain.",
   deadline_out_of_range: "A swap's deadline does not match the plan's expiry.",
   totals_mismatch: "The plan's totals differ from the totals recomputed from its calls.",
   index_mismatch: "The plan names another index or version than the comparison on this page.",

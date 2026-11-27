@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { DEPLOYMENTS, LOCAL_CHAIN_ID, rebalanceLogAbi } from "@equityos/contracts-abi";
 import { type Address, decodeFunctionData, type Hex } from "viem";
-import { AMZN, buildReadyPlan, chainReadsFor, DIVERSIFIED, NVDA, TSLA, USDC } from "../../e2e/execution-plans";
+import {
+  AMZN,
+  buildReadyPlan,
+  chainReadsFor,
+  DIVERSIFIED,
+  NVDA,
+  OPEN_MARKET_TIME,
+  TSLA,
+  USDC,
+} from "../../e2e/execution-plans";
 import { builderCodeSuffix } from "../../src/lib/execution/builder-code";
 import { executionNetwork } from "../../src/lib/execution/networks";
 import {
@@ -18,7 +27,8 @@ import type { Batching } from "../../src/lib/wallet/capabilities";
 
 const ACCOUNT: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const OTHER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-const EXPIRES = 1_800_000_000;
+/** Within a plan's lifetime of the chain time the browser reads. */
+const EXPIRES = OPEN_MARKET_TIME + 100;
 const CONSTITUENTS = [
   TSLA,
   AMZN,

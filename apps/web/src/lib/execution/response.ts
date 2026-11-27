@@ -83,6 +83,8 @@ export interface ExecutionPlanView {
   readonly statement: string;
   readonly mode: "rebalance" | "buy_only";
   readonly slippageBps: number;
+  /** The deviation band the plan was checked with, in basis points. */
+  readonly maxDeviationBps: number;
   readonly providerRouter: Address;
   readonly status: "ready" | "blocked";
   readonly executable: boolean;
@@ -294,6 +296,7 @@ export function parseExecutionPlan(body: unknown): ExecutionPlanView {
     statement: text(data.statement, "data.statement"),
     mode: oneOf(data.mode, ["rebalance", "buy_only"] as const, "data.mode"),
     slippageBps: integer(data.slippageBps, "data.slippageBps", 0, 10_000),
+    maxDeviationBps: integer(data.maxDeviationBps, "data.maxDeviationBps", 0, 10_000),
     providerRouter: address(provider.router, "data.provider.router"),
     status,
     executable: data.executable,

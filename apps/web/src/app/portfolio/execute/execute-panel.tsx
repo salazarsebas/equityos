@@ -9,6 +9,7 @@ import { useExecutionAvailability } from "@/components/wallet/hooks";
 import { ConnectDialog } from "@/components/wallet/connect-dialog";
 import { rebalanceLogToRead } from "@/lib/execution/attestation";
 import { builderCodeSuffix, InvalidBuilderCodeError } from "@/lib/execution/builder-code";
+import { PLAN_DEFAULT_MAX_DEVIATION_BPS, PLAN_DEFAULT_SLIPPAGE_BPS } from "@/lib/execution/calldata";
 import { EXECUTION_USDC, executionNetwork } from "@/lib/execution/networks";
 import { PlanShapeError, parseExecutionPlan } from "@/lib/execution/response";
 import { type ExecutionSnapshot, takeExecutionSnapshot } from "@/lib/execution/snapshot";
@@ -92,6 +93,9 @@ export function ExecutePanel({
         index: comparison.index.identifier,
         ...(version === null ? {} : { version }),
         mode,
+        // Stated, not left to the server's defaults: the browser verifies the plan against these.
+        slippageBps: PLAN_DEFAULT_SLIPPAGE_BPS,
+        maxDeviationBps: PLAN_DEFAULT_MAX_DEVIATION_BPS,
       });
       const network = executionNetwork(plan.chainId);
       const log = rebalanceLogToRead(network);

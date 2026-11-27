@@ -66,7 +66,15 @@ test.describe("execution review", () => {
   }) => {
     const requests = await answerPlan(page, readyPlan(CHAIN_TIME + 100));
     const review = await openReview(page);
-    expect(requests).toEqual([{ address: ACCOUNT, index: "diversified-equity-d622e2a5", mode: "rebalance" }]);
+    expect(requests).toEqual([
+      {
+        address: ACCOUNT,
+        index: "diversified-equity-d622e2a5",
+        mode: "rebalance",
+        slippageBps: 50,
+        maxDeviationBps: 150,
+      },
+    ]);
     const calls = review.getByRole("region", { name: "Calls you would sign" });
     await expect(calls.getByRole("rowheader")).toHaveText(["Approve NVDAc", "Approve USDC", "Sell NVDAc", "Buy TSLAc"]);
     await expect(calls.getByRole("row", { name: /Approve NVDAc/ })).toContainText("Exactly 4 NVDAc to the router");
