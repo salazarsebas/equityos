@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { Address } from "viem";
 import { KYBERSWAP_ROUTER } from "../src/lib/execution/calldata";
-import { buildBlockedPlan, buildReadyPlan, fairPriceE8, NVDA, OPEN_MARKET_TIME, TSLA, USDC } from "./execution-plans";
+import { buildBlockedPlan, buildReadyPlan, NVDA, TSLA, USDC } from "./execution-plans";
+import { ACCOUNT, answerPlan, CHAIN_TIME, fairPrices, INDEX, readyPlan } from "./execution-support";
 import { installMockWallet, mockBaseRpc, TEST_ACCOUNT } from "./wallet-support";
 
 /**
@@ -10,38 +10,6 @@ import { installMockWallet, mockBaseRpc, TEST_ACCOUNT } from "./wallet-support";
  * with a plan of `execution-plans.ts`, and the Base mainnet endpoint with `mockBaseRpc`, whose feeds answer the
  * price at which each leg's quote is fair, a minute before a latest block in an open session. Nothing is sent.
  */
-const INDEX = "diversified-equity-d622e2a5";
-const ACCOUNT = TEST_ACCOUNT.toLowerCase() as Address;
-const CHAIN_TIME = OPEN_MARKET_TIME;
-
-/** Feed answers at which the legs of the ready plan are quoted fairly. */
-function fairPrices(): Record<string, bigint> {
-  return Object.fromEntries(readyPlan(CHAIN_TIME + 100).data.legs.map((leg) => [leg.token, fairPriceE8(leg)]));
-}
-
-function readyPlan(expiresAt: number) {
-  return buildReadyPlan({
-    account: ACCOUNT,
-    chainId: 8453,
-    expiresAt,
-    legs: [
-      { side: "sell", token: NVDA, symbol: "NVDAc", amountIn: 400_000_000n, quotedAmountOut: 519_000_000n },
-      { side: "buy", token: TSLA, symbol: "TSLAc", amountIn: 300_000_000n, quotedAmountOut: 77_000_000n },
-    ],
-    balances: { [USDC]: 250_500_000n, [NVDA]: 2_464_860_328n, [TSLA]: 456_555_856n },
-    warnings: [["reference_freshness", "delayed", 1]],
-  });
-}
-
-async function answerPlan(page: Page, body: unknown, status = 200) {
-  const requests: unknown[] = [];
-  await page.route("**/api/v1/portfolio/execution-plan", async (route) => {
-    requests.push(route.request().postDataJSON());
-    await route.fulfill({ status, json: body });
-  });
-  return requests;
-}
-
 async function openReview(page: Page, prices: Record<string, bigint> = fairPrices()) {
   await installMockWallet(page, { chainId: 8453, rejectSend: true });
   await mockBaseRpc(page, {}, { blockTimestamp: CHAIN_TIME, prices });

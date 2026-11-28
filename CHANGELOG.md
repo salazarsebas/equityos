@@ -163,6 +163,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `docs/development/performance.md` describes them.
 - schema.org structured data: `WebSite` on the landing page and `Dataset` on index pages.
 - The sitemap lists every published index at its canonical URL with the time of its latest version.
+- Browser journeys that move only by links and controls (verify, drift and plan, publish, new version, execute with
+  a mocked wallet, a blocked plan, the jurisdiction gate), keyboard-only runs of publish and execute with a check of
+  the focus indicator at every stop, and screenshot baselines of six pages at 375, 768 and 1440 px in both themes,
+  rendered on Linux with `bun run test:visual:update`. `docs/development/testing.md` describes them.
 
 ### Changed
 

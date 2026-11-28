@@ -24,6 +24,7 @@
     "test:mutation": "bun install --frozen-lockfile --cwd tools/mutation && cd packages/core && ../../tools/mutation/node_modules/.bin/stryker run ../../tools/mutation/stryker.config.mjs",
     "test:e2e": "bun run --filter @equityos/web test:e2e",
     "test:lighthouse": "bun run --filter @equityos/web test:lighthouse",
+    "test:visual:update": "bun run --filter @equityos/web test:visual:update",
     "test:integration": "forge build --root contracts && CONTRACT_ARTIFACTS=required bun run --filter @equityos/contracts-abi test && bun run --filter @equityos/web test:integration && bun run --filter @equityos/web test:e2e:chain",
     "build": "bun run --filter '*' build",
     "contracts:build": "forge build --root contracts",

@@ -33,6 +33,8 @@ function server(serverPort: number, env: Record<string, string>) {
 export default defineConfig({
   testDir: "e2e",
   testMatch: "**/*.e2e.ts",
+  // Rendered on Linux only (see e2e/visual.e2e.ts), so the path carries no platform suffix.
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFileName}/{arg}{ext}",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
